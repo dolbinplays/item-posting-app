@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1338</title>
+  <title>Item Posting Assistant v0.26.05.22.1420</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -87,9 +87,9 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1338 · storage location shared photo fix</p>
+      <p class="eyebrow">v0.26.05.22.1420 · item intelligence foundation</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds backup readiness checks, clearer Google Sheets/Drive export previews, and improved rebuild instructions.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds structured item intelligence fields for stronger Facebook Marketplace drafts and future AI recognition/pricing support.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -230,6 +230,20 @@
             <label class="small">Price</label><input id="itemPrice" placeholder="25">
             <label class="small">Condition</label><select id="itemCondition"><option>New</option><option>Like New</option><option>Used - Good</option><option>Used - Fair</option><option>For parts or repair</option></select>
             <label class="small">Status</label><select id="itemStatus"><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select>
+
+            <h3 style="margin-top:16px">Item Intelligence Fields</h3>
+            <p class="note">These structured fields improve draft generation now and prepare the app for future AI identification, pricing research, and marketplace category suggestions.</p>
+            <div class="grid two">
+              <div><label class="small">Brand</label><input id="itemBrand" placeholder="Sony, LEGO, KitchenAid..."></div>
+              <div><label class="small">Model / series</label><input id="itemModel" placeholder="Model number, series, edition..."></div>
+              <div><label class="small">Item type</label><input id="itemType" placeholder="Bluetooth speaker, action figure, jacket..."></div>
+              <div><label class="small">Color</label><input id="itemColor" placeholder="Black, blue, stainless steel..."></div>
+              <div><label class="small">Size / dimensions</label><input id="itemDimensions" placeholder="Large, 10 in, 12 x 8 x 4..."></div>
+              <div><label class="small">Material</label><input id="itemMaterial" placeholder="Wood, plastic, metal, cotton..."></div>
+            </div>
+            <label class="small">Tested / working status</label><select id="itemTestedStatus"><option value="">Not specified</option><option>Tested and working</option><option>Powers on</option><option>Untested</option><option>Not applicable</option><option>For parts or repair</option></select>
+            <label class="small">Missing parts</label><input id="itemMissingParts" placeholder="Remote missing, no charger, missing lid...">
+            <label class="small">Keywords / tags</label><input id="itemKeywords" placeholder="collectible, vintage, gaming, replacement part...">
             <label class="small">Category hint</label><input id="itemCategory" placeholder="Home goods, electronics, toys...">
             <label class="small">Accessories / included items</label><input id="itemAccessories" placeholder="Box, manual, cables...">
             <label class="small">Flaws / damage</label><input id="itemFlaws" placeholder="Small scratch on back...">
@@ -313,7 +327,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1338';
+    const VERSION='v0.26.05.22.1420';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -469,14 +483,47 @@
     }
     function renderRecentStorageChips(){let el=$('recentStorageList');if(!el)return;let recent=getRecentStorageLocations();el.innerHTML=recent.length?recent.map(v=>`<button type="button" class="storage-chip" data-recent-storage="${escapeAttr(v)}">${escapeHtml(v)}</button>`).join(''):'<span class="note">No recent storage locations yet.</span>';el.querySelectorAll('[data-recent-storage]').forEach(b=>b.onclick=()=>{$('itemStorage').value=b.dataset.recentStorage})}
 
-    function generateDraft(item){let name=item.title?.trim()||'Item for sale',cond=item.condition||'Used - Good',cat=item.category?.trim(),acc=item.accessories?.trim(),flaws=item.flaws?.trim(),notes=item.notes?.trim(),tone=item.draftTone||'friendly',pickup=item.pickupMode||'Local pickup preferred';let title=titleCase(name).slice(0,80);let lines=[];if(tone==='direct')lines.push(`${name} for sale.`);else if(tone==='detailed')lines.push(`Selling ${name}. This is a ${cond.toLowerCase()} item${cat?` in the ${cat} category`:''}.`);else lines.push(`Selling ${name}.`);lines.push(`Condition: ${cond}.`);if(acc)lines.push(`Includes: ${acc}.`);if(flaws)lines.push(`Please note: ${flaws}.`);if(notes)lines.push(notes);lines.push('Please review the photos and message me with any questions.');return{fbTitle:title,fbPrice:moneyText(item.price),fbDescription:lines.join('\n\n'),fbPickup:pickup+'.'}}
+    function joinParts(parts,sep=' '){return parts.map(v=>String(v||'').trim()).filter(Boolean).join(sep)}
+    function generateSmartTitle(item){
+      let base=joinParts([item.brand,item.model,item.itemType]) || item.title || 'Item for sale';
+      let extras=[item.color,item.dimensions].map(v=>String(v||'').trim()).filter(Boolean);
+      let title=titleCase([base,...extras].join(' '));
+      return title.slice(0,80);
+    }
+    function generateDraft(item){
+      let name=item.title?.trim()||'Item for sale',cond=item.condition||'Used - Good',cat=item.category?.trim(),acc=item.accessories?.trim(),flaws=item.flaws?.trim(),notes=item.notes?.trim(),tone=item.draftTone||'friendly',pickup=item.pickupMode||'Local pickup preferred';
+      let brand=item.brand?.trim(),model=item.model?.trim(),type=item.itemType?.trim(),color=item.color?.trim(),dims=item.dimensions?.trim(),material=item.material?.trim(),tested=item.testedStatus?.trim(),missing=item.missingParts?.trim(),keywords=item.keywords?.trim();
+      let title=generateSmartTitle(item);
+      let lines=[];
+      let displayName=joinParts([brand,model,type]) || name;
+      if(tone==='direct')lines.push(`${displayName} for sale.`);
+      else if(tone==='detailed')lines.push(`Selling ${displayName}. This is a ${cond.toLowerCase()} item${cat?` in the ${cat} category`:''}.`);
+      else lines.push(`Selling ${displayName}.`);
+      let details=[];
+      if(brand)details.push(`Brand: ${brand}`);
+      if(model)details.push(`Model/series: ${model}`);
+      if(type)details.push(`Type: ${type}`);
+      if(color)details.push(`Color: ${color}`);
+      if(dims)details.push(`Size/dimensions: ${dims}`);
+      if(material)details.push(`Material: ${material}`);
+      if(details.length)lines.push(details.join('\n'));
+      lines.push(`Condition: ${cond}.`);
+      if(tested)lines.push(`Tested/working status: ${tested}.`);
+      if(acc)lines.push(`Includes: ${acc}.`);
+      if(missing)lines.push(`Missing parts: ${missing}.`);
+      if(flaws)lines.push(`Please note: ${flaws}.`);
+      if(notes)lines.push(notes);
+      if(keywords && tone==='detailed')lines.push(`Helpful keywords: ${keywords}.`);
+      lines.push('Please review the photos and message me with any questions.');
+      return{fbTitle:title,fbPrice:moneyText(item.price),fbDescription:lines.join('\n\n'),fbPickup:pickup+'.'}
+    }
     async function createItemFromShots(shots,titleHint){
       if(!shots||!shots.length){alert('Capture at least one photo first.');return}
       try{
         const buttons=[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean);buttons.forEach(b=>b.disabled=true);
         $('captureStatus').textContent='Creating inventory item...';
         let items=getItems(),title=(titleHint||$('sessionName').value||'').trim()||`Inventory item ${items.length+1}`;
-        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',draftHistory:[],storagePhoto:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
+        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',brand:'',model:'',itemType:'',color:'',dimensions:'',material:'',testedStatus:'',missingParts:'',keywords:'',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',draftHistory:[],storagePhoto:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
         Object.assign(item,generateDraft(item));
         items.push(item);
         if(!setItems(items))return;
@@ -488,7 +535,7 @@
     }
     async function createItemFromCurrentShots(){let shots=getShots();if(!shots.length){alert('Capture at least one photo first, or use Create Item from a saved session.');return}await createItemFromShots(shots,$('sessionName').value.trim())}
     function itemPriceNum(item){let raw=String(item.price||item.fbPrice||'').replace(/[^0-9.]/g,'');let n=Number(raw);return Number.isFinite(n)?n:0}
-    function itemSearchBlob(item){return [item.title,item.status,item.condition,item.storage,item.notes,item.category,item.accessories,item.flaws,item.fbTitle,item.fbDescription,item.fbPickup].join(' ').toLowerCase()}
+    function itemSearchBlob(item){return [item.title,item.status,item.condition,item.brand,item.model,item.itemType,item.color,item.dimensions,item.material,item.testedStatus,item.missingParts,item.keywords,item.storage,item.notes,item.category,item.accessories,item.flaws,item.fbTitle,item.fbDescription,item.fbPickup].join(' ').toLowerCase()}
     function getFilteredInventory(){
       let items=getItems();
       let q=($('inventorySearch')?.value||'').toLowerCase().trim();
@@ -541,9 +588,17 @@
         renderInventory();refreshBackupViews();
       }
     }
-    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderStoragePhoto(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderInventory()}
-    function saveItemObject(item){let items=getItems().map(i=>i.id===item.id?item:i);return setItems(items)}
-    function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+    function loadItem(idv){
+      let item=getItems().find(i=>i.id===idv);if(!item)return;
+      selectedItemId=idv;
+      $('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';
+      $('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';
+      $('itemBrand').value=item.brand||'';$('itemModel').value=item.model||'';$('itemType').value=item.itemType||'';$('itemColor').value=item.color||'';$('itemDimensions').value=item.dimensions||'';$('itemMaterial').value=item.material||'';$('itemTestedStatus').value=item.testedStatus||'';$('itemMissingParts').value=item.missingParts||'';$('itemKeywords').value=item.keywords||'';
+      $('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';
+      $('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';
+      $('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;
+      renderItemPhotos(item);renderStoragePhoto(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderInventory()
+    }
     function currentDraftSnapshot(item,label){return {id:id('draft'),label:label||`Draft ${((item.draftHistory||[]).length)+1}`,savedAt:new Date().toISOString(),fbTitle:item.fbTitle||'',fbPrice:item.fbPrice||'',fbDescription:item.fbDescription||'',fbPickup:item.fbPickup||'',tone:item.draftTone||'friendly',pickupMode:item.pickupMode||'Local pickup preferred'}}
     function renderDraftHistory(item){let list=$('draftHistoryList');if(!list)return;let h=item.draftHistory||[];list.innerHTML=h.length?'':'<div class="empty-state">No saved draft versions yet.</div>';h.slice().reverse().forEach(d=>{let card=document.createElement('div');card.className='draft-history-card';card.innerHTML=`<strong>${escapeHtml(d.label||'Saved draft')}</strong><span class="note">${new Date(d.savedAt||Date.now()).toLocaleString()} · ${escapeHtml(d.tone||'tone not saved')}</span><div class="draft-preview">${escapeHtml((d.fbTitle||'')+'\n'+(d.fbPrice||'')+'\n\n'+(d.fbDescription||'')).slice(0,900)}</div><div class="draft-history-actions"><button class="success" data-draft-restore="${d.id}">Restore</button><button class="secondary" data-draft-copy="${d.id}">Copy All</button><button class="danger" data-draft-delete="${d.id}">Delete</button></div>`;list.appendChild(card)});wireDraftHistoryButtons()}
     function wireDraftHistoryButtons(){document.querySelectorAll('[data-draft-restore]').forEach(b=>b.onclick=()=>restoreDraftVersion(b.dataset.draftRestore));document.querySelectorAll('[data-draft-copy]').forEach(b=>b.onclick=()=>copyDraftVersion(b.dataset.draftCopy));document.querySelectorAll('[data-draft-delete]').forEach(b=>b.onclick=()=>deleteDraftVersion(b.dataset.draftDelete))}
@@ -651,7 +706,7 @@
       if(!selectedItemId){alert('No inventory item is selected.');return null}
       let items=getItems(),item=items.find(i=>i.id===selectedItemId);
       if(!item){alert('The selected item could not be found. Please select it again from the inventory list.');return null}
-      Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});
+      Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,brand:getField('itemBrand'),model:getField('itemModel'),itemType:getField('itemType'),color:getField('itemColor'),dimensions:getField('itemDimensions'),material:getField('itemMaterial'),testedStatus:$('itemTestedStatus').value,missingParts:getField('itemMissingParts'),keywords:getField('itemKeywords'),category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});
       if(!setItems(items))return null;
       return item;
     }
@@ -679,13 +734,17 @@
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
     function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
     function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
-    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),storageLocationPhoto:getEffectiveStoragePhoto(item)?.dataUrl?{label:getEffectiveStoragePhoto(item).label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:getEffectiveStoragePhoto(item).takenAt||'',hasEmbeddedDataUrl:true,source:getEffectiveStoragePhoto(item)._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
-    function buildSheetsDriveRows(){let rows=[['Date Created','Item ID','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,getEffectiveStoragePhoto(i)?.dataUrl?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});return rows}
+    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),storageLocationPhoto:getEffectiveStoragePhoto(item)?.dataUrl?{label:getEffectiveStoragePhoto(item).label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:getEffectiveStoragePhoto(item).takenAt||'',hasEmbeddedDataUrl:true,source:getEffectiveStoragePhoto(item)._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
+    function buildSheetsDriveRows(){
+      let rows=[['Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];
+      getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,getEffectiveStoragePhoto(i)?.dataUrl?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
+      return rows
+    }
     function buildRebuildHtml(){
       let b=backupObj();
       let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
       let rows=buildSheetsDriveRows();
-      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[10]||'')}</td><td>${esc(r[9]||'0')}</td><td>${esc(r[5]||'')}</td><td>${esc(r[7]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
+      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[22]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let items=b.items.map((item,index)=>{
         let effectiveStoragePhoto=getEffectiveStoragePhoto(item);
         let storageImg=effectiveStoragePhoto?.dataUrl?`<figure><img src="${effectiveStoragePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
@@ -694,13 +753,13 @@
         checklist.push((item.photos||[]).length?'Listing photos saved':'No listing photos saved');
         checklist.push(getEffectiveStoragePhoto(item)?.dataUrl?'Storage location photo saved':'No storage location photo saved');
         checklist.push((item.fbDescription||item.notes)?'Listing text saved':'No listing text saved');
-        return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Recovery Checklist</h3><ul>${checklist.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Storage Location Photo</h3><div class="photos">${storageImg||'<p>No storage location photo saved for this item.</p>'}</div><h3>Listing Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`;
+        return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Item details:</b> ${esc(joinParts([item.brand,item.model,item.itemType,item.color,item.dimensions,item.material], ' · ')||'No structured details saved')}</p><p><b>Tested:</b> ${esc(item.testedStatus||'')} &nbsp; <b>Missing parts:</b> ${esc(item.missingParts||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Recovery Checklist</h3><ul>${checklist.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Storage Location Photo</h3><div class="photos">${storageImg||'<p>No storage location photo saved for this item.</p>'}</div><h3>Listing Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`;
       }).join('');
       return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Rebuild Backup ${VERSION}</title><style>body{font-family:system-ui,sans-serif;margin:24px;background:#f8fafc;color:#0f172a}.item,.guide{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin:0 0 18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;vertical-align:top}th{background:#e0f2fe}</style></head><body><h1>Item Posting Assistant Rebuild Backup</h1><section class="guide"><p><b>Version:</b> ${esc(VERSION)} · <b>Exported:</b> ${esc(b.exportedAt)} · <b>Items:</b> ${b.items.length}</p><h2>How to use this backup</h2><ol><li>Open this file in a browser to view listing details and saved photos.</li><li>Use each item’s Suggested Drive Folder and Suggested file names when organizing photos in Google Drive.</li><li>Use the Sheets + Drive CSV as your Google Sheets inventory index.</li><li>Use the embedded photos and listing text here to rebuild Facebook Marketplace listings if local phone data is lost.</li></ol><h2>Spreadsheet / Drive Index Preview</h2><table><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Photo Count</th><th>Status</th><th>Storage</th></tr></thead><tbody>${tableRows}</tbody></table></section>${items}</body></html>`;
     }
 
     $('exportJsonBtn').onclick=()=>download(`item-posting-backup-${VERSION}.json`,JSON.stringify(backupObj(),null,2));
-    $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));download(`item-posting-inventory-${VERSION}.csv`,toCsv(rows),'text/csv')};
+    $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Brand','Model','Item Type','Color','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category','Tested Status','Accessories','Missing Parts','Flaws','Keywords','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.testedStatus||'',i.accessories||'',i.missingParts||'',i.flaws||'',i.keywords||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));download(`item-posting-inventory-${VERSION}.csv`,toCsv(rows),'text/csv')};
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
