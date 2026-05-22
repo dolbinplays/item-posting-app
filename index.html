@@ -1,190 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Item Posting Assistant — Camera Diagnostic</title>
-  <style>
-    :root{--bg:#0f172a;--card:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;--accent:#38bdf8;--ok:#22c55e;--warn:#facc15;--bad:#fb7185;--border:rgba(255,255,255,.14)}
-    *{box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#1e293b 0%,var(--bg) 58%);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
-    main{width:min(980px,100%);margin:0 auto;padding:16px 16px 80px} header{padding:14px 2px 18px}.eyebrow{margin:0 0 8px;color:var(--accent);font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}h1{font-size:clamp(1.8rem,8vw,3.2rem);line-height:1.04;margin:0}.sub{color:var(--muted);line-height:1.45;max-width:760px}.grid{display:grid;gap:14px}.two{grid-template-columns:1fr}@media(min-width:820px){.two{grid-template-columns:1.05fr .95fr}}.card{background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.035));border:1px solid var(--border);border-radius:22px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.25)}
-    video{width:100%;background:#020617;border-radius:18px;border:1px solid var(--border);min-height:260px;object-fit:cover} .controls{display:grid;gap:10px;margin-top:12px}.row{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:560px){.row{grid-template-columns:1fr 1fr}}button{border:0;border-radius:15px;padding:14px 15px;font-weight:900;font-size:1rem;color:var(--text);background:rgba(255,255,255,.09);border:1px solid var(--border)}button.primary{background:linear-gradient(135deg,#38bdf8,#0284c7);box-shadow:0 10px 25px rgba(2,132,199,.35)}button.danger{background:rgba(251,113,133,.16);border-color:rgba(251,113,133,.35)}button:active{transform:scale(.985)}
-    .pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:9px 12px;border:1px solid var(--border);background:rgba(255,255,255,.06);font-size:.9rem;font-weight:800}.dot{width:10px;height:10px;border-radius:50%;background:var(--warn);box-shadow:0 0 12px rgba(250,204,21,.6)}.dot.ok{background:var(--ok);box-shadow:0 0 12px rgba(34,197,94,.7)}.dot.bad{background:var(--bad);box-shadow:0 0 12px rgba(251,113,133,.7)}
-    .status-list{display:grid;gap:9px;margin:12px 0}.status-line{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(15,23,42,.55);border:1px solid var(--border);border-radius:14px}.status-line b{font-size:.92rem}.status-line span{color:var(--muted);text-align:right;font-size:.9rem;overflow-wrap:anywhere}.log{white-space:pre-wrap;word-break:break-word;background:#020617;border:1px solid var(--border);border-radius:16px;padding:12px;color:#dbeafe;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;min-height:190px;max-height:340px;overflow:auto}.note{color:var(--muted);font-size:.92rem;line-height:1.45}.small{font-size:.82rem;color:#94a3b8}.thumb{display:none;width:100%;border-radius:16px;border:1px solid var(--border);margin-top:12px}.select{width:100%;border-radius:14px;padding:12px;background:#020617;color:var(--text);border:1px solid var(--border);font-weight:800}.footer{margin-top:16px;text-align:center;color:#94a3b8;font-size:.82rem}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Item Posting Assistant</title>
+<style>
+:root{--bg:#0f172a;--card:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;--accent:#38bdf8;--accent2:#0284c7;--success:#22c55e;--warn:#facc15;--danger:#fb7185;--border:rgba(255,255,255,.13)}*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at top,#1e293b 0%,var(--bg) 55%);color:var(--text)}.app{width:min(1100px,100%);margin:0 auto;padding:16px}header{padding:12px 2px 14px}.eyebrow{margin:0 0 8px;color:var(--accent);font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}h1{margin:0;font-size:clamp(1.8rem,7vw,3.1rem);line-height:1.03}.subtitle{margin:10px 0 0;color:var(--muted);line-height:1.45;max-width:850px}.tabs{display:flex;gap:8px;overflow:auto;padding:8px 0 14px;position:sticky;top:0;background:linear-gradient(180deg,#0f172a 70%,rgba(15,23,42,.65));z-index:10}.tab{white-space:nowrap;border:1px solid var(--border);border-radius:999px;padding:10px 12px;color:var(--muted);background:rgba(255,255,255,.06);font-weight:800}.tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}.screen{display:none}.screen.active{display:block}.grid{display:grid;grid-template-columns:1fr;gap:14px}@media(min-width:840px){.grid.two{grid-template-columns:1fr 1fr}.grid.sidebar{grid-template-columns:.85fr 1.15fr}}.card{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border:1px solid var(--border);border-radius:22px;padding:16px;box-shadow:0 16px 34px rgba(0,0,0,.22)}h2,h3{margin:0 0 12px}.note,.small{color:var(--muted);font-size:.9rem;line-height:1.4}.small{display:block;margin:10px 0 6px;font-weight:800}button,input,select,textarea{font:inherit}input,select,textarea{width:100%;border:1px solid var(--border);border-radius:14px;background:rgba(2,6,23,.62);color:var(--text);padding:12px}textarea{resize:vertical}button{border:0;border-radius:15px;padding:13px 14px;font-weight:900;cursor:pointer}.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}.secondary{background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--text)}.success{background:var(--success);color:#052e16}.danger{background:var(--danger);color:#3f0714}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.actions button{flex:1 1 150px}button:disabled{opacity:.45;cursor:not-allowed}.checklist{list-style:none;padding:0;margin:0;display:grid;gap:10px}.check-item{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;background:rgba(15,23,42,.52);border:1px solid var(--border);border-radius:16px;padding:12px;cursor:pointer}.check-item input{display:none}.box{width:28px;height:28px;border-radius:10px;border:2px solid rgba(255,255,255,.24);display:grid;place-items:center;color:transparent;font-weight:900}.check-item input:checked+.box{background:var(--success);border-color:var(--success);color:#052e16}.pill,.mini-pill{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:999px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.28);color:#bae6fd;font-size:.87rem;font-weight:800}.mini-pill{padding:5px 8px;font-size:.75rem}.dot{width:9px;height:9px;border-radius:50%;background:var(--warn);box-shadow:0 0 12px rgba(250,204,21,.7)}.dot.ready{background:var(--success);box-shadow:0 0 12px rgba(34,197,94,.7)}.result-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.result-box{padding:12px;border-radius:14px;background:rgba(2,6,23,.5);border:1px solid var(--border)}.big-number{font-size:2.5rem;font-weight:950;letter-spacing:-.04em}.video-wrap{position:relative;background:#020617;border-radius:20px;overflow:hidden;border:1px solid var(--border);min-height:280px;display:grid;place-items:center}video{width:100%;max-height:62vh;object-fit:cover}.countdown{position:absolute;inset:0;display:none;place-items:center;background:rgba(2,6,23,.65);font-size:5rem;font-weight:950}.progress{height:12px;background:rgba(255,255,255,.09);border-radius:999px;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--success));transition:width .2s}.shots,.detail-images{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:760px){.shots,.detail-images{grid-template-columns:repeat(4,1fr)}}.shot-card,.item-card{background:rgba(2,6,23,.48);border:1px solid var(--border);border-radius:16px;overflow:hidden}.shot-card img,.item-card img,.detail-images img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}.shot-card-body,.item-card-body{padding:10px}.inventory-grid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:760px){.inventory-grid{grid-template-columns:repeat(2,1fr)}}.item-card{cursor:pointer}.item-card.active{outline:2px solid var(--accent)}.item-card-title{font-weight:950;margin-bottom:6px}.item-meta{display:flex;flex-wrap:wrap;gap:7px;color:var(--muted);font-size:.86rem}.copy-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}.copy-row button{padding:11px 12px;font-size:.9rem}.empty-state{border:1px dashed var(--border);border-radius:18px;padding:18px;color:var(--muted);text-align:center}.footer-note{text-align:center;color:#94a3b8;font-size:.85rem;margin:20px 0 0}.helper-grid{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:760px){.helper-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
 </head>
 <body>
-  <main>
-    <header>
-      <p class="eyebrow">v0.26.05.22.0202 · Camera Diagnostic</p>
-      <h1>Camera startup test</h1>
-      <p class="sub">This diagnostic build is only for isolating why the camera will not start. It shows the exact browser error and tests multiple camera-start methods.</p>
-    </header>
-    <section class="grid two">
-      <div class="card">
-        <video id="video" playsinline autoplay muted></video>
-        <canvas id="canvas" style="display:none"></canvas>
-        <img id="thumb" class="thumb" alt="Captured test shot" />
-        <div class="controls">
-          <button class="primary" id="startDefault">Start Default Camera</button>
-          <div class="row">
-            <button id="startRear">Start Rear Camera</button>
-            <button id="startFront">Start Front Camera</button>
-          </div>
-          <select id="deviceSelect" class="select"><option value="">Camera devices will appear after permission</option></select>
-          <div class="row">
-            <button id="startSelected">Start Selected Camera</button>
-            <button id="testShot">Take Test Shot</button>
-          </div>
-          <button class="danger" id="stopCamera">Stop Camera</button>
-        </div>
-        <p class="note">On Android Chrome, camera access requires HTTPS. GitHub Pages is HTTPS, but an older cached version or an iframe preview can still cause problems. This page will report that below.</p>
-      </div>
-      <div class="card">
-        <span class="pill"><span id="runDot" class="dot"></span><span id="runText">Not started</span></span>
-        <div class="status-list">
-          <div class="status-line"><b>Secure context</b><span id="secureStatus">Checking…</span></div>
-          <div class="status-line"><b>MediaDevices API</b><span id="apiStatus">Checking…</span></div>
-          <div class="status-line"><b>Page protocol</b><span id="protocolStatus">Checking…</span></div>
-          <div class="status-line"><b>Video state</b><span id="videoStatus">Idle</span></div>
-          <div class="status-line"><b>Device count</b><span id="deviceCount">Unknown</span></div>
-          <div class="status-line"><b>Last error</b><span id="lastError">None</span></div>
-        </div>
-        <h2>Diagnostic log</h2>
-        <div id="log" class="log"></div>
-        <p class="small">When you test this, the most useful thing to send back is the “Last error” line and the last few log entries.</p>
-      </div>
-    </section>
-    <p class="footer">Item Posting Assistant · Camera diagnostic build</p>
-  </main>
+<main class="app">
+<header><p class="eyebrow">Prototype v0.26.05.22.0216 · Diagnostic Camera Merge</p><h1>Item Posting Assistant</h1><p class="subtitle">Mobile-first capture, turntable calibration, inventory tracking, and Facebook Marketplace draft generation.</p></header>
+<nav class="tabs"><button class="tab active" data-screen="setup">1 · Setup</button><button class="tab" data-screen="calibration">2 · Calibration</button><button class="tab" data-screen="capture">3 · Capture</button><button class="tab" data-screen="inventory">4 · Inventory</button></nav>
+<section id="setup" class="screen active"><div class="grid two"><div class="card"><h2>Prepare Capture Station</h2><p class="note">Mount the phone, center the turntable, and start with the front of the item facing the camera.</p><ul class="checklist" id="setupChecks"><li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span><strong>Phone is mounted</strong><br><span class="note">Tripod or stand is steady.</span></span></label></li><li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span><strong>Turntable is centered</strong><br><span class="note">Rotating display is directly in frame.</span></span></label></li><li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span><strong>Item is stable</strong><br><span class="note">No sliding or wobbling.</span></span></label></li><li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span><strong>Lighting looks good</strong><br><span class="note">Avoid glare, shadows, and clutter.</span></span></label></li><li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span><strong>Front faces camera</strong><br><span class="note">Start position is the item front.</span></span></label></li></ul><div class="actions"><span class="pill"><span id="readyDot" class="dot"></span><span id="readyText">0 of 5 ready</span></span><button id="toCalibrationBtn" class="primary" disabled>Continue to Calibration</button><button id="resetSetupBtn" class="secondary">Reset</button></div></div><div class="card"><h2>Current Workflow</h2><p class="note">This build keeps the listing generator and uses the camera startup logic proven in the diagnostic build.</p><div class="helper-grid"><div class="result-box"><strong>Capture</strong><p class="note">Timed front/right/back/left photos.</p></div><div class="result-box"><strong>Inventory</strong><p class="note">Photos, price, notes, storage.</p></div><div class="result-box"><strong>Draft</strong><p class="note">Title, description, pickup notes, copy buttons.</p></div></div></div></div></section>
+<section id="calibration" class="screen"><div class="grid two"><div class="card"><h2>Turntable Calibration</h2><p class="note">Choose one rotation for speed or three rotations for better accuracy.</p><label class="small">Mode</label><select id="calMode"><option value="1">Quick Calibration · 1 rotation</option><option value="3">Precision Calibration · 3 rotations</option></select><div class="big-number" id="timerText">0.00s</div><div class="actions"><button id="startCalBtn" class="primary">Start</button><button id="stopCalBtn" class="danger" disabled>Stop</button><button id="resetCalBtn" class="secondary">Reset</button></div><label class="small">Preset name</label><input id="presetName" placeholder="Example: Small white turntable"><button id="savePresetBtn" class="success" disabled style="margin-top:10px;width:100%">Save Preset</button></div><div class="card"><h2>Capture Timing</h2><div class="result-grid"><div class="result-box"><span class="note">Rotation</span><div id="rotationResult">—</div></div><div class="result-box"><span class="note">Front</span><div id="frontResult">0.00s</div></div><div class="result-box"><span class="note">Right</span><div id="rightResult">—</div></div><div class="result-box"><span class="note">Back</span><div id="backResult">—</div></div><div class="result-box"><span class="note">Left</span><div id="leftResult">—</div></div></div><h3 style="margin-top:16px">Saved Presets</h3><select id="presetSelect"></select><div class="actions"><button id="toCaptureBtn" class="primary" disabled>Continue to Capture</button><button id="deletePresetBtn" class="secondary">Delete Selected</button></div></div></div></section>
+<section id="capture" class="screen"><div class="grid sidebar"><div class="card"><h2>Camera Capture</h2><p class="note" id="capturePresetInfo">Select or save a calibration preset first.</p><label class="small">Session / item name</label><input id="sessionName" placeholder="Example: Blue ceramic vase"><div class="video-wrap"><video id="video" autoplay playsinline muted></video><div id="countdown" class="countdown">3</div><div id="noCamera" class="empty-state">Camera preview will appear here.</div></div><div class="progress" style="margin-top:10px"><div class="bar" id="captureBar"></div></div><p class="note" id="captureStatus">Camera not started.</p><div class="actions"><button id="startCameraBtn" class="primary">Start Camera</button><button id="startAutoCaptureBtn" class="success" disabled>Auto Capture 4 Angles</button><button id="manualShotBtn" class="secondary" disabled>Manual Test Shot</button></div><div class="actions"><button id="saveSessionBtn" class="success">Save Capture Session</button><button id="createItemBtn" class="primary">Create Inventory Item</button><button id="clearShotsBtn" class="secondary">Clear Captures</button></div></div><div class="card"><h2>Captured Photos</h2><div id="shotsGrid" class="shots"></div><h3 style="margin-top:16px">Saved Sessions</h3><div id="sessionsList"></div></div></div></section>
+<section id="inventory" class="screen"><div class="grid sidebar"><div class="card"><h2>Inventory Dashboard</h2><p class="note">Create items from captures, then generate a Facebook Marketplace-ready draft.</p><button id="newItemFromShotsBtn" class="primary" style="width:100%">Create Item From Current Captures</button><label class="small">Search inventory</label><input id="inventorySearch" placeholder="Search title, status, storage, notes..."><div id="inventoryList" class="inventory-grid" style="margin-top:12px"></div></div><div class="card"><h2>Item Detail + Facebook Draft</h2><div id="itemDetailEmpty" class="empty-state">Select an inventory item or create one from your current captures.</div><div id="itemDetailForm" style="display:none"><label class="small">Item title</label><input id="itemTitle"><div class="grid two"><div><label class="small">Asking price</label><input id="itemPrice" inputmode="decimal" placeholder="25"></div><div><label class="small">Condition</label><select id="itemCondition"><option>New</option><option>Like new</option><option>Used - Good</option><option>Used - Fair</option><option>For parts or repair</option></select></div></div><div class="grid two"><div><label class="small">Listing status</label><select id="itemStatus"><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select></div><div><label class="small">Category hint</label><input id="itemCategory" placeholder="Example: Home decor, Electronics, Toys"></div></div><label class="small">Included accessories</label><input id="itemAccessories" placeholder="Example: box, charger, manual, remote"><label class="small">Known flaws / damage</label><input id="itemFlaws" placeholder="Example: small scuff on back, missing lid"><label class="small">Storage location</label><input id="itemStorage" placeholder="Example: Garage shelf B / Blue tote 3"><label class="small">Item notes</label><textarea id="itemNotes" rows="3" placeholder="Testing notes, measurements, buyer-friendly details..."></textarea><h3>Draft Generator Options</h3><div class="grid two"><div><label class="small">Tone</label><select id="draftTone"><option value="friendly">Friendly</option><option value="direct">Short and direct</option><option value="detailed">Detailed</option></select></div><div><label class="small">Pickup preference</label><select id="pickupMode"><option>Local pickup preferred</option><option>Local pickup only</option><option>Can ship if buyer pays shipping</option><option>Porch pickup available</option></select></div></div><div class="actions"><button id="generateDraftBtn" class="primary">Generate / Regenerate Draft</button><button id="saveItemBtn" class="success">Save Item</button><button id="deleteItemBtn" class="danger">Delete Item</button></div><h3>Facebook Marketplace Draft</h3><div class="copy-row"><div><label class="small">Marketplace title</label><input id="fbTitle"></div><button class="secondary copy-btn" data-copy="fbTitle">Copy</button></div><div class="copy-row"><div><label class="small">Marketplace price</label><input id="fbPrice"></div><button class="secondary copy-btn" data-copy="fbPrice">Copy</button></div><div class="copy-row"><div><label class="small">Marketplace description</label><textarea id="fbDescription" rows="8"></textarea></div><button class="secondary copy-btn" data-copy="fbDescription">Copy</button></div><div class="copy-row"><div><label class="small">Pickup / shipping notes</label><textarea id="fbPickup" rows="3"></textarea></div><button class="secondary copy-btn" data-copy="fbPickup">Copy</button></div><h3>Photos</h3><div id="itemDetailImages" class="detail-images"></div></div></div></div></section>
+<p class="footer-note">Facebook Marketplace-first item posting assistant · local prototype data stays in this browser</p>
+</main>
 <script>
-(() => {
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  const thumb = document.getElementById('thumb');
-  const logEl = document.getElementById('log');
-  const runDot = document.getElementById('runDot');
-  const runText = document.getElementById('runText');
-  const secureStatus = document.getElementById('secureStatus');
-  const apiStatus = document.getElementById('apiStatus');
-  const protocolStatus = document.getElementById('protocolStatus');
-  const videoStatus = document.getElementById('videoStatus');
-  const deviceCount = document.getElementById('deviceCount');
-  const lastError = document.getElementById('lastError');
-  const deviceSelect = document.getElementById('deviceSelect');
-  let stream = null;
-
-  function log(msg, obj){
-    const time = new Date().toLocaleTimeString();
-    let extra = '';
-    if (obj) {
-      try { extra = ' ' + JSON.stringify(obj, null, 2); } catch(e) { extra = ' ' + String(obj); }
-    }
-    logEl.textContent += `[${time}] ${msg}${extra}\n`;
-    logEl.scrollTop = logEl.scrollHeight;
+const STORAGE_PRESETS='ipa_turntable_presets_v1',STORAGE_SELECTED='ipa_selected_preset_v1',STORAGE_SHOTS='ipa_capture_shots_v1',STORAGE_SESSIONS='ipa_capture_sessions_v1',STORAGE_ITEMS='ipa_inventory_items_v2';
+const $=id=>document.getElementById(id);const tabs=document.querySelectorAll('.tab'),screens=document.querySelectorAll('.screen');function showScreen(id){screens.forEach(s=>s.classList.toggle('active',s.id===id));tabs.forEach(t=>t.classList.toggle('active',t.dataset.screen===id));window.scrollTo({top:0,behavior:'smooth'})}tabs.forEach(t=>t.onclick=()=>showScreen(t.dataset.screen));
+const checks=[...document.querySelectorAll('.setup-check')];function updateReady(){let c=checks.filter(x=>x.checked).length,ready=c===checks.length;$('readyText').textContent=ready?'Capture station ready':`${c} of ${checks.length} ready`;$('readyDot').classList.toggle('ready',ready);$('toCalibrationBtn').disabled=!ready}checks.forEach(c=>c.onchange=updateReady);$('resetSetupBtn').onclick=()=>{checks.forEach(c=>c.checked=false);updateReady()};$('toCalibrationBtn').onclick=()=>showScreen('calibration');updateReady();
+function read(k,d=[]){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}}function write(k,v){localStorage.setItem(k,JSON.stringify(v))}function fmt(n){return Number(n).toFixed(2)+'s'}function moneyText(v){let c=String(v||'').replace(/[^0-9.]/g,'');if(!c)return'';let n=Number(c);return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)}function id(prefix){return prefix+'_'+Date.now()+'_'+Math.random().toString(16).slice(2)}
+let calStart=0,calTimer=null,latestRotation=null;function updateTiming(r){$('rotationResult').textContent=r?fmt(r):'—';$('frontResult').textContent='0.00s';$('rightResult').textContent=r?fmt(r*.25):'—';$('backResult').textContent=r?fmt(r*.5):'—';$('leftResult').textContent=r?fmt(r*.75):'—'}function getPresets(){return read(STORAGE_PRESETS,[])}function setPresets(p){write(STORAGE_PRESETS,p)}function renderPresets(){let ps=getPresets(),sel=$('presetSelect');sel.innerHTML='';if(!ps.length){sel.innerHTML='<option>No saved presets yet</option>';$('toCaptureBtn').disabled=true;return}ps.forEach((p,i)=>{let o=document.createElement('option');o.value=i;o.textContent=`${p.name} · ${fmt(p.rotation)}/rotation`;sel.appendChild(o)});let saved=localStorage.getItem(STORAGE_SELECTED)||'0';sel.value=ps[saved]?saved:'0';$('toCaptureBtn').disabled=false;updateCapturePresetInfo()}function getSelectedPreset(){let ps=getPresets(),i=Number($('presetSelect').value||localStorage.getItem(STORAGE_SELECTED)||0);return ps[i]||null}
+$('startCalBtn').onclick=()=>{calStart=performance.now();$('startCalBtn').disabled=true;$('stopCalBtn').disabled=false;$('savePresetBtn').disabled=true;calTimer=setInterval(()=>{$('timerText').textContent=((performance.now()-calStart)/1000).toFixed(2)+'s'},50)};$('stopCalBtn').onclick=()=>{clearInterval(calTimer);let total=(performance.now()-calStart)/1000,rot=Number($('calMode').value);latestRotation=total/rot;$('timerText').textContent=total.toFixed(2)+'s total';updateTiming(latestRotation);$('startCalBtn').disabled=false;$('stopCalBtn').disabled=true;$('savePresetBtn').disabled=false};$('resetCalBtn').onclick=()=>{clearInterval(calTimer);latestRotation=null;$('timerText').textContent='0.00s';updateTiming(null);$('startCalBtn').disabled=false;$('stopCalBtn').disabled=true;$('savePresetBtn').disabled=true};$('savePresetBtn').onclick=()=>{if(!latestRotation)return;let ps=getPresets();ps.push({name:$('presetName').value.trim()||`Turntable ${ps.length+1}`,rotation:latestRotation,mode:$('calMode').value==='1'?'Quick':'Precision',savedAt:new Date().toISOString()});setPresets(ps);localStorage.setItem(STORAGE_SELECTED,String(ps.length-1));$('savePresetBtn').disabled=true;renderPresets()};$('presetSelect').onchange=()=>{localStorage.setItem(STORAGE_SELECTED,$('presetSelect').value);updateCapturePresetInfo()};$('deletePresetBtn').onclick=()=>{let ps=getPresets(),i=Number($('presetSelect').value);if(!ps[i])return;ps.splice(i,1);setPresets(ps);localStorage.setItem(STORAGE_SELECTED,'0');renderPresets()};$('toCaptureBtn').onclick=()=>showScreen('capture');renderPresets();
+let stream=null,capturing=false;
+function getShots(){return read(STORAGE_SHOTS,[])}
+function setShots(s){write(STORAGE_SHOTS,s);renderShots()}
+function updateCapturePresetInfo(){let p=getSelectedPreset();$('capturePresetInfo').textContent=p?`Using ${p.name}: ${fmt(p.rotation)} per rotation. Capture points: 0s, ${fmt(p.rotation*.25)}, ${fmt(p.rotation*.5)}, ${fmt(p.rotation*.75)}.`:'Save or select a calibration preset first.';$('startAutoCaptureBtn').disabled=!p||!stream}
+function stopCameraStream(){try{if(stream){stream.getTracks().forEach(t=>t.stop())}}catch(e){}stream=null}
+async function startCameraWith(label,constraints){
+  $('captureStatus').textContent=`Starting ${label}...`;
+  stopCameraStream();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){throw new Error('Camera API unavailable. Use HTTPS in Chrome or another supported browser.');}
+  stream=await navigator.mediaDevices.getUserMedia(constraints);
+  let v=$('video');
+  v.srcObject=stream;
+  v.muted=true;
+  v.setAttribute('playsinline','true');
+  await v.play();
+  $('noCamera').style.display='none';
+  $('manualShotBtn').disabled=false;
+  updateCapturePresetInfo();
+  let track=stream.getVideoTracks()[0];
+  $('captureStatus').textContent=`Camera ready: ${track?.label||label} · ${v.videoWidth||'?'}×${v.videoHeight||'?'}`;
+}
+async function startCamera(){
+  const attempts=[
+    {label:'rear camera exact',constraints:{video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},
+    {label:'rear camera ideal',constraints:{video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},
+    {label:'default camera',constraints:{video:{width:{ideal:1280},height:{ideal:720}},audio:false}},
+    {label:'basic camera',constraints:{video:true,audio:false}}
+  ];
+  let errors=[];
+  for(const a of attempts){
+    try{await startCameraWith(a.label,a.constraints);return;}
+    catch(e){errors.push(`${a.label}: ${e.name||'Error'} ${e.message||e}`);}
   }
-  function setRun(state, text){
-    runDot.className = 'dot' + (state === 'ok' ? ' ok' : state === 'bad' ? ' bad' : '');
-    runText.textContent = text;
-  }
-  function setErr(err){
-    const detail = err ? `${err.name || 'Error'}: ${err.message || String(err)}` : 'None';
-    lastError.textContent = detail;
-    if (err) log('ERROR', {name: err.name, message: err.message, constraint: err.constraint});
-  }
-  function stop(){
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
-    video.srcObject = null;
-    videoStatus.textContent = 'Stopped';
-    setRun('warn', 'Stopped');
-    log('Camera stopped');
-  }
-  async function refreshDevices(){
-    if (!navigator.mediaDevices?.enumerateDevices) return;
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const cams = devices.filter(d => d.kind === 'videoinput');
-      deviceCount.textContent = String(cams.length);
-      deviceSelect.innerHTML = '';
-      if (!cams.length) {
-        deviceSelect.innerHTML = '<option value="">No cameras found</option>';
-      } else {
-        cams.forEach((cam, i) => {
-          const opt = document.createElement('option');
-          opt.value = cam.deviceId;
-          opt.textContent = cam.label || `Camera ${i + 1}`;
-          deviceSelect.appendChild(opt);
-        });
-      }
-      log('Devices refreshed', cams.map((c,i)=>({i, label:c.label, id:c.deviceId ? 'present' : 'blank'})));
-    } catch(err) { setErr(err); }
-  }
-  async function startWithConstraints(label, constraints){
-    setErr(null);
-    setRun('warn', `Starting ${label}…`);
-    videoStatus.textContent = 'Requesting permission…';
-    log(`Starting ${label}`, constraints);
-    stop();
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('navigator.mediaDevices.getUserMedia is not available. Use HTTPS in a supported browser.');
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      video.muted = true;
-      video.setAttribute('playsinline', 'true');
-      await video.play();
-      const track = stream.getVideoTracks()[0];
-      videoStatus.textContent = `${video.videoWidth || '?'} × ${video.videoHeight || '?'} · ${track?.label || 'camera'}`;
-      setRun('ok', `${label} running`);
-      log(`${label} started`, {videoWidth: video.videoWidth, videoHeight: video.videoHeight, track: track?.label, settings: track?.getSettings ? track.getSettings() : null});
-      await refreshDevices();
-    } catch(err) {
-      setRun('bad', `${label} failed`);
-      videoStatus.textContent = 'Failed';
-      setErr(err);
-    }
-  }
-  async function startFallbackRear(){
-    const attempts = [
-      {name:'Rear exact environment', constraints:{video:{facingMode:{exact:'environment'}, width:{ideal:1280}, height:{ideal:720}}, audio:false}},
-      {name:'Rear ideal environment', constraints:{video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}, audio:false}},
-      {name:'Any camera basic', constraints:{video:true, audio:false}}
-    ];
-    for (const a of attempts) {
-      await startWithConstraints(a.name, a.constraints);
-      if (stream) return;
-      log('Attempt failed; trying next fallback if available');
-    }
-  }
-  function takeShot(){
-    if (!stream || !video.videoWidth) { log('Cannot take shot: camera is not running'); return; }
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    thumb.src = canvas.toDataURL('image/jpeg', .9);
-    thumb.style.display = 'block';
-    log('Test shot captured', {width: canvas.width, height: canvas.height});
-  }
-
-  secureStatus.textContent = window.isSecureContext ? 'Yes' : 'No — camera may be blocked';
-  apiStatus.textContent = navigator.mediaDevices?.getUserMedia ? 'Available' : 'Unavailable';
-  protocolStatus.textContent = location.protocol;
-  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) setRun('bad', 'Camera API unavailable');
-  log('Diagnostic loaded', {href: location.href, protocol: location.protocol, secureContext: window.isSecureContext, userAgent: navigator.userAgent});
-  refreshDevices();
-
-  document.getElementById('startDefault').onclick = () => startWithConstraints('Default camera', {video:{width:{ideal:1280}, height:{ideal:720}}, audio:false});
-  document.getElementById('startRear').onclick = startFallbackRear;
-  document.getElementById('startFront').onclick = () => startWithConstraints('Front camera', {video:{facingMode:{ideal:'user'}, width:{ideal:1280}, height:{ideal:720}}, audio:false});
-  document.getElementById('startSelected').onclick = () => {
-    const id = deviceSelect.value;
-    if (!id) { log('No selected camera device id yet. Start Default Camera first to grant permission.'); return; }
-    startWithConstraints('Selected camera', {video:{deviceId:{exact:id}, width:{ideal:1280}, height:{ideal:720}}, audio:false});
-  };
-  document.getElementById('testShot').onclick = takeShot;
-  document.getElementById('stopCamera').onclick = stop;
-})();
+  $('captureStatus').textContent='Camera failed to start. See error details.';
+  alert('Camera could not start. Error details:\n\n'+errors.join('\n'));
+}
+function canvasShot(label){let v=$('video'),c=document.createElement('canvas');c.width=v.videoWidth||1280;c.height=v.videoHeight||720;let ctx=c.getContext('2d');ctx.drawImage(v,0,0,c.width,c.height);return{label,dataUrl:c.toDataURL('image/jpeg',.88),takenAt:new Date().toISOString()}}
+function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}}
+function beep(){try{let ac=new(AudioContext||webkitAudioContext)(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
+function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=canvasShot(a[i].label);setShots(a)})}
+async function autoCapture(){let p=getSelectedPreset();if(!p||capturing)return;capturing=true;$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';for(let i=3;i>0;i--){cd.textContent=i;await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(canvasShot(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. Review photos or create an inventory item.'}
+$('startCameraBtn').onclick=startCamera;$('manualShotBtn').onclick=()=>{let s=getShots();s.push(canvasShot('Manual shot '+(s.length+1)));setShots(s)};$('startAutoCaptureBtn').onclick=autoCapture;$('clearShotsBtn').onclick=()=>confirm('Clear current captures?')&&setShots([]);function saveSession(){let shots=getShots();if(!shots.length){alert('No captures to save.');return}let sessions=read(STORAGE_SESSIONS,[]);sessions.push({id:id('session'),name:$('sessionName').value.trim()||'Untitled session',createdAt:new Date().toISOString(),photos:shots,preset:getSelectedPreset()?.name||''});write(STORAGE_SESSIONS,sessions);renderSessions()}function renderSessions(){let sessions=read(STORAGE_SESSIONS,[]),el=$('sessionsList');el.innerHTML=sessions.length?'':'<div class="empty-state">No saved sessions yet.</div>';sessions.slice().reverse().forEach(s=>{let d=document.createElement('div');d.className='result-box';d.innerHTML=`<strong>${s.name}</strong><p class="note">${s.photos?.length||0} photos · ${new Date(s.createdAt).toLocaleString()}</p>`;el.appendChild(d)})}$('saveSessionBtn').onclick=saveSession;renderShots();renderSessions();
+const fields=['itemTitle','itemPrice','itemCondition','itemStatus','itemCategory','itemAccessories','itemFlaws','itemStorage','itemNotes','draftTone','pickupMode','fbTitle','fbPrice','fbDescription','fbPickup'];let selectedItemId=null;function getItems(){return read(STORAGE_ITEMS,[])}function setItems(v){write(STORAGE_ITEMS,v)}function getField(id){return $(id).value.trim()}function titleCase(s){return String(s||'').replace(/\w\S*/g,t=>t[0].toUpperCase()+t.slice(1).toLowerCase())}function createItemFromCurrentShots(){let shots=getShots();if(!shots.length){alert('Capture at least one photo first.');return}let items=getItems(),title=$('sessionName').value.trim()||`Inventory item ${items.length+1}`;let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:shots};Object.assign(item,generateDraft(item));items.push(item);setItems(items);selectedItemId=item.id;renderInventory();loadItem(item.id);showScreen('inventory')}
+function generateDraft(item){let name=item.title?.trim()||'Item for sale',cond=item.condition||'Used - Good',cat=item.category?.trim(),acc=item.accessories?.trim(),flaws=item.flaws?.trim(),notes=item.notes?.trim(),tone=item.draftTone||'friendly',pickup=item.pickupMode||'Local pickup preferred';let title=titleCase(name).slice(0,80);let lines=[];if(tone==='direct'){lines.push(`${name} for sale.`)}else if(tone==='detailed'){lines.push(`Selling ${name}. This is a ${cond.toLowerCase()} item${cat?` in the ${cat} category`:''}.`)}else{lines.push(`Selling ${name}.`)}lines.push(`Condition: ${cond}.`);if(acc)lines.push(`Includes: ${acc}.`);if(flaws)lines.push(`Please note: ${flaws}.`);if(notes)lines.push(notes);lines.push('Please review the photos and message me with any questions.');let pickupText=pickup+'.';if(pickup.includes('public')===false&&pickup.includes('pickup'))pickupText+=' I can usually coordinate a safe, convenient pickup time.';return{fbTitle:title,fbPrice:moneyText(item.price),fbDescription:lines.join('\n\n'),fbPickup:pickupText}}
+function renderInventory(){let items=getItems(),q=$('inventorySearch').value.toLowerCase().trim(),list=$('inventoryList');list.innerHTML='';let filtered=q?items.filter(i=>JSON.stringify(i).toLowerCase().includes(q)):items;if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items yet. Create one from current captures.</div>';return}filtered.slice().reverse().forEach(i=>{let first=i.photos?.[0]?.dataUrl||'',card=document.createElement('div');card.className='item-card'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;card.innerHTML=`${first?`<img src="${first}">`:'<div class="empty-state">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${i.title||'Untitled'}</div><div class="item-meta"><span class="mini-pill">${i.status||'Draft'}</span><span>${moneyText(i.price)||'No price'}</span><span>${i.condition||''}</span></div><div class="item-meta">${i.storage||'No storage location yet'}</div></div>`;list.appendChild(card)});list.querySelectorAll('.item-card').forEach(c=>c.onclick=()=>loadItem(c.dataset.id))}
+function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;let imgs=$('itemDetailImages');imgs.innerHTML='';(item.photos||[]).forEach(p=>{let im=document.createElement('img');im.src=p.dataUrl;imgs.appendChild(im)});renderInventory()}
+function collectItem(){if(!selectedItemId)return null;let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return null;Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});setItems(items);return item}function saveItem(){let i=collectItem();if(i){renderInventory();loadItem(i.id)}}function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));setItems(getItems().map(i=>i.id===item.id?item:i));loadItem(item.id)}function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;setItems(getItems().filter(i=>i.id!==selectedItemId));selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()}async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);let old=document.activeElement;alert('Copied to clipboard.');old?.focus()}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}$('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));renderInventory();
 </script>
-</body>
-</html>
+</body></html>
