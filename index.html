@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1512</title>
+  <title>Item Posting Assistant v0.26.05.22.1544</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -93,7 +93,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1512 · storage optimization</p>
+      <p class="eyebrow">v0.26.05.22.1544 · storage optimization</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds storage optimization, compressed session saves, storage usage estimates, and cleanup tools to reduce browser quota errors.</p>
     </header>
@@ -222,9 +222,9 @@
               </select>
             </div>
           </div>
-          <div class="actions"><button id="newItemFromShotsBtn" class="primary">Create Item from Current Captures</button><button id="clearInventoryFiltersBtn" class="secondary">Clear Search / Filters</button></div>
+          <div class="actions"><button id="newItemFromShotsBtn" class="primary">Create Item from Current Captures</button><button id="clearInventoryFiltersBtn" class="secondary">Clear Search / Filters</button><button id="scanInventoryBtn" class="secondary">Scan / Repair Inventory</button><button id="deleteIncompleteItemsBtn" class="danger">Delete Incomplete Draft Items</button></div>
           <div id="inventoryCount" class="inventory-count">0 items</div>
-          <p class="inventory-toolbar-note">Tip: use Needs Listing to focus on Draft and Ready to Post items. Quick status changes on cards save immediately.</p>
+          <p class="inventory-toolbar-note">Tip: use Needs Listing to focus on Draft and Ready to Post items. Quick status changes on cards save immediately.</p><p class="inventory-toolbar-note">If older test items will not open, use Scan / Repair Inventory to assign missing IDs, then select or delete them.</p>
           <div id="inventoryList" class="inventory-grid" style="margin-top:12px"></div>
         </div>
         <div class="card">
@@ -343,7 +343,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1512';
+    const VERSION='v0.26.05.22.1544';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -473,6 +473,78 @@
 
     // Inventory
     let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
+    function isBlankValue(v){return String(v??'').trim()===''}
+    function normalizeInventoryItems(opts={}){
+      const silent=!!opts.silent;
+      let raw=read(K.items,[]), changed=false, repaired=0, removed=0, duplicateFixed=0;
+      if(!Array.isArray(raw)){raw=[];changed=true;removed++}
+      const seen=new Set();
+      const now=new Date().toISOString();
+      const normalized=[];
+      raw.forEach((item,idx)=>{
+        if(!item || typeof item!=='object'){
+          removed++; changed=true; return;
+        }
+        let originalId=item.id;
+        if(!item.id || item.id==='undefined' || item.id==='null'){
+          item.id=id('repaired_item');
+          repaired++; changed=true;
+        }
+        if(seen.has(item.id)){
+          item.id=id('repaired_duplicate');
+          duplicateFixed++; changed=true;
+        }
+        seen.add(item.id);
+        if(!Array.isArray(item.photos)){item.photos=[];changed=true;}
+        if(!Array.isArray(item.draftHistory)){item.draftHistory=[];changed=true;}
+        if(!item.status){item.status='Draft';changed=true;}
+        if(!item.condition){item.condition='Used - Good';changed=true;}
+        if(!item.createdAt){item.createdAt=now;changed=true;}
+        if(!item.updatedAt){item.updatedAt=now;changed=true;}
+        if(!('storagePhoto' in item)){item.storagePhoto=null;changed=true;}
+        normalized.push(item);
+      });
+      if(changed){
+        if(!safeWrite(K.items,normalized))return {changed:false,repaired,removed,duplicateFixed,error:true};
+        try{refreshBackupViews()}catch{}
+      }
+      if(!silent){
+        alert(`Inventory scan complete. Repaired ${repaired} missing IDs, fixed ${duplicateFixed} duplicate IDs, removed ${removed} unreadable records.`);
+      }
+      return {changed,repaired,removed,duplicateFixed,error:false};
+    }
+    function isIncompleteDraftItem(item){
+      if(!item || typeof item!=='object')return true;
+      const photos=Array.isArray(item.photos)?item.photos:[];
+      if(photos.length>0)return false;
+      const status=item.status||'Draft';
+      if(!['Draft','Ready to Post'].includes(status))return false;
+      const fields=[item.price,item.storage,item.notes,item.brand,item.model,item.itemType,item.color,item.dimensions,item.material,item.testedStatus,item.missingParts,item.keywords,item.category,item.accessories,item.flaws,item.fbDescription,item.fbPickup];
+      return fields.every(isBlankValue);
+    }
+    function scanAndRepairInventory(){
+      const result=normalizeInventoryItems({silent:false});
+      renderInventory();refreshBackupViews();
+      if(selectedItemId && !getItems().some(i=>i.id===selectedItemId)){
+        selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';
+      }
+    }
+    function deleteIncompleteDraftItems(){
+      normalizeInventoryItems({silent:true});
+      const items=getItems();
+      const doomed=items.filter(isIncompleteDraftItem);
+      if(!doomed.length){alert('No incomplete draft items were found.');return;}
+      const preview=doomed.slice(0,8).map(i=>'• '+(i.title||'Untitled item')).join('\n')+(doomed.length>8?`\n…plus ${doomed.length-8} more`: '');
+      if(!confirm(`Delete ${doomed.length} incomplete draft item${doomed.length===1?'':'s'}?\n\nThese are items with no listing photos and almost no saved details.\n\n${preview}`))return;
+      const doomedIds=new Set(doomed.map(i=>i.id));
+      if(!setItems(items.filter(i=>!doomedIds.has(i.id))))return;
+      if(selectedItemId && doomedIds.has(selectedItemId)){
+        selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';
+      }
+      renderInventory();refreshBackupViews();
+      alert(`Deleted ${doomed.length} incomplete draft item${doomed.length===1?'':'s'}.`);
+    }
+
     const getStoragePresets=()=>read(K.storagePresets,[]), setStoragePresets=v=>{if(safeWrite(K.storagePresets,[...new Set((v||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)))){renderStoragePresets();renderInventory();refreshBackupViews();return true}return false};
     const normalizeStorageLocation=v=>String(v||'').trim().toLowerCase();
     const getStorageLocationPhotos=()=>read(K.storageLocationPhotos,{});
@@ -632,7 +704,9 @@
       }
     }
     function loadItem(idv){
-      let item=getItems().find(i=>i.id===idv);if(!item)return;
+      normalizeInventoryItems({silent:true});
+      let item=getItems().find(i=>i.id===idv);
+      if(!item){alert('This inventory item could not be opened. Run Scan / Repair Inventory, then try again.');return;}
       selectedItemId=idv;
       $('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';
       $('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';
@@ -768,7 +842,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};$('chooseStoragePhotoBtn').onclick=chooseStoragePhoto;$('storagePhotoFile').onchange=handleStoragePhotoFile;$('captureStorageFromCameraBtn').onclick=captureStoragePhotoFromActiveCamera;$('clearStoragePhotoBtn').onclick=clearStoragePhoto;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('scanInventoryBtn').onclick=scanAndRepairInventory;$('deleteIncompleteItemsBtn').onclick=deleteIncompleteDraftItems;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};$('chooseStoragePhotoBtn').onclick=chooseStoragePhoto;$('storagePhotoFile').onchange=handleStoragePhotoFile;$('captureStorageFromCameraBtn').onclick=captureStoragePhotoFromActiveCamera;$('clearStoragePhotoBtn').onclick=clearStoragePhoto;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
@@ -879,7 +953,7 @@
     function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness()}catch(e){}}
 
     // Init
-    updateDiag(); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
