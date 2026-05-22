@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1315</title>
+  <title>Item Posting Assistant v0.26.05.22.1338</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -87,7 +87,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1315 · storage photo item link fix</p>
+      <p class="eyebrow">v0.26.05.22.1338 · storage location shared photo fix</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds backup readiness checks, clearer Google Sheets/Drive export previews, and improved rebuild instructions.</p>
     </header>
@@ -313,8 +313,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1315';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.05.22.1338';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
     function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
@@ -417,6 +417,45 @@
     // Inventory
     let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
     const getStoragePresets=()=>read(K.storagePresets,[]), setStoragePresets=v=>{if(safeWrite(K.storagePresets,[...new Set((v||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)))){renderStoragePresets();renderInventory();refreshBackupViews();return true}return false};
+    const normalizeStorageLocation=v=>String(v||'').trim().toLowerCase();
+    const getStorageLocationPhotos=()=>read(K.storageLocationPhotos,{});
+    const setStorageLocationPhotos=v=>safeWrite(K.storageLocationPhotos,v||{});
+    function locationPhotoFromItems(location,excludeItemId){
+      const key=normalizeStorageLocation(location);
+      if(!key)return null;
+      return getItems().find(i=>i.id!==excludeItemId&&normalizeStorageLocation(i.storage)===key&&i.storagePhoto?.dataUrl)?.storagePhoto||null;
+    }
+    function getSharedStoragePhoto(location,excludeItemId){
+      const key=normalizeStorageLocation(location);
+      if(!key)return null;
+      const map=getStorageLocationPhotos();
+      if(map[key]?.dataUrl)return map[key];
+      const fromItem=locationPhotoFromItems(location,excludeItemId);
+      if(fromItem?.dataUrl){
+        map[key]={...fromItem,sharedLocation:location,source:(fromItem.source||'item storage photo')+' · shared location photo'};
+        setStorageLocationPhotos(map);
+        return map[key];
+      }
+      return null;
+    }
+    function saveSharedStoragePhoto(location,photo){
+      const key=normalizeStorageLocation(location);
+      if(!key||!photo?.dataUrl)return;
+      const map=getStorageLocationPhotos();
+      map[key]={...photo,sharedLocation:location,savedAt:new Date().toISOString(),source:(photo.source||'storage photo')+' · shared for this storage location'};
+      setStorageLocationPhotos(map);
+    }
+    function getEffectiveStoragePhoto(item){
+      if(!item)return null;
+      const own=item.storagePhoto;
+      const ownLocation=normalizeStorageLocation(own?.storageLocation);
+      const currentLocation=normalizeStorageLocation(item.storage);
+      if(own?.dataUrl && (!ownLocation || !currentLocation || ownLocation===currentLocation))return {...own,_photoScope:'item'};
+      const shared=getSharedStoragePhoto(item.storage,item.id);
+      if(shared?.dataUrl)return {...shared,_photoScope:'shared'};
+      if(own?.dataUrl)return {...own,_photoScope:'item-other-location'};
+      return null;
+    }
     function getRecentStorageLocations(){let seen=[];getItems().slice().reverse().forEach(i=>{let v=String(i.storage||'').trim();if(v&&!seen.includes(v))seen.push(v)});return seen.slice(0,6)}
     function maybeAddRecentStorage(value){let v=String(value||'').trim();if(!v)return;let ps=getStoragePresets();if(!ps.includes(v)&&confirm(`Save "${v}" as a reusable storage preset?`)){setStoragePresets([...ps,v])}}
     function renderStoragePresets(){
@@ -522,21 +561,25 @@
     function renderStoragePhoto(item){
       let el=$('storagePhotoPreview');
       if(!el)return;
-      // Always render the storage photo from the currently selected item record.
-      // This prevents the preview area from showing the most recently captured
-      // storage photo when a different inventory item is opened.
       let currentItem=item;
       if(selectedItemId){
         currentItem=getItems().find(i=>i.id===selectedItemId)||item;
       }
+      // Use the current visible storage field as the location when the user has
+      // changed or applied a preset but has not saved the item yet.
+      if(currentItem){
+        currentItem={...currentItem,storage:getField('itemStorage')||currentItem.storage||''};
+      }
       el.innerHTML='';
-      let sp=currentItem?.storagePhoto;
+      let sp=getEffectiveStoragePhoto(currentItem);
       if(sp?.dataUrl){
         let linkedTitle=escapeHtml(currentItem?.title||'Selected item');
-        let linkedLocation=escapeHtml(currentItem?.storage||'No storage location text saved');
-        el.innerHTML=`<img src="${sp.dataUrl}" alt="Storage location photo for ${linkedTitle}"><p class="photo-manage-note">Storage photo for: <b>${linkedTitle}</b><br>Location: ${linkedLocation}<br>Saved ${sp.takenAt?new Date(sp.takenAt).toLocaleString():'with this item'}${sp.source?` · ${escapeHtml(sp.source)}`:''}</p>`;
+        let linkedLocation=escapeHtml(currentItem?.storage||sp.sharedLocation||sp.storageLocation||'No storage location text saved');
+        let scope=sp._photoScope==='shared'?'Shared storage-location photo':(sp._photoScope==='item-other-location'?'Item photo from a previous storage location':'Item-specific storage photo');
+        el.innerHTML=`<img src="${sp.dataUrl}" alt="Storage location photo for ${linkedTitle}"><p class="photo-manage-note">${scope}<br>Item: <b>${linkedTitle}</b><br>Location: ${linkedLocation}<br>Saved ${sp.takenAt?new Date(sp.takenAt).toLocaleString():'with this item'}${sp.source?` · ${escapeHtml(sp.source)}`:''}</p>`;
       }else{
-        el.textContent='No storage location photo saved for this item yet.';
+        let loc=currentItem?.storage?` for ${escapeHtml(currentItem.storage)}`:'';
+        el.textContent=`No storage location photo saved${loc} yet.`;
       }
     }
     async function imageFileToStoragePhoto(file){
@@ -566,6 +609,7 @@
       if(!item){alert('The selected item could not be found.');return false}
       if(storagePhoto){
         item.storagePhoto={...storagePhoto,itemId:item.id,itemTitle:item.title||'',storageLocation:item.storage||'',savedAt:new Date().toISOString()};
+        saveSharedStoragePhoto(item.storage,item.storagePhoto);
       }else{
         item.storagePhoto=null;
       }
@@ -625,29 +669,30 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v)$('itemStorage').value=v};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};$('chooseStoragePhotoBtn').onclick=chooseStoragePhoto;$('storagePhotoFile').onchange=handleStoragePhotoFile;$('captureStorageFromCameraBtn').onclick=captureStoragePhotoFromActiveCamera;$('clearStoragePhotoBtn').onclick=clearStoragePhoto;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};$('chooseStoragePhotoBtn').onclick=chooseStoragePhoto;$('storagePhotoFile').onchange=handleStoragePhotoFile;$('captureStorageFromCameraBtn').onclick=captureStoragePhotoFromActiveCamera;$('clearStoragePhotoBtn').onclick=clearStoragePhoto;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets()}}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
     function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
     function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
-    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),storageLocationPhoto:item.storagePhoto?.dataUrl?{label:item.storagePhoto.label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:item.storagePhoto.takenAt||'',hasEmbeddedDataUrl:true}:null,listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
-    function buildSheetsDriveRows(){let rows=[['Date Created','Item ID','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,i.storagePhoto?.dataUrl?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});return rows}
+    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),storageLocationPhoto:getEffectiveStoragePhoto(item)?.dataUrl?{label:getEffectiveStoragePhoto(item).label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:getEffectiveStoragePhoto(item).takenAt||'',hasEmbeddedDataUrl:true,source:getEffectiveStoragePhoto(item)._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
+    function buildSheetsDriveRows(){let rows=[['Date Created','Item ID','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,getEffectiveStoragePhoto(i)?.dataUrl?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});return rows}
     function buildRebuildHtml(){
       let b=backupObj();
       let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
       let rows=buildSheetsDriveRows();
       let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[10]||'')}</td><td>${esc(r[9]||'0')}</td><td>${esc(r[5]||'')}</td><td>${esc(r[7]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let items=b.items.map((item,index)=>{
-        let storageImg=item.storagePhoto?.dataUrl?`<figure><img src="${item.storagePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
+        let effectiveStoragePhoto=getEffectiveStoragePhoto(item);
+        let storageImg=effectiveStoragePhoto?.dataUrl?`<figure><img src="${effectiveStoragePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
         let imgs=(item.photos||[]).map((p,pi)=>`<figure><img src="${p.dataUrl}" alt="${esc(p.label||'photo')}"><figcaption>${esc(p.label||`Photo ${pi+1}`)} · Suggested file: ${esc(shotFileName(item,index,p,pi))}</figcaption></figure>`).join('');
         let checklist=[];
         checklist.push((item.photos||[]).length?'Listing photos saved':'No listing photos saved');
-        checklist.push(item.storagePhoto?.dataUrl?'Storage location photo saved':'No storage location photo saved');
+        checklist.push(getEffectiveStoragePhoto(item)?.dataUrl?'Storage location photo saved':'No storage location photo saved');
         checklist.push((item.fbDescription||item.notes)?'Listing text saved':'No listing text saved');
         return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Recovery Checklist</h3><ul>${checklist.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Storage Location Photo</h3><div class="photos">${storageImg||'<p>No storage location photo saved for this item.</p>'}</div><h3>Listing Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`;
       }).join('');
@@ -659,8 +704,8 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(i.storagePhoto?.dataUrl?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Storage location photos: <b>${storagePhotoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(i.storagePhoto?.dataUrl?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
     function itemBackupReadiness(item){
       let missing=[];
       if(!(item.photos||[]).length) missing.push('listing photos');
@@ -668,7 +713,7 @@
       if(!(item.fbDescription||item.notes)) missing.push('description/notes');
       if(!item.price && !item.fbPrice) missing.push('price');
       if(!item.storage) missing.push('storage location');
-      if(!item.storagePhoto?.dataUrl) missing.push('storage photo');
+      if(!getEffectiveStoragePhoto(item)?.dataUrl) missing.push('storage photo');
       let level=missing.length===0?'ok':missing.length<=2?'warn':'bad';
       let label=level==='ok'?'Ready for rebuild':level==='warn'?'Mostly ready':'Needs attention';
       return {level,label,missing};
@@ -680,7 +725,7 @@
       el.innerHTML=items.slice().reverse().map(item=>{
         let r=itemBackupReadiness(item);
         let missingText=r.missing.length?`Missing: ${r.missing.join(', ')}`:'All key rebuild fields are present.';
-        return `<div class="backup-ready-card ${r.level}"><strong>${item.title||'Untitled item'}</strong><br><span class="readiness-pill ${r.level}">${r.label}</span><p class="note">${missingText}</p><p class="note">Photos: ${(item.photos||[]).length} · Storage photo: ${item.storagePhoto?.dataUrl?'Yes':'No'} · Status: ${item.status||'Draft'}</p></div>`;
+        return `<div class="backup-ready-card ${r.level}"><strong>${item.title||'Untitled item'}</strong><br><span class="readiness-pill ${r.level}">${r.label}</span><p class="note">${missingText}</p><p class="note">Photos: ${(item.photos||[]).length} · Storage photo: ${getEffectiveStoragePhoto(item)?.dataUrl?'Yes':'No'} · Status: ${item.status||'Draft'}</p></div>`;
       }).join('');
     }
     function renderBackupPreview(){
@@ -691,7 +736,7 @@
         let index=items.indexOf(item);
         let photos=item.photos||[];
         let files=photos.map((p,pi)=>shotFileName(item,index,p,pi)).join('<br>')||'No listing photo filenames yet';
-        let storageFile=item.storagePhoto?.dataUrl?`${itemFolderName(item,index)}-storage-location.jpg`:'No storage photo filename yet';
+        let storageFile=getEffectiveStoragePhoto(item)?.dataUrl?`${itemFolderName(item,index)}-storage-location.jpg`:'No storage photo filename yet';
         return `<tr><td>${item.title||'Untitled item'}</td><td>${itemFolderName(item,index)}</td><td>${files}</td><td>${storageFile}</td></tr>`;
       }).join('');
       el.innerHTML=`<table class="backup-table"><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Suggested Listing Photo Files</th><th>Storage Photo File</th></tr></thead><tbody>${rows}</tbody></table>`;
