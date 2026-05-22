@@ -181,7 +181,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.0822';
+    const VERSION='v0.26.05.22.0841';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -258,8 +258,7 @@
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
     function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
-    function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('
-')}
+    function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
     function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
     function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
