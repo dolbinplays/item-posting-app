@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1016</title>
+  <title>Item Posting Assistant v0.26.05.22.1034</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -44,7 +44,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1016 · draft history</p>
+      <p class="eyebrow">v0.26.05.22.1034 · save item feedback fix</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds draft history so Facebook Marketplace listing versions can be saved, restored, copied, or deleted.</p>
     </header>
@@ -205,7 +205,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1016';
+    const VERSION='v0.26.05.22.1034';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -343,8 +343,28 @@
     function updateSelectedPhotos(mutator){let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;item.photos=item.photos||[];mutator(item.photos,item);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=async()=>{let idx=Number(b.dataset.photoRotate);let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item||!item.photos?.[idx])return;b.disabled=true;try{item.photos[idx].dataUrl=await rotateDataUrlRight(item.photos[idx].dataUrl);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}catch(e){alert('Could not rotate photo: '+e.message)}finally{b.disabled=false}})}
     function rotateDataUrlRight(dataUrl){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>{try{let c=document.createElement('canvas');c.width=img.height;c.height=img.width;let ctx=c.getContext('2d');ctx.translate(c.width/2,c.height/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-img.width/2,-img.height/2);resolve(c.toDataURL('image/jpeg',0.84))}catch(e){reject(e)}};img.onerror=()=>reject(new Error('Image load failed'));img.src=dataUrl})}
-    function collectItem(){if(!selectedItemId)return null;let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return null;Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});setItems(items);return item}
-    function saveItem(){let i=collectItem();if(i){renderInventory();loadItem(i.id)}} function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
+    function collectItem(){
+      if(!selectedItemId){alert('No inventory item is selected.');return null}
+      let items=getItems(),item=items.find(i=>i.id===selectedItemId);
+      if(!item){alert('The selected item could not be found. Please select it again from the inventory list.');return null}
+      Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});
+      if(!setItems(items))return null;
+      return item;
+    }
+    function saveItem(){
+      const btn=$('saveItemBtn');
+      if(btn)btn.disabled=true;
+      try{
+        let saved=collectItem();
+        if(!saved)return;
+        selectedItemId=saved.id;
+        renderInventory();
+        loadItem(saved.id);
+        refreshBackupViews();
+        alert(`Item saved: ${saved.title||'Untitled item'}`);
+      }catch(e){storageError(e)}
+      finally{if(btn)btn.disabled=false;}
+    } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
     $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
