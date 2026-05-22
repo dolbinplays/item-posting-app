@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1420</title>
+  <title>Item Posting Assistant v0.26.05.22.1458</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -82,14 +82,20 @@
     .backup-table td{background:rgba(2,6,23,.36);color:var(--muted)}
     .backup-step-list{margin:10px 0 0;padding-left:20px;color:var(--muted);line-height:1.45;font-size:.9rem}
 
+
+    .storage-meter{height:12px;background:rgba(255,255,255,.09);border-radius:999px;overflow:hidden;margin:10px 0}
+    .storage-meter-bar{height:100%;width:0;background:linear-gradient(90deg,var(--success),var(--warn),var(--danger));transition:width .25s}
+    .cleanup-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+    @media(min-width:760px){.cleanup-grid{grid-template-columns:repeat(2,1fr)}}
+    .cleanup-grid button{font-size:.88rem;padding:10px}
 </style>
 </head>
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1420 · item intelligence foundation</p>
+      <p class="eyebrow">v0.26.05.22.1458 · storage optimization</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds structured item intelligence fields for stronger Facebook Marketplace drafts and future AI recognition/pricing support.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds storage optimization, compressed session saves, storage usage estimates, and cleanup tools to reduce browser quota errors.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -296,6 +302,16 @@
           </div>
           <p class="note">For now, Google Sheets/Drive support is export-based: the CSV acts as the spreadsheet index, while the manifest suggests Drive folders and filenames for each item’s media.</p>
           <div id="countsBox" class="note"></div>
+          <h3 style="margin-top:16px">Storage Usage & Cleanup</h3>
+          <p class="note">This prototype stores photos locally in your browser. These tools help recover space before the phone browser hits its storage limit.</p>
+          <div class="storage-meter"><div id="storageMeterBar" class="storage-meter-bar"></div></div>
+          <div id="storageUsageBox" class="note"></div>
+          <div class="cleanup-grid">
+            <button id="clearTempCapturesBtn" class="secondary" type="button">Clear Temporary Captures</button>
+            <button id="clearSavedSessionsBtn" class="secondary" type="button">Clear Saved Capture Sessions</button>
+            <button id="compressInventoryBtn" class="secondary" type="button">Compress Existing Inventory Photos</button>
+            <button id="refreshStorageStatsBtn" class="secondary" type="button">Refresh Storage Stats</button>
+          </div>
           <h3 style="margin-top:16px">Backup Readiness</h3>
           <p class="note">This checks whether each item has enough saved information to rebuild a listing later.</p>
           <div id="backupReadiness" class="backup-ready-grid"></div>
@@ -327,19 +343,23 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1420';
+    const VERSION='v0.26.05.22.1458';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
     function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
     function storageError(e){
-      const msg=(e&&e.name==='QuotaExceededError')?'Storage is full. Try Export Rebuildable HTML Backup, then clear older saved sessions or current captures before creating more items.':(e?.message||e||'Unknown storage error');
+      const msg=(e&&e.name==='QuotaExceededError')?'Storage is full. Export a Rebuildable HTML Backup, then use Backup > Storage Usage & Cleanup to clear temporary captures/saved sessions or compress existing inventory photos.':(e?.message||e||'Unknown storage error');
       alert('Could not save data: '+msg);
       try{$('captureStatus').textContent='Save failed: '+msg}catch{}
       console.error(e);
       return false;
     }
     function safeWrite(k,v){try{write(k,v);return true}catch(e){return storageError(e)}}
+    function bytesOfString(str){try{return new Blob([str||'']).size}catch{return String(str||'').length*2}}
+    function approxLocalStorageBytes(){let total=0;try{for(let i=0;i<localStorage.length;i++){let k=localStorage.key(i);total+=bytesOfString(k)+bytesOfString(localStorage.getItem(k)||'')}}catch{}return total}
+    function fmtBytes(bytes){if(!bytes)return '0 KB';let units=['B','KB','MB','GB'],i=0,n=bytes;while(n>=1024&&i<units.length-1){n/=1024;i++}return (i? n.toFixed(1):Math.round(n))+' '+units[i]}
+    async function storageEstimate(){if(navigator.storage?.estimate){try{return await navigator.storage.estimate()}catch{}}return {usage:approxLocalStorageBytes(),quota:null}}
     const fmt=n=>Number(n).toFixed(2)+'s';
     const id=p=>p+'_'+Date.now()+'_'+Math.random().toString(16).slice(2);
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
@@ -392,17 +412,17 @@
     function updateCapturePresetInfo(){let p=getSelectedPreset();$('capturePresetInfo').textContent=p?`Using ${p.name}: ${fmt(p.rotation)} per rotation. Capture points: 0s, ${fmt(p.rotation*.25)}, ${fmt(p.rotation*.5)}, ${fmt(p.rotation*.75)}.`:'Save or select a calibration preset first.';$('startAutoCaptureBtn').disabled=!p||!stream}
     function canvasShot(label){
       if(!stream||!video.videoWidth){alert('Camera is not running yet.');throw new Error('Camera not running')}
-      let maxW=960,maxH=720,ratio=Math.min(maxW/video.videoWidth,maxH/video.videoHeight,1);
+      let maxW=720,maxH=540,ratio=Math.min(maxW/video.videoWidth,maxH/video.videoHeight,1);
       let c=document.createElement('canvas');c.width=Math.round(video.videoWidth*ratio);c.height=Math.round(video.videoHeight*ratio);
       c.getContext('2d').drawImage(video,0,0,c.width,c.height);
-      return{label,dataUrl:c.toDataURL('image/jpeg',.74),takenAt:new Date().toISOString(),width:c.width,height:c.height}
+      return{label,dataUrl:c.toDataURL('image/jpeg',.62),takenAt:new Date().toISOString(),width:c.width,height:c.height,optimized:true}
     }
     function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}} function beep(){try{let C=window.AudioContext||window.webkitAudioContext;if(!C)return;let ac=new C(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
     function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=canvasShot(a[i].label);setShots(a)})}
     async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';for(let i=3;i>0;i--){cd.textContent=i;await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(canvasShot(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. Review photos or create an inventory item.'}
     $('manualShotBtn').onclick=()=>{let s=getShots();s.push(canvasShot('Manual shot '+(s.length+1)));setShots(s);$('captureStatus').textContent='Manual test shot saved to current captures.'}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
     function cloneShots(shots){return (shots||[]).map(s=>({...s}))}
-    function compressDataUrl(dataUrl,maxW=900,maxH=675,quality=.72){
+    function compressDataUrl(dataUrl,maxW=640,maxH=480,quality=.58){
       return new Promise(resolve=>{
         if(!dataUrl||!dataUrl.startsWith('data:image/')) return resolve(dataUrl);
         let img=new Image();
@@ -418,14 +438,37 @@
         img.src=dataUrl;
       });
     }
-    async function compactShots(shots){
+    async function compactShots(shots,maxW=640,maxH=480,quality=.58){
       let out=[];
       for(const s of (shots||[])){
-        out.push({...s,dataUrl:await compressDataUrl(s.dataUrl),compressedForInventory:true});
+        out.push({...s,dataUrl:await compressDataUrl(s.dataUrl,maxW,maxH,quality),compressedForInventory:true,optimized:true});
       }
       return out;
     }
-    function saveSession(){let shots=getShots();if(!shots.length){alert('No captures to save. Take photos first, or load an existing saved session.');return}let sessions=read(K.sessions,[]);let name=$('sessionName').value.trim()||'Untitled session';sessions.push({id:id('session'),name,createdAt:new Date().toISOString(),photos:cloneShots(shots),preset:getSelectedPreset()?.name||''});if(!safeWrite(K.sessions,sessions))return;renderSessions();refreshBackupViews();$('captureStatus').textContent=`Saved session: ${name}`;alert('Capture session saved. It should now appear under Saved Sessions.')} $('saveSessionBtn').onclick=saveSession;
+    async function saveSession(){
+      let shots=getShots();
+      if(!shots.length){alert('No captures to save. Take photos first, or load an existing saved session.');return}
+      let sessions=read(K.sessions,[]);
+      let name=$('sessionName').value.trim()||'Untitled session';
+      $('captureStatus').textContent='Compressing and saving capture session...';
+      let photos=await compactShots(shots,640,480,.56);
+      let newSession={id:id('session'),name,createdAt:new Date().toISOString(),photos,preset:getSelectedPreset()?.name||'',optimized:true};
+      sessions.push(newSession);
+      if(!safeWrite(K.sessions,sessions)){
+        photos=await compactShots(shots,480,360,.45);
+        newSession={...newSession,photos,optimized:true,extraCompressed:true};
+        sessions=read(K.sessions,[]);
+        sessions.push(newSession);
+        if(!safeWrite(K.sessions,sessions)){
+          $('captureStatus').textContent='Session save failed. Use Backup > Storage Usage & Cleanup.';
+          await renderStorageUsage();
+          return;
+        }
+      }
+      renderSessions();refreshBackupViews();await renderStorageUsage();
+      $('captureStatus').textContent=`Saved compressed session: ${name}`;
+      alert('Capture session saved using compressed photos. It should now appear under Saved Sessions.');
+    } $('saveSessionBtn').onclick=saveSession;
     function renderSessions(){let sessions=read(K.sessions,[]),el=$('sessionsList');el.innerHTML=sessions.length?'':'<div class="empty-state">No saved sessions yet.</div>';sessions.slice().reverse().forEach(s=>{let d=document.createElement('div');d.className='result-box';d.innerHTML=`<strong>${s.name}</strong><p class="note">${s.photos?.length||0} photos · ${new Date(s.createdAt).toLocaleString()}</p><div class="actions"><button class="secondary" data-load-session="${s.id}">Load Photos</button><button class="primary" data-item-session="${s.id}">Create Item</button></div>`;el.appendChild(d)});el.querySelectorAll('[data-load-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.loadSession);if(!s)return;setShots(cloneShots(s.photos));$('sessionName').value=s.name||'';$('captureStatus').textContent=`Loaded saved session: ${s.name}`});el.querySelectorAll('[data-item-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.itemSession);if(!s)return;createItemFromShots(cloneShots(s.photos),s.name||'Saved session item')})}
 
     // Inventory
@@ -755,7 +798,13 @@
         checklist.push((item.fbDescription||item.notes)?'Listing text saved':'No listing text saved');
         return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Item details:</b> ${esc(joinParts([item.brand,item.model,item.itemType,item.color,item.dimensions,item.material], ' · ')||'No structured details saved')}</p><p><b>Tested:</b> ${esc(item.testedStatus||'')} &nbsp; <b>Missing parts:</b> ${esc(item.missingParts||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Recovery Checklist</h3><ul>${checklist.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Storage Location Photo</h3><div class="photos">${storageImg||'<p>No storage location photo saved for this item.</p>'}</div><h3>Listing Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`;
       }).join('');
-      return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Rebuild Backup ${VERSION}</title><style>body{font-family:system-ui,sans-serif;margin:24px;background:#f8fafc;color:#0f172a}.item,.guide{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin:0 0 18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;vertical-align:top}th{background:#e0f2fe}</style></head><body><h1>Item Posting Assistant Rebuild Backup</h1><section class="guide"><p><b>Version:</b> ${esc(VERSION)} · <b>Exported:</b> ${esc(b.exportedAt)} · <b>Items:</b> ${b.items.length}</p><h2>How to use this backup</h2><ol><li>Open this file in a browser to view listing details and saved photos.</li><li>Use each item’s Suggested Drive Folder and Suggested file names when organizing photos in Google Drive.</li><li>Use the Sheets + Drive CSV as your Google Sheets inventory index.</li><li>Use the embedded photos and listing text here to rebuild Facebook Marketplace listings if local phone data is lost.</li></ol><h2>Spreadsheet / Drive Index Preview</h2><table><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Photo Count</th><th>Status</th><th>Storage</th></tr></thead><tbody>${tableRows}</tbody></table></section>${items}</body></html>`;
+      return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Rebuild Backup ${VERSION}</title><style>body{font-family:system-ui,sans-serif;margin:24px;background:#f8fafc;color:#0f172a}.item,.guide{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin:0 0 18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;vertical-align:top}th{background:#e0f2fe}
+    .storage-meter{height:12px;background:rgba(255,255,255,.09);border-radius:999px;overflow:hidden;margin:10px 0}
+    .storage-meter-bar{height:100%;width:0;background:linear-gradient(90deg,var(--success),var(--warn),var(--danger));transition:width .25s}
+    .cleanup-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
+    @media(min-width:760px){.cleanup-grid{grid-template-columns:repeat(2,1fr)}}
+    .cleanup-grid button{font-size:.88rem;padding:10px}
+</style></head><body><h1>Item Posting Assistant Rebuild Backup</h1><section class="guide"><p><b>Version:</b> ${esc(VERSION)} · <b>Exported:</b> ${esc(b.exportedAt)} · <b>Items:</b> ${b.items.length}</p><h2>How to use this backup</h2><ol><li>Open this file in a browser to view listing details and saved photos.</li><li>Use each item’s Suggested Drive Folder and Suggested file names when organizing photos in Google Drive.</li><li>Use the Sheets + Drive CSV as your Google Sheets inventory index.</li><li>Use the embedded photos and listing text here to rebuild Facebook Marketplace listings if local phone data is lost.</li></ol><h2>Spreadsheet / Drive Index Preview</h2><table><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Photo Count</th><th>Status</th><th>Storage</th></tr></thead><tbody>${tableRows}</tbody></table></section>${items}</body></html>`;
     }
 
     $('exportJsonBtn').onclick=()=>download(`item-posting-backup-${VERSION}.json`,JSON.stringify(backupObj(),null,2));
@@ -764,6 +813,32 @@
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+
+    async function renderStorageUsage(){
+      const est=await storageEstimate();
+      const usage=est.usage||approxLocalStorageBytes();
+      const quota=est.quota||0;
+      const pct=quota?Math.min(100,Math.round((usage/quota)*100)):0;
+      if($('storageMeterBar')) $('storageMeterBar').style.width=quota?pct+'%':'0%';
+      const sessions=read(K.sessions,[]), shots=getShots(), items=getItems();
+      const sessionPhotos=sessions.reduce((n,s)=>n+(s.photos?.length||0),0);
+      const itemPhotos=items.reduce((n,i)=>n+(i.photos?.length||0)+(i.storagePhoto?.dataUrl?1:0),0);
+      if($('storageUsageBox')) $('storageUsageBox').innerHTML=`Approx local app storage: <b>${fmtBytes(usage)}</b>${quota?` of ${fmtBytes(quota)} (${pct}%)`:''}<br>Temporary captures: <b>${shots.length}</b> · Saved session photos: <b>${sessionPhotos}</b> · Inventory/storage photos: <b>${itemPhotos}</b><br><span class="note">Tip: export a Rebuildable HTML Backup before clearing saved sessions or compressing existing photos.</span>`;
+    }
+    async function compressExistingInventoryPhotos(){
+      if(!confirm('Compress existing inventory and storage photos to save browser storage? Export a backup first if you want to preserve the current larger local copies.'))return;
+      let items=getItems();
+      for(const item of items){
+        if(item.photos?.length)item.photos=await compactShots(item.photos,640,480,.56);
+        if(item.storagePhoto?.dataUrl)item.storagePhoto={...item.storagePhoto,dataUrl:await compressDataUrl(item.storagePhoto.dataUrl,640,480,.56),optimized:true};
+      }
+      if(setItems(items)){if(selectedItemId)loadItem(selectedItemId);renderInventory();await renderStorageUsage();alert('Existing inventory photos compressed.');}
+    }
+    function clearSavedSessions(){
+      if(!confirm('Clear all saved capture sessions? Inventory items and their photos will remain. Export a backup first if needed.'))return;
+      if(safeWrite(K.sessions,[])){renderSessions();refreshBackupViews();alert('Saved capture sessions cleared.');}
+    }
+
     function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(i.storagePhoto?.dataUrl?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
     function itemBackupReadiness(item){
       let missing=[];
