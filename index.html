@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1057</title>
+  <title>Item Posting Assistant v0.26.05.22.1123</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -50,6 +50,15 @@
     .quick-status-row label{color:var(--muted);font-size:.76rem;font-weight:900}
     .needs-listing-badge{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.35);color:#fde68a}
 
+
+    .storage-tools{margin-top:8px;display:grid;gap:8px}
+    .storage-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .storage-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
+    .recent-storage-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}
+    .storage-chip{border:1px solid rgba(56,189,248,.28);background:rgba(56,189,248,.12);color:#bae6fd;border-radius:999px;padding:7px 9px;font-size:.78rem;font-weight:900;cursor:pointer}
+    .preset-list{display:grid;gap:7px;margin-top:8px}
+    .preset-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:rgba(2,6,23,.38);border:1px solid var(--border);border-radius:13px;padding:8px}
+    .preset-row button{padding:8px 10px;font-size:.78rem;border-radius:10px}
 </style>
 </head>
 <body>
@@ -165,6 +174,12 @@
               </select>
             </div>
             <div>
+              <label class="small">Storage filter</label>
+              <select id="inventoryStorageFilter">
+                <option value="all">All storage locations</option>
+              </select>
+            </div>
+            <div>
               <label class="small">Sort inventory</label>
               <select id="inventorySort">
                 <option value="newest">Newest first</option>
@@ -196,6 +211,11 @@
             <label class="small">Accessories / included items</label><input id="itemAccessories" placeholder="Box, manual, cables...">
             <label class="small">Flaws / damage</label><input id="itemFlaws" placeholder="Small scratch on back...">
             <label class="small">Storage location</label><input id="itemStorage" placeholder="Garage shelf B, blue tote...">
+            <div class="storage-tools">
+              <select id="itemStoragePreset"><option value="">Choose saved storage preset...</option></select>
+              <div class="storage-actions"><button id="applyStoragePresetBtn" class="secondary">Apply Preset</button><button id="saveStoragePresetBtn" class="success">Save Preset</button><button id="removeStoragePresetBtn" class="danger">Remove Preset</button></div>
+              <div id="recentStorageList" class="recent-storage-list"></div>
+            </div>
             <label class="small">Notes</label><textarea id="itemNotes" rows="3"></textarea>
             <h3 style="margin-top:16px">Facebook Marketplace Draft</h3>
             <label class="small">Tone</label><select id="draftTone"><option value="friendly">Friendly</option><option value="direct">Direct</option><option value="detailed">Detailed</option></select>
@@ -233,6 +253,9 @@
           <input id="importFile" type="file" accept="application/json">
           <div class="actions"><button id="importJsonBtn" class="success">Import Selected Backup</button></div>
           <p class="note">This replaces local prototype data with the JSON backup file you choose. Rebuildable HTML files are for viewing/recovery, not importing yet.</p>
+          <h3 style="margin-top:16px">Saved Storage Presets</h3>
+          <p class="note">These common storage locations are included in JSON backups and appear as quick-select options while editing items.</p>
+          <div id="storagePresetList" class="preset-list"></div>
           <h3 style="margin-top:16px">Sheets/Drive Preview</h3>
           <p class="note">This preview shows where the suggested Google Drive folder names and photo filenames appear before you export.</p>
           <div id="backupPreview" class="note"></div>
@@ -245,8 +268,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1057';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.05.22.1123';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
     function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
@@ -348,6 +371,20 @@
 
     // Inventory
     let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
+    const getStoragePresets=()=>read(K.storagePresets,[]), setStoragePresets=v=>{if(safeWrite(K.storagePresets,[...new Set((v||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)))){renderStoragePresets();renderInventory();refreshBackupViews();return true}return false};
+    function getRecentStorageLocations(){let seen=[];getItems().slice().reverse().forEach(i=>{let v=String(i.storage||'').trim();if(v&&!seen.includes(v))seen.push(v)});return seen.slice(0,6)}
+    function maybeAddRecentStorage(value){let v=String(value||'').trim();if(!v)return;let ps=getStoragePresets();if(!ps.includes(v)&&confirm(`Save "${v}" as a reusable storage preset?`)){setStoragePresets([...ps,v])}}
+    function renderStoragePresets(){
+      let ps=getStoragePresets();
+      let storageFilter=$('inventoryStorageFilter');
+      if(storageFilter){let current=storageFilter.value||'all';storageFilter.innerHTML='<option value="all">All storage locations</option>'+ps.map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');storageFilter.value=ps.includes(current)?current:'all'}
+      let itemSel=$('itemStoragePreset');
+      if(itemSel){let current=itemSel.value||'';itemSel.innerHTML='<option value="">Choose saved storage preset...</option>'+ps.map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');itemSel.value=ps.includes(current)?current:''}
+      let list=$('storagePresetList');
+      if(list){list.innerHTML=ps.length?'':'<div class="empty-state">No saved storage presets yet. Add one from an item storage location field.</div>';ps.forEach(p=>{let row=document.createElement('div');row.className='preset-row';row.innerHTML=`<span>${escapeHtml(p)}</span><button class="danger" data-remove-storage-global="${escapeAttr(p)}">Remove</button>`;list.appendChild(row)});list.querySelectorAll('[data-remove-storage-global]').forEach(b=>b.onclick=()=>{setStoragePresets(getStoragePresets().filter(p=>p!==b.dataset.removeStorageGlobal))})}
+    }
+    function renderRecentStorageChips(){let el=$('recentStorageList');if(!el)return;let recent=getRecentStorageLocations();el.innerHTML=recent.length?recent.map(v=>`<button type="button" class="storage-chip" data-recent-storage="${escapeAttr(v)}">${escapeHtml(v)}</button>`).join(''):'<span class="note">No recent storage locations yet.</span>';el.querySelectorAll('[data-recent-storage]').forEach(b=>b.onclick=()=>{$('itemStorage').value=b.dataset.recentStorage})}
+
     function generateDraft(item){let name=item.title?.trim()||'Item for sale',cond=item.condition||'Used - Good',cat=item.category?.trim(),acc=item.accessories?.trim(),flaws=item.flaws?.trim(),notes=item.notes?.trim(),tone=item.draftTone||'friendly',pickup=item.pickupMode||'Local pickup preferred';let title=titleCase(name).slice(0,80);let lines=[];if(tone==='direct')lines.push(`${name} for sale.`);else if(tone==='detailed')lines.push(`Selling ${name}. This is a ${cond.toLowerCase()} item${cat?` in the ${cat} category`:''}.`);else lines.push(`Selling ${name}.`);lines.push(`Condition: ${cond}.`);if(acc)lines.push(`Includes: ${acc}.`);if(flaws)lines.push(`Please note: ${flaws}.`);if(notes)lines.push(notes);lines.push('Please review the photos and message me with any questions.');return{fbTitle:title,fbPrice:moneyText(item.price),fbDescription:lines.join('\n\n'),fbPickup:pickup+'.'}}
     async function createItemFromShots(shots,titleHint){
       if(!shots||!shots.length){alert('Capture at least one photo first.');return}
@@ -373,11 +410,13 @@
       let q=($('inventorySearch')?.value||'').toLowerCase().trim();
       let status=($('inventoryStatusFilter')?.value||'all');
       let sort=($('inventorySort')?.value||'newest');
+      let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let filtered=items.filter(item=>{
         let itemStatus=item.status||'Draft';
         let statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):itemStatus===status);
         let searchMatch=!q||itemSearchBlob(item).includes(q);
-        return statusMatch&&searchMatch;
+        let storageMatch=storageFilter==='all'||String(item.storage||'')===storageFilter;
+        return statusMatch&&searchMatch&&storageMatch;
       });
       filtered.sort((a,b)=>{
         if(sort==='oldest')return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
@@ -396,8 +435,9 @@
       let items=getItems(),filtered=getFilteredInventory(),list=$('inventoryList');
       list.innerHTML='';
       let status=($('inventoryStatusFilter')?.value||'all');
+      let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let q=($('inventorySearch')?.value||'').trim();
-      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':(status!=='all'?` · ${status}`:''));
+      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter}`:'');
       if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';return}
       filtered.forEach(i=>{
         let first=i.photos?.[0]?.dataUrl||'',card=document.createElement('div');
@@ -417,7 +457,7 @@
         renderInventory();refreshBackupViews();
       }
     }
-    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderDraftHistory(item);renderInventory()}
+    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderInventory()}
     function saveItemObject(item){let items=getItems().map(i=>i.id===item.id?item:i);return setItems(items)}
     function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
     function currentDraftSnapshot(item,label){return {id:id('draft'),label:label||`Draft ${((item.draftHistory||[]).length)+1}`,savedAt:new Date().toISOString(),fbTitle:item.fbTitle||'',fbPrice:item.fbPrice||'',fbDescription:item.fbDescription||'',fbPickup:item.fbPickup||'',tone:item.draftTone||'friendly',pickupMode:item.pickupMode||'Local pickup preferred'}}
@@ -455,11 +495,11 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v)$('itemStorage').value=v};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems()}}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
@@ -502,13 +542,13 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;renderPresets();renderShots();renderSessions();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p>`}
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
     function renderBackupPreview(){let el=$('backupPreview');if(!el)return;let items=getItems();if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names and photo filenames.</div>';return}let sample=items.slice(-3).reverse().map((item,revIndex)=>{let index=items.indexOf(item);let files=(item.photos||[]).map((p,pi)=>`<li>${shotFileName(item,index,p,pi)}</li>`).join('')||'<li>No photos attached</li>';return `<div class="result-box"><strong>${item.title||'Untitled item'}</strong><p>Suggested Drive folder: <b>${itemFolderName(item,index)}</b></p><ul>${files}</ul></div>`}).join('');el.innerHTML=sample}
     function refreshBackupViews(){try{renderCounts();renderBackupPreview()}catch(e){}}
 
     // Init
-    updateDiag(); renderPresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
