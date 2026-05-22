@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Item Posting Assistant — Capture Station</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --card-soft: #1f2937;
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --accent: #38bdf8;
+      --accent-strong: #0284c7;
+      --success: #22c55e;
+      --warning: #facc15;
+      --danger: #f97316;
+      --border: rgba(255,255,255,0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+
+    .app {
+      width: min(960px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    header { padding: 16px 4px 20px; }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.9rem, 8vw, 3.4rem);
+      line-height: 1.02;
+    }
+
+    .subtitle {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.5;
+      max-width: 720px;
+    }
+
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+    @media (min-width: 760px) {
+      .grid.two { grid-template-columns: 1.05fr 0.95fr; }
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.25);
+      backdrop-filter: blur(10px);
+    }
+
+    .card h2 { margin: 0 0 12px; font-size: 1.2rem; }
+
+    .setup-visual {
+      min-height: 260px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .phone {
+      width: 92px;
+      height: 172px;
+      border: 5px solid #e2e8f0;
+      border-radius: 24px;
+      position: relative;
+      background: #020617;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.15), 0 18px 34px rgba(0,0,0,0.35);
+      transform: translateY(-16px);
+    }
+
+    .phone:before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 34px;
+      height: 5px;
+      border-radius: 999px;
+      background: #475569;
+    }
+
+    .lens {
+      position: absolute;
+      top: 34px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 3px solid var(--accent);
+      box-shadow: 0 0 26px rgba(56,189,248,0.6);
+    }
+
+    .tripod {
+      position: absolute;
+      top: calc(50% + 66px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 8px;
+      height: 56px;
+      background: #94a3b8;
+      border-radius: 999px;
+    }
+
+    .tripod:before, .tripod:after {
+      content: "";
+      position: absolute;
+      top: 36px;
+      width: 7px;
+      height: 78px;
+      background: #94a3b8;
+      border-radius: 999px;
+      transform-origin: top;
+    }
+
+    .tripod:before { left: 0; transform: rotate(28deg); }
+    .tripod:after { right: 0; transform: rotate(-28deg); }
+
+    .turntable {
+      position: absolute;
+      bottom: 28px;
+      width: 210px;
+      height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #334155, #020617);
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+
+    .item-box {
+      position: absolute;
+      bottom: 64px;
+      width: 88px;
+      height: 82px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #f8fafc, #94a3b8);
+      box-shadow: 0 18px 28px rgba(0,0,0,0.28);
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 50%;
+      top: 64px;
+      transform: translateX(-50%);
+      width: 250px;
+      height: 130px;
+      border: 1px solid rgba(56,189,248,0.4);
+      border-radius: 28px;
+      box-shadow: 0 0 34px rgba(56,189,248,0.25) inset;
+    }
+
+    .checklist {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+    }
+
+    .check-item {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+      align-items: start;
+      background: rgba(15,23,42,0.52);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .check-item input { display: none; }
+
+    .box {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,0.24);
+      display: grid;
+      place-items: center;
+      color: transparent;
+      font-weight: 900;
+      transition: 0.15s ease;
+    }
+
+    .check-item input:checked + .box {
+      background: var(--success);
+      border-color: var(--success);
+      color: #052e16;
+    }
+
+    .check-text strong { display: block; margin-bottom: 3px; }
+
+    .check-text span {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+
+    .status {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(56,189,248,0.12);
+      color: #bae6fd;
+      border: 1px solid rgba(56,189,248,0.28);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--warning);
+      box-shadow: 0 0 14px rgba(250,204,21,0.7);
+    }
+
+    .dot.ready { background: var(--success); box-shadow: 0 0 14px rgba(34,197,94,0.7); }
+
+    .actions { display: grid; gap: 10px; margin-top: 18px; }
+
+    button {
+      border: 0;
+      border-radius: 16px;
+      padding: 15px 16px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease, background 0.12s ease;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    .primary {
+      color: #f8fafc;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      box-shadow: 0 12px 28px rgba(2,132,199,0.38);
+    }
+
+    .primary:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+    .secondary {
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+    }
+
+    .note {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .footer-note {
+      margin: 20px 2px 0;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <p class="eyebrow">Stage 1 · Prepare Capture Station</p>
+      <h1>Set up your item capture station.</h1>
+      <p class="subtitle">
+        Place your phone on a tripod, center the item on the rotating display, and confirm the setup checklist before moving into turntable calibration.
+      </p>
+    </header>
+
+    <section class="grid two">
+      <div class="card setup-visual" aria-label="Capture station illustration">
+        <div class="scan-line"></div>
+        <div class="phone"><div class="lens"></div></div>
+        <div class="tripod"></div>
+        <div class="item-box"></div>
+        <div class="turntable"></div>
+      </div>
+
+      <div class="card">
+        <h2>Capture Station Checklist</h2>
+        <ul class="checklist">
+          <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Phone is mounted</strong><span>Set your phone on a tripod or stand so it will not move during capture.</span></span></label></li>
+          <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Turntable is centered</strong><span>Place the rotating display directly in front of the camera.</span></span></label></li>
+          <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Item is stable</strong><span>Make sure the item will not slide, wobble, or fall while rotating.</span></span></label></li>
+          <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Lighting looks good</strong><span>Avoid harsh glare, deep shadows, and cluttered backgrounds.</span></span></label></li>
+          <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Item front is facing camera</strong><span>Start with the front of the item facing the phone before calibration.</span></span></label></li>
+        </ul>
+
+        <div class="status">
+          <span class="pill"><span id="readyDot" class="dot"></span><span id="readyText">0 of 5 ready</span></span>
+        </div>
+
+        <div class="actions">
+          <button id="continueBtn" class="primary" disabled>Continue to Turntable Calibration</button>
+          <button id="resetBtn" class="secondary">Reset Checklist</button>
+        </div>
+
+        <p class="note">Next step will add the calibration screen with Quick Calibration and Precision Calibration modes.</p>
+      </div>
+    </section>
+
+    <p class="footer-note">Prototype v0.1 · Facebook Marketplace-first item posting assistant</p>
+  </main>
+
+  <script>
+    const checks = Array.from(document.querySelectorAll('.setup-check'));
+    const readyText = document.getElementById('readyText');
+    const readyDot = document.getElementById('readyDot');
+    const continueBtn = document.getElementById('continueBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    function updateReadyState() {
+      const completed = checks.filter(check => check.checked).length;
+      const total = checks.length;
+      const ready = completed === total;
+      readyText.textContent = ready ? 'Capture station ready' : `${completed} of ${total} ready`;
+      readyDot.classList.toggle('ready', ready);
+      continueBtn.disabled = !ready;
+    }
+
+    checks.forEach(check => check.addEventListener('change', updateReadyState));
+
+    resetBtn.addEventListener('click', () => {
+      checks.forEach(check => check.checked = false);
+      updateReadyState();
+    });
+
+    continueBtn.addEventListener('click', () => {
+      alert('Next build: Turntable Calibration screen with 1-rotation and 3-rotation modes.');
+    });
+
+    updateReadyState();
+  </script>
+</body>
+</html>
