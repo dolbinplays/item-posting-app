@@ -124,21 +124,41 @@
     .saved-session span { color:var(--muted); font-size:.84rem; }
     .toggle-row { display:flex; gap:10px; align-items:center; margin-top:10px; color:var(--muted); font-weight:800; }
     .toggle-row input { width:auto; }
+
+    .inventory-grid { display:grid; grid-template-columns:1fr; gap:12px; }
+    @media (min-width: 760px) { .inventory-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1080px) { .inventory-grid { grid-template-columns: repeat(3, 1fr); } }
+    .item-card { border:1px solid var(--border); border-radius:18px; background:rgba(15,23,42,.48); overflow:hidden; cursor:pointer; }
+    .item-card.active { border-color:rgba(56,189,248,.78); box-shadow:0 0 0 2px rgba(56,189,248,.14) inset; }
+    .item-card img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#020617; }
+    .item-card-body { padding:11px; display:grid; gap:6px; }
+    .item-card-title { font-weight:950; }
+    .item-meta { color:var(--muted); font-size:.84rem; display:flex; gap:8px; flex-wrap:wrap; }
+    .mini-pill { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; background:rgba(56,189,248,.1); border:1px solid rgba(56,189,248,.22); color:#bae6fd; font-size:.78rem; font-weight:900; }
+    .form-grid { display:grid; grid-template-columns:1fr; gap:10px; }
+    @media (min-width: 760px) { .form-grid.two { grid-template-columns:1fr 1fr; } }
+    .copy-row { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:end; }
+    .copy-row button { padding:11px 12px; font-size:.9rem; }
+    .detail-images { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:8px; }
+    .detail-images img { width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:14px; border:1px solid var(--border); background:#020617; }
+    .empty-state { padding:20px; border:1px dashed rgba(255,255,255,.22); border-radius:18px; color:var(--muted); text-align:center; }
+
     .footer-note { margin: 20px 2px 0; color: var(--soft); font-size: .84rem; text-align:center; }
   </style>
 </head>
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">Prototype v0.26.05.22.0017 · Capture Polish</p>
+      <p class="eyebrow">Prototype v0.26.05.22.0035 · Inventory + Listing Drafts</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Prepare your capture station, calibrate your turntable, then use your phone camera to automatically capture front, right, back, and left images with countdown, progress feedback, and saved session details.</p>
+      <p class="subtitle">Prepare your capture station, calibrate your turntable, capture listing photos, then turn those captures into inventory items with Facebook Marketplace-ready draft fields.</p>
     </header>
 
     <nav class="nav">
       <button class="tab active" data-screen="setup">1 · Setup</button>
       <button class="tab" data-screen="calibration">2 · Calibration</button>
       <button class="tab" data-screen="capture">3 · Camera Capture</button>
+      <button class="tab" data-screen="inventory">4 · Inventory</button>
     </nav>
 
     <section id="setup" class="screen active">
@@ -235,9 +255,92 @@
           <div id="captureGuide" class="capture-guide"></div>
           <h3>Captured Images</h3>
           <div class="shot-list" id="shotList"></div>
-          <div class="actions"><button id="saveSessionBtn" class="success">Save Capture Session</button><button id="clearShotsBtn" class="secondary">Clear Captures</button></div>
+          <div class="actions"><button id="saveSessionBtn" class="success">Save Capture Session</button><button id="createItemBtn" class="primary">Create Inventory Item</button><button id="clearShotsBtn" class="secondary">Clear Captures</button></div>
           <h3>Saved Sessions</h3>
           <div id="savedSessions" class="session-card"></div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="inventory" class="screen">
+      <div class="grid capture">
+        <div class="card">
+          <h2>Inventory Dashboard</h2>
+          <p class="note">Each saved capture session can become an inventory item with photos, pricing, storage details, status, and Facebook Marketplace draft text.</p>
+          <div class="actions">
+            <button id="newItemFromShotsBtn" class="success">Create Item From Current Captures</button>
+            <button id="refreshInventoryBtn" class="secondary">Refresh Inventory</button>
+          </div>
+          <label class="small" for="inventorySearch">Search inventory</label>
+          <input id="inventorySearch" placeholder="Search title, status, storage, notes..." />
+          <div id="inventoryList" class="inventory-grid" style="margin-top:12px"></div>
+        </div>
+
+        <div class="card">
+          <h2>Item Detail + Facebook Draft</h2>
+          <div id="itemDetailEmpty" class="empty-state">Select an inventory item or create one from your current captures.</div>
+          <div id="itemDetailForm" style="display:none">
+            <div class="form-grid two">
+              <div>
+                <label class="small" for="itemTitle">Item title</label>
+                <input id="itemTitle" placeholder="Example: Vintage brass lamp" />
+              </div>
+              <div>
+                <label class="small" for="itemPrice">Asking price</label>
+                <input id="itemPrice" placeholder="Example: 35" inputmode="decimal" />
+              </div>
+              <div>
+                <label class="small" for="itemCondition">Condition</label>
+                <select id="itemCondition">
+                  <option>Used - Good</option>
+                  <option>Used - Like New</option>
+                  <option>Used - Fair</option>
+                  <option>New</option>
+                  <option>For parts or repair</option>
+                </select>
+              </div>
+              <div>
+                <label class="small" for="itemStatus">Listing status</label>
+                <select id="itemStatus">
+                  <option>Draft</option>
+                  <option>Ready to Post</option>
+                  <option>Listed</option>
+                  <option>Sold</option>
+                  <option>Archived</option>
+                </select>
+              </div>
+            </div>
+            <label class="small" for="itemStorage">Storage location</label>
+            <input id="itemStorage" placeholder="Example: Garage shelf B / Blue tote 3" />
+            <label class="small" for="itemNotes">Item notes</label>
+            <textarea id="itemNotes" rows="3" placeholder="Damage, accessories, testing notes, measurements..."></textarea>
+
+            <h3>Facebook Marketplace Draft</h3>
+            <div class="copy-row">
+              <div><label class="small" for="fbTitle">Marketplace title</label><input id="fbTitle" /></div>
+              <button class="secondary copy-btn" data-copy="fbTitle">Copy</button>
+            </div>
+            <div class="copy-row">
+              <div><label class="small" for="fbPrice">Marketplace price</label><input id="fbPrice" /></div>
+              <button class="secondary copy-btn" data-copy="fbPrice">Copy</button>
+            </div>
+            <div class="copy-row">
+              <div><label class="small" for="fbDescription">Marketplace description</label><textarea id="fbDescription" rows="6"></textarea></div>
+              <button class="secondary copy-btn" data-copy="fbDescription">Copy</button>
+            </div>
+            <div class="copy-row">
+              <div><label class="small" for="fbPickup">Pickup / shipping notes</label><textarea id="fbPickup" rows="3"></textarea></div>
+              <button class="secondary copy-btn" data-copy="fbPickup">Copy</button>
+            </div>
+            <div class="actions">
+              <button id="saveItemBtn" class="success">Save Item</button>
+              <button id="generateDraftBtn" class="primary">Regenerate Facebook Draft</button>
+              <button id="deleteItemBtn" class="danger">Delete Item</button>
+            </div>
+            <h3>Photos</h3>
+            <div id="itemDetailImages" class="detail-images"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -250,6 +353,7 @@
     const STORAGE_SELECTED = 'ipa_selected_preset_v1';
     const STORAGE_SHOTS = 'ipa_capture_shots_v1';
     const STORAGE_SESSIONS = 'ipa_capture_sessions_v1';
+    const STORAGE_ITEMS = 'ipa_inventory_items_v1';
 
     const tabs = document.querySelectorAll('.tab');
     const screens = document.querySelectorAll('.screen');
@@ -381,7 +485,211 @@
         const next = getPresets().filter((_, i) => i !== idx);
         setPresets(next);
         localStorage.setItem(STORAGE_SELECTED, '0');
-        renderPresets();
+    
+
+    const createItemBtn = document.getElementById('createItemBtn');
+    const newItemFromShotsBtn = document.getElementById('newItemFromShotsBtn');
+    const refreshInventoryBtn = document.getElementById('refreshInventoryBtn');
+    const inventorySearch = document.getElementById('inventorySearch');
+    const inventoryList = document.getElementById('inventoryList');
+    const itemDetailEmpty = document.getElementById('itemDetailEmpty');
+    const itemDetailForm = document.getElementById('itemDetailForm');
+    const itemTitle = document.getElementById('itemTitle');
+    const itemPrice = document.getElementById('itemPrice');
+    const itemCondition = document.getElementById('itemCondition');
+    const itemStatus = document.getElementById('itemStatus');
+    const itemStorage = document.getElementById('itemStorage');
+    const itemNotes = document.getElementById('itemNotes');
+    const fbTitle = document.getElementById('fbTitle');
+    const fbPrice = document.getElementById('fbPrice');
+    const fbDescription = document.getElementById('fbDescription');
+    const fbPickup = document.getElementById('fbPickup');
+    const saveItemBtn = document.getElementById('saveItemBtn');
+    const deleteItemBtn = document.getElementById('deleteItemBtn');
+    const generateDraftBtn = document.getElementById('generateDraftBtn');
+    const itemDetailImages = document.getElementById('itemDetailImages');
+    let selectedItemId = null;
+
+    function getItems() { try { return JSON.parse(localStorage.getItem(STORAGE_ITEMS) || '[]'); } catch { return []; } }
+    function setItems(items) { localStorage.setItem(STORAGE_ITEMS, JSON.stringify(items)); }
+    function makeId() { return `item_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+    function moneyText(value) {
+      const clean = String(value || '').replace(/[^0-9.]/g, '');
+      if (!clean) return '';
+      const n = Number(clean);
+      return Number.isFinite(n) ? `$${n.toFixed(n % 1 ? 2 : 0)}` : value;
+    }
+    function buildDescription(item) {
+      const title = item.title || 'Item for sale';
+      const condition = item.condition || 'Used - Good';
+      const notes = item.notes?.trim() ? `
+
+Notes: ${item.notes.trim()}` : '';
+      return `${title}
+
+Condition: ${condition}${notes}
+
+Please review the photos and message me with any questions. Local pickup preferred.`;
+    }
+    function buildPickup(item) {
+      const storage = item.storage?.trim() ? `
+Internal storage note: ${item.storage.trim()}` : '';
+      return `Available for local pickup. Cash or marketplace-approved payment preferred. I can usually meet in a safe public location.${storage}`;
+    }
+    function generateFacebookDraft(item) {
+      return {
+        fbTitle: item.title || 'Item for sale',
+        fbPrice: moneyText(item.price),
+        fbDescription: buildDescription(item),
+        fbPickup: buildPickup(item)
+      };
+    }
+    function createItemFromCurrentShots() {
+      const shots = getShots();
+      if (!shots.length) { alert('Capture or load at least one photo before creating an inventory item.'); return null; }
+      const p = getSelectedPreset();
+      const items = getItems();
+      const title = sessionName.value.trim() || `Inventory item ${items.length + 1}`;
+      const base = {
+        id: makeId(),
+        title,
+        price: '',
+        condition: 'Used - Good',
+        status: 'Draft',
+        storage: '',
+        notes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        presetName: p?.name || '',
+        photos: shots
+      };
+      Object.assign(base, generateFacebookDraft(base));
+      items.push(base);
+      setItems(items);
+      selectedItemId = base.id;
+      renderInventory();
+      loadItemDetail(base.id);
+      showScreen('inventory');
+      return base;
+    }
+    function renderInventory() {
+      const items = getItems();
+      const q = (inventorySearch?.value || '').toLowerCase().trim();
+      const filtered = q ? items.filter(item => [item.title,item.status,item.storage,item.notes,item.condition].join(' ').toLowerCase().includes(q)) : items;
+      inventoryList.innerHTML = '';
+      if (!filtered.length) {
+        inventoryList.innerHTML = '<div class="empty-state">No inventory items found yet. Create one from your current captures.</div>';
+        return;
+      }
+      filtered.slice().reverse().forEach(item => {
+        const firstPhoto = item.photos?.[0]?.dataUrl || '';
+        const card = document.createElement('div');
+        card.className = 'item-card' + (item.id === selectedItemId ? ' active' : '');
+        card.dataset.itemId = item.id;
+        card.innerHTML = `${firstPhoto ? `<img src="${firstPhoto}" alt="${item.title}">` : '<div style="aspect-ratio:4/3;display:grid;place-items:center;color:#94a3b8;background:#020617">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${item.title || 'Untitled item'}</div><div class="item-meta"><span class="mini-pill">${item.status || 'Draft'}</span><span>${moneyText(item.price) || 'No price'}</span><span>${item.condition || ''}</span></div><div class="item-meta">${item.storage || 'No storage location yet'}</div></div>`;
+        inventoryList.appendChild(card);
+      });
+      document.querySelectorAll('.item-card').forEach(card => card.addEventListener('click', () => loadItemDetail(card.dataset.itemId)));
+    }
+    function loadItemDetail(id) {
+      const item = getItems().find(i => i.id === id);
+      if (!item) {
+        selectedItemId = null;
+        itemDetailEmpty.style.display = 'block';
+        itemDetailForm.style.display = 'none';
+        renderInventory();
+        return;
+      }
+      selectedItemId = id;
+      itemDetailEmpty.style.display = 'none';
+      itemDetailForm.style.display = 'block';
+      itemTitle.value = item.title || '';
+      itemPrice.value = item.price || '';
+      itemCondition.value = item.condition || 'Used - Good';
+      itemStatus.value = item.status || 'Draft';
+      itemStorage.value = item.storage || '';
+      itemNotes.value = item.notes || '';
+      fbTitle.value = item.fbTitle || item.title || '';
+      fbPrice.value = item.fbPrice || moneyText(item.price);
+      fbDescription.value = item.fbDescription || buildDescription(item);
+      fbPickup.value = item.fbPickup || buildPickup(item);
+      itemDetailImages.innerHTML = '';
+      (item.photos || []).forEach(photo => {
+        const img = document.createElement('img');
+        img.src = photo.dataUrl;
+        img.alt = photo.label || 'Item photo';
+        itemDetailImages.appendChild(img);
+      });
+      renderInventory();
+    }
+    function collectDetailItem() {
+      if (!selectedItemId) return null;
+      const items = getItems();
+      const item = items.find(i => i.id === selectedItemId);
+      if (!item) return null;
+      Object.assign(item, {
+        title: itemTitle.value.trim(),
+        price: itemPrice.value.trim(),
+        condition: itemCondition.value,
+        status: itemStatus.value,
+        storage: itemStorage.value.trim(),
+        notes: itemNotes.value.trim(),
+        fbTitle: fbTitle.value.trim(),
+        fbPrice: fbPrice.value.trim(),
+        fbDescription: fbDescription.value.trim(),
+        fbPickup: fbPickup.value.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      setItems(items);
+      return item;
+    }
+    function saveItemDetail() {
+      const item = collectDetailItem();
+      if (!item) return;
+      renderInventory();
+      loadItemDetail(item.id);
+    }
+    function regenerateSelectedDraft() {
+      const item = collectDetailItem();
+      if (!item) return;
+      Object.assign(item, generateFacebookDraft(item));
+      const items = getItems().map(i => i.id === item.id ? item : i);
+      setItems(items);
+      loadItemDetail(item.id);
+    }
+    function deleteSelectedItem() {
+      if (!selectedItemId) return;
+      if (!confirm('Delete this inventory item from this browser?')) return;
+      setItems(getItems().filter(i => i.id !== selectedItemId));
+      selectedItemId = null;
+      itemDetailEmpty.style.display = 'block';
+      itemDetailForm.style.display = 'none';
+      renderInventory();
+    }
+    async function copyField(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      try {
+        await navigator.clipboard.writeText(el.value || '');
+        const old = document.activeElement;
+        el.focus(); el.select();
+        if (old && old.focus) old.focus();
+        alert('Copied to clipboard.');
+      } catch {
+        el.focus(); el.select();
+        alert('Text selected. Use Copy from your browser/device menu.');
+      }
+    }
+    createItemBtn.addEventListener('click', createItemFromCurrentShots);
+    newItemFromShotsBtn.addEventListener('click', createItemFromCurrentShots);
+    refreshInventoryBtn.addEventListener('click', renderInventory);
+    inventorySearch.addEventListener('input', renderInventory);
+    saveItemBtn.addEventListener('click', saveItemDetail);
+    generateDraftBtn.addEventListener('click', regenerateSelectedDraft);
+    deleteItemBtn.addEventListener('click', deleteSelectedItem);
+    document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => copyField(btn.dataset.copy)));
+
+    renderPresets();
       }));
       const savedSelected = localStorage.getItem(STORAGE_SELECTED) || '0';
       if (presets[Number(savedSelected)]) select.value = savedSelected;
@@ -396,7 +704,211 @@
       setPresets(presets);
       localStorage.setItem(STORAGE_SELECTED, String(presets.length - 1));
       savePresetBtn.disabled = true;
-      renderPresets();
+  
+
+    const createItemBtn = document.getElementById('createItemBtn');
+    const newItemFromShotsBtn = document.getElementById('newItemFromShotsBtn');
+    const refreshInventoryBtn = document.getElementById('refreshInventoryBtn');
+    const inventorySearch = document.getElementById('inventorySearch');
+    const inventoryList = document.getElementById('inventoryList');
+    const itemDetailEmpty = document.getElementById('itemDetailEmpty');
+    const itemDetailForm = document.getElementById('itemDetailForm');
+    const itemTitle = document.getElementById('itemTitle');
+    const itemPrice = document.getElementById('itemPrice');
+    const itemCondition = document.getElementById('itemCondition');
+    const itemStatus = document.getElementById('itemStatus');
+    const itemStorage = document.getElementById('itemStorage');
+    const itemNotes = document.getElementById('itemNotes');
+    const fbTitle = document.getElementById('fbTitle');
+    const fbPrice = document.getElementById('fbPrice');
+    const fbDescription = document.getElementById('fbDescription');
+    const fbPickup = document.getElementById('fbPickup');
+    const saveItemBtn = document.getElementById('saveItemBtn');
+    const deleteItemBtn = document.getElementById('deleteItemBtn');
+    const generateDraftBtn = document.getElementById('generateDraftBtn');
+    const itemDetailImages = document.getElementById('itemDetailImages');
+    let selectedItemId = null;
+
+    function getItems() { try { return JSON.parse(localStorage.getItem(STORAGE_ITEMS) || '[]'); } catch { return []; } }
+    function setItems(items) { localStorage.setItem(STORAGE_ITEMS, JSON.stringify(items)); }
+    function makeId() { return `item_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+    function moneyText(value) {
+      const clean = String(value || '').replace(/[^0-9.]/g, '');
+      if (!clean) return '';
+      const n = Number(clean);
+      return Number.isFinite(n) ? `$${n.toFixed(n % 1 ? 2 : 0)}` : value;
+    }
+    function buildDescription(item) {
+      const title = item.title || 'Item for sale';
+      const condition = item.condition || 'Used - Good';
+      const notes = item.notes?.trim() ? `
+
+Notes: ${item.notes.trim()}` : '';
+      return `${title}
+
+Condition: ${condition}${notes}
+
+Please review the photos and message me with any questions. Local pickup preferred.`;
+    }
+    function buildPickup(item) {
+      const storage = item.storage?.trim() ? `
+Internal storage note: ${item.storage.trim()}` : '';
+      return `Available for local pickup. Cash or marketplace-approved payment preferred. I can usually meet in a safe public location.${storage}`;
+    }
+    function generateFacebookDraft(item) {
+      return {
+        fbTitle: item.title || 'Item for sale',
+        fbPrice: moneyText(item.price),
+        fbDescription: buildDescription(item),
+        fbPickup: buildPickup(item)
+      };
+    }
+    function createItemFromCurrentShots() {
+      const shots = getShots();
+      if (!shots.length) { alert('Capture or load at least one photo before creating an inventory item.'); return null; }
+      const p = getSelectedPreset();
+      const items = getItems();
+      const title = sessionName.value.trim() || `Inventory item ${items.length + 1}`;
+      const base = {
+        id: makeId(),
+        title,
+        price: '',
+        condition: 'Used - Good',
+        status: 'Draft',
+        storage: '',
+        notes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        presetName: p?.name || '',
+        photos: shots
+      };
+      Object.assign(base, generateFacebookDraft(base));
+      items.push(base);
+      setItems(items);
+      selectedItemId = base.id;
+      renderInventory();
+      loadItemDetail(base.id);
+      showScreen('inventory');
+      return base;
+    }
+    function renderInventory() {
+      const items = getItems();
+      const q = (inventorySearch?.value || '').toLowerCase().trim();
+      const filtered = q ? items.filter(item => [item.title,item.status,item.storage,item.notes,item.condition].join(' ').toLowerCase().includes(q)) : items;
+      inventoryList.innerHTML = '';
+      if (!filtered.length) {
+        inventoryList.innerHTML = '<div class="empty-state">No inventory items found yet. Create one from your current captures.</div>';
+        return;
+      }
+      filtered.slice().reverse().forEach(item => {
+        const firstPhoto = item.photos?.[0]?.dataUrl || '';
+        const card = document.createElement('div');
+        card.className = 'item-card' + (item.id === selectedItemId ? ' active' : '');
+        card.dataset.itemId = item.id;
+        card.innerHTML = `${firstPhoto ? `<img src="${firstPhoto}" alt="${item.title}">` : '<div style="aspect-ratio:4/3;display:grid;place-items:center;color:#94a3b8;background:#020617">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${item.title || 'Untitled item'}</div><div class="item-meta"><span class="mini-pill">${item.status || 'Draft'}</span><span>${moneyText(item.price) || 'No price'}</span><span>${item.condition || ''}</span></div><div class="item-meta">${item.storage || 'No storage location yet'}</div></div>`;
+        inventoryList.appendChild(card);
+      });
+      document.querySelectorAll('.item-card').forEach(card => card.addEventListener('click', () => loadItemDetail(card.dataset.itemId)));
+    }
+    function loadItemDetail(id) {
+      const item = getItems().find(i => i.id === id);
+      if (!item) {
+        selectedItemId = null;
+        itemDetailEmpty.style.display = 'block';
+        itemDetailForm.style.display = 'none';
+        renderInventory();
+        return;
+      }
+      selectedItemId = id;
+      itemDetailEmpty.style.display = 'none';
+      itemDetailForm.style.display = 'block';
+      itemTitle.value = item.title || '';
+      itemPrice.value = item.price || '';
+      itemCondition.value = item.condition || 'Used - Good';
+      itemStatus.value = item.status || 'Draft';
+      itemStorage.value = item.storage || '';
+      itemNotes.value = item.notes || '';
+      fbTitle.value = item.fbTitle || item.title || '';
+      fbPrice.value = item.fbPrice || moneyText(item.price);
+      fbDescription.value = item.fbDescription || buildDescription(item);
+      fbPickup.value = item.fbPickup || buildPickup(item);
+      itemDetailImages.innerHTML = '';
+      (item.photos || []).forEach(photo => {
+        const img = document.createElement('img');
+        img.src = photo.dataUrl;
+        img.alt = photo.label || 'Item photo';
+        itemDetailImages.appendChild(img);
+      });
+      renderInventory();
+    }
+    function collectDetailItem() {
+      if (!selectedItemId) return null;
+      const items = getItems();
+      const item = items.find(i => i.id === selectedItemId);
+      if (!item) return null;
+      Object.assign(item, {
+        title: itemTitle.value.trim(),
+        price: itemPrice.value.trim(),
+        condition: itemCondition.value,
+        status: itemStatus.value,
+        storage: itemStorage.value.trim(),
+        notes: itemNotes.value.trim(),
+        fbTitle: fbTitle.value.trim(),
+        fbPrice: fbPrice.value.trim(),
+        fbDescription: fbDescription.value.trim(),
+        fbPickup: fbPickup.value.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      setItems(items);
+      return item;
+    }
+    function saveItemDetail() {
+      const item = collectDetailItem();
+      if (!item) return;
+      renderInventory();
+      loadItemDetail(item.id);
+    }
+    function regenerateSelectedDraft() {
+      const item = collectDetailItem();
+      if (!item) return;
+      Object.assign(item, generateFacebookDraft(item));
+      const items = getItems().map(i => i.id === item.id ? item : i);
+      setItems(items);
+      loadItemDetail(item.id);
+    }
+    function deleteSelectedItem() {
+      if (!selectedItemId) return;
+      if (!confirm('Delete this inventory item from this browser?')) return;
+      setItems(getItems().filter(i => i.id !== selectedItemId));
+      selectedItemId = null;
+      itemDetailEmpty.style.display = 'block';
+      itemDetailForm.style.display = 'none';
+      renderInventory();
+    }
+    async function copyField(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      try {
+        await navigator.clipboard.writeText(el.value || '');
+        const old = document.activeElement;
+        el.focus(); el.select();
+        if (old && old.focus) old.focus();
+        alert('Copied to clipboard.');
+      } catch {
+        el.focus(); el.select();
+        alert('Text selected. Use Copy from your browser/device menu.');
+      }
+    }
+    createItemBtn.addEventListener('click', createItemFromCurrentShots);
+    newItemFromShotsBtn.addEventListener('click', createItemFromCurrentShots);
+    refreshInventoryBtn.addEventListener('click', renderInventory);
+    inventorySearch.addEventListener('input', renderInventory);
+    saveItemBtn.addEventListener('click', saveItemDetail);
+    generateDraftBtn.addEventListener('click', regenerateSelectedDraft);
+    deleteItemBtn.addEventListener('click', deleteSelectedItem);
+    document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => copyField(btn.dataset.copy)));
+
+    renderPresets();
     });
     toCaptureBtn.addEventListener('click', () => showScreen('capture'));
 
@@ -580,6 +1092,7 @@
         renderShots();
       }));
       saveSessionBtn.disabled = getShots().length === 0;
+      if (typeof createItemBtn !== "undefined" && createItemBtn) createItemBtn.disabled = getShots().length === 0;
     }
     function stopCaptureTimers() {
       captureTimers.forEach(t => clearTimeout(t));
@@ -657,9 +1170,214 @@
     saveSessionBtn.addEventListener('click', saveCurrentSession);
     clearShotsBtn.addEventListener('click', () => { setShots([]); renderShots(); captureStatus.textContent = 'Waiting'; captureProgress.style.width = '0%'; renderCaptureGuide(); });
 
+
+
+    const createItemBtn = document.getElementById('createItemBtn');
+    const newItemFromShotsBtn = document.getElementById('newItemFromShotsBtn');
+    const refreshInventoryBtn = document.getElementById('refreshInventoryBtn');
+    const inventorySearch = document.getElementById('inventorySearch');
+    const inventoryList = document.getElementById('inventoryList');
+    const itemDetailEmpty = document.getElementById('itemDetailEmpty');
+    const itemDetailForm = document.getElementById('itemDetailForm');
+    const itemTitle = document.getElementById('itemTitle');
+    const itemPrice = document.getElementById('itemPrice');
+    const itemCondition = document.getElementById('itemCondition');
+    const itemStatus = document.getElementById('itemStatus');
+    const itemStorage = document.getElementById('itemStorage');
+    const itemNotes = document.getElementById('itemNotes');
+    const fbTitle = document.getElementById('fbTitle');
+    const fbPrice = document.getElementById('fbPrice');
+    const fbDescription = document.getElementById('fbDescription');
+    const fbPickup = document.getElementById('fbPickup');
+    const saveItemBtn = document.getElementById('saveItemBtn');
+    const deleteItemBtn = document.getElementById('deleteItemBtn');
+    const generateDraftBtn = document.getElementById('generateDraftBtn');
+    const itemDetailImages = document.getElementById('itemDetailImages');
+    let selectedItemId = null;
+
+    function getItems() { try { return JSON.parse(localStorage.getItem(STORAGE_ITEMS) || '[]'); } catch { return []; } }
+    function setItems(items) { localStorage.setItem(STORAGE_ITEMS, JSON.stringify(items)); }
+    function makeId() { return `item_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+    function moneyText(value) {
+      const clean = String(value || '').replace(/[^0-9.]/g, '');
+      if (!clean) return '';
+      const n = Number(clean);
+      return Number.isFinite(n) ? `$${n.toFixed(n % 1 ? 2 : 0)}` : value;
+    }
+    function buildDescription(item) {
+      const title = item.title || 'Item for sale';
+      const condition = item.condition || 'Used - Good';
+      const notes = item.notes?.trim() ? `
+
+Notes: ${item.notes.trim()}` : '';
+      return `${title}
+
+Condition: ${condition}${notes}
+
+Please review the photos and message me with any questions. Local pickup preferred.`;
+    }
+    function buildPickup(item) {
+      const storage = item.storage?.trim() ? `
+Internal storage note: ${item.storage.trim()}` : '';
+      return `Available for local pickup. Cash or marketplace-approved payment preferred. I can usually meet in a safe public location.${storage}`;
+    }
+    function generateFacebookDraft(item) {
+      return {
+        fbTitle: item.title || 'Item for sale',
+        fbPrice: moneyText(item.price),
+        fbDescription: buildDescription(item),
+        fbPickup: buildPickup(item)
+      };
+    }
+    function createItemFromCurrentShots() {
+      const shots = getShots();
+      if (!shots.length) { alert('Capture or load at least one photo before creating an inventory item.'); return null; }
+      const p = getSelectedPreset();
+      const items = getItems();
+      const title = sessionName.value.trim() || `Inventory item ${items.length + 1}`;
+      const base = {
+        id: makeId(),
+        title,
+        price: '',
+        condition: 'Used - Good',
+        status: 'Draft',
+        storage: '',
+        notes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        presetName: p?.name || '',
+        photos: shots
+      };
+      Object.assign(base, generateFacebookDraft(base));
+      items.push(base);
+      setItems(items);
+      selectedItemId = base.id;
+      renderInventory();
+      loadItemDetail(base.id);
+      showScreen('inventory');
+      return base;
+    }
+    function renderInventory() {
+      const items = getItems();
+      const q = (inventorySearch?.value || '').toLowerCase().trim();
+      const filtered = q ? items.filter(item => [item.title,item.status,item.storage,item.notes,item.condition].join(' ').toLowerCase().includes(q)) : items;
+      inventoryList.innerHTML = '';
+      if (!filtered.length) {
+        inventoryList.innerHTML = '<div class="empty-state">No inventory items found yet. Create one from your current captures.</div>';
+        return;
+      }
+      filtered.slice().reverse().forEach(item => {
+        const firstPhoto = item.photos?.[0]?.dataUrl || '';
+        const card = document.createElement('div');
+        card.className = 'item-card' + (item.id === selectedItemId ? ' active' : '');
+        card.dataset.itemId = item.id;
+        card.innerHTML = `${firstPhoto ? `<img src="${firstPhoto}" alt="${item.title}">` : '<div style="aspect-ratio:4/3;display:grid;place-items:center;color:#94a3b8;background:#020617">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${item.title || 'Untitled item'}</div><div class="item-meta"><span class="mini-pill">${item.status || 'Draft'}</span><span>${moneyText(item.price) || 'No price'}</span><span>${item.condition || ''}</span></div><div class="item-meta">${item.storage || 'No storage location yet'}</div></div>`;
+        inventoryList.appendChild(card);
+      });
+      document.querySelectorAll('.item-card').forEach(card => card.addEventListener('click', () => loadItemDetail(card.dataset.itemId)));
+    }
+    function loadItemDetail(id) {
+      const item = getItems().find(i => i.id === id);
+      if (!item) {
+        selectedItemId = null;
+        itemDetailEmpty.style.display = 'block';
+        itemDetailForm.style.display = 'none';
+        renderInventory();
+        return;
+      }
+      selectedItemId = id;
+      itemDetailEmpty.style.display = 'none';
+      itemDetailForm.style.display = 'block';
+      itemTitle.value = item.title || '';
+      itemPrice.value = item.price || '';
+      itemCondition.value = item.condition || 'Used - Good';
+      itemStatus.value = item.status || 'Draft';
+      itemStorage.value = item.storage || '';
+      itemNotes.value = item.notes || '';
+      fbTitle.value = item.fbTitle || item.title || '';
+      fbPrice.value = item.fbPrice || moneyText(item.price);
+      fbDescription.value = item.fbDescription || buildDescription(item);
+      fbPickup.value = item.fbPickup || buildPickup(item);
+      itemDetailImages.innerHTML = '';
+      (item.photos || []).forEach(photo => {
+        const img = document.createElement('img');
+        img.src = photo.dataUrl;
+        img.alt = photo.label || 'Item photo';
+        itemDetailImages.appendChild(img);
+      });
+      renderInventory();
+    }
+    function collectDetailItem() {
+      if (!selectedItemId) return null;
+      const items = getItems();
+      const item = items.find(i => i.id === selectedItemId);
+      if (!item) return null;
+      Object.assign(item, {
+        title: itemTitle.value.trim(),
+        price: itemPrice.value.trim(),
+        condition: itemCondition.value,
+        status: itemStatus.value,
+        storage: itemStorage.value.trim(),
+        notes: itemNotes.value.trim(),
+        fbTitle: fbTitle.value.trim(),
+        fbPrice: fbPrice.value.trim(),
+        fbDescription: fbDescription.value.trim(),
+        fbPickup: fbPickup.value.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      setItems(items);
+      return item;
+    }
+    function saveItemDetail() {
+      const item = collectDetailItem();
+      if (!item) return;
+      renderInventory();
+      loadItemDetail(item.id);
+    }
+    function regenerateSelectedDraft() {
+      const item = collectDetailItem();
+      if (!item) return;
+      Object.assign(item, generateFacebookDraft(item));
+      const items = getItems().map(i => i.id === item.id ? item : i);
+      setItems(items);
+      loadItemDetail(item.id);
+    }
+    function deleteSelectedItem() {
+      if (!selectedItemId) return;
+      if (!confirm('Delete this inventory item from this browser?')) return;
+      setItems(getItems().filter(i => i.id !== selectedItemId));
+      selectedItemId = null;
+      itemDetailEmpty.style.display = 'block';
+      itemDetailForm.style.display = 'none';
+      renderInventory();
+    }
+    async function copyField(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      try {
+        await navigator.clipboard.writeText(el.value || '');
+        const old = document.activeElement;
+        el.focus(); el.select();
+        if (old && old.focus) old.focus();
+        alert('Copied to clipboard.');
+      } catch {
+        el.focus(); el.select();
+        alert('Text selected. Use Copy from your browser/device menu.');
+      }
+    }
+    createItemBtn.addEventListener('click', createItemFromCurrentShots);
+    newItemFromShotsBtn.addEventListener('click', createItemFromCurrentShots);
+    refreshInventoryBtn.addEventListener('click', renderInventory);
+    inventorySearch.addEventListener('input', renderInventory);
+    saveItemBtn.addEventListener('click', saveItemDetail);
+    generateDraftBtn.addEventListener('click', regenerateSelectedDraft);
+    deleteItemBtn.addEventListener('click', deleteSelectedItem);
+    document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => copyField(btn.dataset.copy)));
+
     renderPresets();
     renderShots();
     renderSessions();
+    renderInventory();
     renderCaptureGuide();
     resetTiming();
   </script>
