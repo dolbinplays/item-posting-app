@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1034</title>
+  <title>Item Posting Assistant v0.26.05.22.1057</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -39,14 +39,25 @@
     .draft-preview{white-space:pre-wrap;color:var(--muted);font-size:.84rem;line-height:1.35;max-height:96px;overflow:auto;background:rgba(15,23,42,.6);border-radius:12px;padding:8px;margin:8px 0}
     .draft-history-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     .draft-history-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
+
+    .filter-grid{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
+    @media(min-width:760px){.filter-grid{grid-template-columns:1fr 1fr}}
+    .filter-grid .full{grid-column:1/-1}
+    .inventory-toolbar-note{margin-top:8px;color:var(--muted);font-size:.82rem;line-height:1.35}
+    .inventory-count{margin-top:10px;color:#bae6fd;font-weight:900;font-size:.88rem}
+    .quick-status-row{display:grid;grid-template-columns:1fr;gap:6px;margin-top:9px}
+    .quick-status-row select{padding:9px;border-radius:12px;font-size:.84rem}
+    .quick-status-row label{color:var(--muted);font-size:.76rem;font-weight:900}
+    .needs-listing-badge{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.35);color:#fde68a}
+
 </style>
 </head>
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1034 · save item feedback fix</p>
+      <p class="eyebrow">v0.26.05.22.1057 · inventory search filters</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds draft history so Facebook Marketplace listing versions can be saved, restored, copied, or deleted.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds inventory search, filters, sorting, quick status updates, and a Needs Listing workflow view.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -139,8 +150,37 @@
       <div class="grid sidebar">
         <div class="card">
           <h2>Inventory</h2>
-          <input id="inventorySearch" placeholder="Search title, status, storage, notes...">
-          <div class="actions"><button id="newItemFromShotsBtn" class="primary">Create Item from Current Captures</button></div>
+          <input id="inventorySearch" placeholder="Search title, status, storage, notes, category, flaws...">
+          <div class="filter-grid">
+            <div>
+              <label class="small">Status filter</label>
+              <select id="inventoryStatusFilter">
+                <option value="all">All statuses</option>
+                <option value="needs-listing">Needs Listing: Draft + Ready to Post</option>
+                <option value="Draft">Draft</option>
+                <option value="Ready to Post">Ready to Post</option>
+                <option value="Listed">Listed</option>
+                <option value="Sold">Sold</option>
+                <option value="Archived">Archived</option>
+              </select>
+            </div>
+            <div>
+              <label class="small">Sort inventory</label>
+              <select id="inventorySort">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="title-az">Title A-Z</option>
+                <option value="title-za">Title Z-A</option>
+                <option value="price-low">Price low to high</option>
+                <option value="price-high">Price high to low</option>
+                <option value="status">Status</option>
+                <option value="storage">Storage location</option>
+              </select>
+            </div>
+          </div>
+          <div class="actions"><button id="newItemFromShotsBtn" class="primary">Create Item from Current Captures</button><button id="clearInventoryFiltersBtn" class="secondary">Clear Search / Filters</button></div>
+          <div id="inventoryCount" class="inventory-count">0 items</div>
+          <p class="inventory-toolbar-note">Tip: use Needs Listing to focus on Draft and Ready to Post items. Quick status changes on cards save immediately.</p>
           <div id="inventoryList" class="inventory-grid" style="margin-top:12px"></div>
         </div>
         <div class="card">
@@ -205,7 +245,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1034';
+    const VERSION='v0.26.05.22.1057';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -326,7 +366,57 @@
       finally{[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean).forEach(b=>b.disabled=false)}
     }
     async function createItemFromCurrentShots(){let shots=getShots();if(!shots.length){alert('Capture at least one photo first, or use Create Item from a saved session.');return}await createItemFromShots(shots,$('sessionName').value.trim())}
-    function renderInventory(){let items=getItems(),q=$('inventorySearch').value.toLowerCase().trim(),list=$('inventoryList');list.innerHTML='';let filtered=q?items.filter(i=>JSON.stringify(i).toLowerCase().includes(q)):items;if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items yet. Create one from current captures.</div>';return}filtered.slice().reverse().forEach(i=>{let first=i.photos?.[0]?.dataUrl||'',card=document.createElement('div');card.className='item-card'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;card.innerHTML=`${first?`<img src="${first}">`:'<div class="empty-state">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${i.title||'Untitled'}</div><div class="item-meta"><span class="mini-pill">${i.status||'Draft'}</span><span>${moneyText(i.price)||'No price'}</span><span>${i.condition||''}</span></div><div class="item-meta">${i.storage||'No storage location yet'}</div></div>`;list.appendChild(card)});list.querySelectorAll('.item-card').forEach(c=>c.onclick=()=>loadItem(c.dataset.id))}
+    function itemPriceNum(item){let raw=String(item.price||item.fbPrice||'').replace(/[^0-9.]/g,'');let n=Number(raw);return Number.isFinite(n)?n:0}
+    function itemSearchBlob(item){return [item.title,item.status,item.condition,item.storage,item.notes,item.category,item.accessories,item.flaws,item.fbTitle,item.fbDescription,item.fbPickup].join(' ').toLowerCase()}
+    function getFilteredInventory(){
+      let items=getItems();
+      let q=($('inventorySearch')?.value||'').toLowerCase().trim();
+      let status=($('inventoryStatusFilter')?.value||'all');
+      let sort=($('inventorySort')?.value||'newest');
+      let filtered=items.filter(item=>{
+        let itemStatus=item.status||'Draft';
+        let statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):itemStatus===status);
+        let searchMatch=!q||itemSearchBlob(item).includes(q);
+        return statusMatch&&searchMatch;
+      });
+      filtered.sort((a,b)=>{
+        if(sort==='oldest')return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
+        if(sort==='title-az')return String(a.title||'Untitled').localeCompare(String(b.title||'Untitled'));
+        if(sort==='title-za')return String(b.title||'Untitled').localeCompare(String(a.title||'Untitled'));
+        if(sort==='price-low')return itemPriceNum(a)-itemPriceNum(b);
+        if(sort==='price-high')return itemPriceNum(b)-itemPriceNum(a);
+        if(sort==='status')return String(a.status||'Draft').localeCompare(String(b.status||'Draft'))||String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+        if(sort==='storage')return String(a.storage||'').localeCompare(String(b.storage||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+        return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+      });
+      return filtered;
+    }
+    function statusOptions(current){return ['Draft','Ready to Post','Listed','Sold','Archived'].map(s=>`<option ${s===(current||'Draft')?'selected':''}>${s}</option>`).join('')}
+    function renderInventory(){
+      let items=getItems(),filtered=getFilteredInventory(),list=$('inventoryList');
+      list.innerHTML='';
+      let status=($('inventoryStatusFilter')?.value||'all');
+      let q=($('inventorySearch')?.value||'').trim();
+      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':(status!=='all'?` · ${status}`:''));
+      if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';return}
+      filtered.forEach(i=>{
+        let first=i.photos?.[0]?.dataUrl||'',card=document.createElement('div');
+        card.className='item-card'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;
+        let statusClass=['Draft','Ready to Post'].includes(i.status||'Draft')?' mini-pill needs-listing-badge':'mini-pill';
+        card.innerHTML=`${first?`<img src="${first}">`:'<div class="empty-state">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${escapeHtml(i.title||'Untitled')}</div><div class="item-meta"><span class="${statusClass.trim()}">${escapeHtml(i.status||'Draft')}</span><span>${escapeHtml(moneyText(i.price)||'No price')}</span><span>${escapeHtml(i.condition||'')}</span></div><div class="item-meta">${escapeHtml(i.storage||'No storage location yet')}</div><div class="quick-status-row"><label>Quick status</label><select data-quick-status="${i.id}">${statusOptions(i.status)}</select></div></div>`;
+        list.appendChild(card)
+      });
+      list.querySelectorAll('.item-card').forEach(c=>c.onclick=e=>{if(e.target.closest('select,button,input,textarea'))return;loadItem(c.dataset.id)});
+      list.querySelectorAll('[data-quick-status]').forEach(sel=>sel.onchange=e=>{e.stopPropagation();quickUpdateStatus(sel.dataset.quickStatus,sel.value)});
+    }
+    function quickUpdateStatus(itemId,status){
+      let items=getItems(),item=items.find(i=>i.id===itemId);if(!item)return;
+      item.status=status;item.updatedAt=new Date().toISOString();
+      if(setItems(items)){
+        if(selectedItemId===itemId){$('itemStatus').value=status;}
+        renderInventory();refreshBackupViews();
+      }
+    }
     function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderDraftHistory(item);renderInventory()}
     function saveItemObject(item){let items=getItems().map(i=>i.id===item.id?item:i);return setItems(items)}
     function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -365,7 +455,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
@@ -395,6 +485,17 @@
     .draft-preview{white-space:pre-wrap;color:var(--muted);font-size:.84rem;line-height:1.35;max-height:96px;overflow:auto;background:rgba(15,23,42,.6);border-radius:12px;padding:8px;margin:8px 0}
     .draft-history-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     .draft-history-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
+
+    .filter-grid{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
+    @media(min-width:760px){.filter-grid{grid-template-columns:1fr 1fr}}
+    .filter-grid .full{grid-column:1/-1}
+    .inventory-toolbar-note{margin-top:8px;color:var(--muted);font-size:.82rem;line-height:1.35}
+    .inventory-count{margin-top:10px;color:#bae6fd;font-weight:900;font-size:.88rem}
+    .quick-status-row{display:grid;grid-template-columns:1fr;gap:6px;margin-top:9px}
+    .quick-status-row select{padding:9px;border-radius:12px;font-size:.84rem}
+    .quick-status-row label{color:var(--muted);font-size:.76rem;font-weight:900}
+    .needs-listing-badge{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.35);color:#fde68a}
+
 </style></head><body><h1>Item Posting Assistant Rebuild Backup</h1><p>Version: ${esc(VERSION)} · Exported: ${esc(b.exportedAt)} · Items: ${b.items.length}</p>${items}</body></html>`}
     $('exportJsonBtn').onclick=()=>download(`item-posting-backup-${VERSION}.json`,JSON.stringify(backupObj(),null,2));
     $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));download(`item-posting-inventory-${VERSION}.csv`,toCsv(rows),'text/csv')};
