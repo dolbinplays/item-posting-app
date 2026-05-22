@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.0242</title>
+  <title>Item Posting Assistant v0.26.05.22.0822</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -26,9 +26,9 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.0242 · capture workflow cleanup</p>
+      <p class="eyebrow">v0.26.05.22.0822 · sheets/drive backup foundation</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera is now the primary capture path, with default/front camera fallbacks kept in a troubleshooting panel.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds Google Sheets/Drive-ready backup exports and a rebuildable media backup file.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -154,8 +154,25 @@
 
     <section id="backup" class="screen">
       <div class="grid two">
-        <div class="card"><h2>Export / Backup</h2><p class="note">Use these before installing a new patch or clearing browser data.</p><div class="actions"><button id="exportJsonBtn" class="primary">Export Full JSON Backup</button><button id="exportCsvBtn" class="secondary">Export CSV for Google Sheets</button></div><div id="countsBox" class="note"></div></div>
-        <div class="card"><h2>Import Backup</h2><input id="importFile" type="file" accept="application/json"><div class="actions"><button id="importJsonBtn" class="success">Import Selected Backup</button></div><p class="note">This replaces local prototype data with the backup file you choose.</p></div>
+        <div class="card">
+          <h2>Export / Backup</h2>
+          <p class="note">Use these before installing a new patch, clearing browser data, or moving your inventory records to another device.</p>
+          <div class="actions">
+            <button id="exportJsonBtn" class="primary">Export Full JSON Backup</button>
+            <button id="exportCsvBtn" class="secondary">Export Basic CSV</button>
+            <button id="exportSheetsDriveCsvBtn" class="secondary">Export Sheets + Drive CSV</button>
+            <button id="exportManifestBtn" class="secondary">Export Media Manifest JSON</button>
+            <button id="exportRebuildHtmlBtn" class="success">Export Rebuildable HTML Backup</button>
+          </div>
+          <p class="note">The Sheets + Drive CSV includes columns for future Google Drive folder/photo links. The rebuildable HTML backup includes item details and embedded photos so a listing can be reconstructed if local phone data is lost.</p>
+          <div id="countsBox" class="note"></div>
+        </div>
+        <div class="card">
+          <h2>Import Backup</h2>
+          <input id="importFile" type="file" accept="application/json">
+          <div class="actions"><button id="importJsonBtn" class="success">Import Selected Backup</button></div>
+          <p class="note">This replaces local prototype data with the JSON backup file you choose. Rebuildable HTML files are for viewing/recovery, not importing yet.</p>
+        </div>
       </div>
     </section>
     <p class="footer-note">GitHub Pages prototype · phone-first, Facebook Marketplace-first</p>
@@ -164,7 +181,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.0228';
+    const VERSION='v0.26.05.22.0822';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -240,10 +257,22 @@
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
     function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems()}}
+    function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
+    function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('
+')}
+    function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
+    function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
+    function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
+    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
+    function buildSheetsDriveRows(){let rows=[['Date Created','Item ID','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Facebook Title','Facebook Description','Pickup Notes']];getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});return rows}
+    function buildRebuildHtml(){let b=backupObj();let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));let items=b.items.map((item,index)=>{let imgs=(item.photos||[]).map((p,pi)=>`<figure><img src="${p.dataUrl}" alt="${esc(p.label||'photo')}"><figcaption>${esc(p.label||`Photo ${pi+1}`)} · Suggested file: ${esc(shotFileName(item,index,p,pi))}</figcaption></figure>`).join('');return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`}).join('');return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Rebuild Backup ${VERSION}</title><style>body{font-family:system-ui,sans-serif;margin:24px;background:#f8fafc;color:#0f172a}.item{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin:0 0 18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}</style></head><body><h1>Item Posting Assistant Rebuild Backup</h1><p>Version: ${esc(VERSION)} · Exported: ${esc(b.exportedAt)} · Items: ${b.items.length}</p>${items}</body></html>`}
     $('exportJsonBtn').onclick=()=>download(`item-posting-backup-${VERSION}.json`,JSON.stringify(backupObj(),null,2));
-    $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');download(`item-posting-inventory-${VERSION}.csv`,csv,'text/csv')};
+    $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));download(`item-posting-inventory-${VERSION}.csv`,toCsv(rows),'text/csv')};
+    $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
+    $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
+    $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;write(K.presets,b.presets||[]);write(K.shots,b.shots||[]);write(K.sessions,b.sessions||[]);write(K.items,b.items||[]);renderPresets();renderShots();renderSessions();renderInventory();renderCounts();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
-    function renderCounts(){let b=backupObj();$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p>`}
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p>`}
 
     // Init
     updateDiag(); renderPresets(); renderShots(); renderSessions(); renderInventory(); renderCounts(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
