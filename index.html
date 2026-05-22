@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.0958</title>
+  <title>Item Posting Assistant v0.26.05.22.1016</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -32,14 +32,21 @@
     .photo-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
     .photo-actions button,.photo-label-row button{padding:9px 8px;font-size:.82rem;border-radius:12px}
     .photo-manage-note{margin:0;color:var(--muted);font-size:.82rem;line-height:1.35}
+
+    .draft-history-list{display:grid;gap:10px;margin-top:10px}
+    .draft-history-card{background:rgba(2,6,23,.48);border:1px solid var(--border);border-radius:16px;padding:12px}
+    .draft-history-card strong{display:block;margin-bottom:4px}
+    .draft-preview{white-space:pre-wrap;color:var(--muted);font-size:.84rem;line-height:1.35;max-height:96px;overflow:auto;background:rgba(15,23,42,.6);border-radius:12px;padding:8px;margin:8px 0}
+    .draft-history-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .draft-history-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
 </style>
 </head>
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.0958 · create item storage fix</p>
+      <p class="eyebrow">v0.26.05.22.1016 · draft history</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds inventory image management: primary photo, reorder, rotate, delete, and editable image labels.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds draft history so Facebook Marketplace listing versions can be saved, restored, copied, or deleted.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -157,7 +164,10 @@
             <label class="small">Facebook price</label><div class="copy-row"><input id="fbPrice"><button class="secondary copy-btn" data-copy="fbPrice">Copy</button></div>
             <label class="small">Facebook description</label><div class="copy-row"><textarea id="fbDescription" rows="7"></textarea><button class="secondary copy-btn" data-copy="fbDescription">Copy</button></div>
             <label class="small">Pickup notes</label><div class="copy-row"><textarea id="fbPickup" rows="3"></textarea><button class="secondary copy-btn" data-copy="fbPickup">Copy</button></div>
-            <div class="actions"><button id="saveItemBtn" class="success">Save Item</button><button id="generateDraftBtn" class="primary">Regenerate Draft</button><button id="deleteItemBtn" class="danger">Delete Item</button></div>
+            <div class="actions"><button id="saveItemBtn" class="success">Save Item</button><button id="generateDraftBtn" class="primary">Regenerate Draft</button><button id="saveDraftVersionBtn" class="secondary">Save Draft Version</button><button id="deleteItemBtn" class="danger">Delete Item</button></div>
+            <h3 style="margin-top:16px">Draft History</h3>
+            <p class="note">Save listing versions here before making major edits. You can restore an older draft or copy a full listing bundle for Facebook Marketplace.</p>
+            <div id="draftHistoryList" class="draft-history-list"></div>
           </div>
         </div>
       </div>
@@ -195,7 +205,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.0958';
+    const VERSION='v0.26.05.22.1016';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -305,7 +315,7 @@
         const buttons=[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean);buttons.forEach(b=>b.disabled=true);
         $('captureStatus').textContent='Creating inventory item...';
         let items=getItems(),title=(titleHint||$('sessionName').value||'').trim()||`Inventory item ${items.length+1}`;
-        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
+        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',draftHistory:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
         Object.assign(item,generateDraft(item));
         items.push(item);
         if(!setItems(items))return;
@@ -317,16 +327,25 @@
     }
     async function createItemFromCurrentShots(){let shots=getShots();if(!shots.length){alert('Capture at least one photo first, or use Create Item from a saved session.');return}await createItemFromShots(shots,$('sessionName').value.trim())}
     function renderInventory(){let items=getItems(),q=$('inventorySearch').value.toLowerCase().trim(),list=$('inventoryList');list.innerHTML='';let filtered=q?items.filter(i=>JSON.stringify(i).toLowerCase().includes(q)):items;if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items yet. Create one from current captures.</div>';return}filtered.slice().reverse().forEach(i=>{let first=i.photos?.[0]?.dataUrl||'',card=document.createElement('div');card.className='item-card'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;card.innerHTML=`${first?`<img src="${first}">`:'<div class="empty-state">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${i.title||'Untitled'}</div><div class="item-meta"><span class="mini-pill">${i.status||'Draft'}</span><span>${moneyText(i.price)||'No price'}</span><span>${i.condition||''}</span></div><div class="item-meta">${i.storage||'No storage location yet'}</div></div>`;list.appendChild(card)});list.querySelectorAll('.item-card').forEach(c=>c.onclick=()=>loadItem(c.dataset.id))}
-    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderInventory()}
+    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderDraftHistory(item);renderInventory()}
     function saveItemObject(item){let items=getItems().map(i=>i.id===item.id?item:i);return setItems(items)}
+    function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+    function currentDraftSnapshot(item,label){return {id:id('draft'),label:label||`Draft ${((item.draftHistory||[]).length)+1}`,savedAt:new Date().toISOString(),fbTitle:item.fbTitle||'',fbPrice:item.fbPrice||'',fbDescription:item.fbDescription||'',fbPickup:item.fbPickup||'',tone:item.draftTone||'friendly',pickupMode:item.pickupMode||'Local pickup preferred'}}
+    function renderDraftHistory(item){let list=$('draftHistoryList');if(!list)return;let h=item.draftHistory||[];list.innerHTML=h.length?'':'<div class="empty-state">No saved draft versions yet.</div>';h.slice().reverse().forEach(d=>{let card=document.createElement('div');card.className='draft-history-card';card.innerHTML=`<strong>${escapeHtml(d.label||'Saved draft')}</strong><span class="note">${new Date(d.savedAt||Date.now()).toLocaleString()} · ${escapeHtml(d.tone||'tone not saved')}</span><div class="draft-preview">${escapeHtml((d.fbTitle||'')+'\n'+(d.fbPrice||'')+'\n\n'+(d.fbDescription||'')).slice(0,900)}</div><div class="draft-history-actions"><button class="success" data-draft-restore="${d.id}">Restore</button><button class="secondary" data-draft-copy="${d.id}">Copy All</button><button class="danger" data-draft-delete="${d.id}">Delete</button></div>`;list.appendChild(card)});wireDraftHistoryButtons()}
+    function wireDraftHistoryButtons(){document.querySelectorAll('[data-draft-restore]').forEach(b=>b.onclick=()=>restoreDraftVersion(b.dataset.draftRestore));document.querySelectorAll('[data-draft-copy]').forEach(b=>b.onclick=()=>copyDraftVersion(b.dataset.draftCopy));document.querySelectorAll('[data-draft-delete]').forEach(b=>b.onclick=()=>deleteDraftVersion(b.dataset.draftDelete))}
+    function saveDraftVersion(){let item=collectItem();if(!item)return;item.draftHistory=item.draftHistory||[];item.draftHistory.push(currentDraftSnapshot(item));item.updatedAt=new Date().toISOString();if(saveItemObject(item)){renderDraftHistory(item);alert('Draft version saved.')}}
+    function findDraft(idv){let item=getItems().find(i=>i.id===selectedItemId);if(!item)return {};return {item,draft:(item.draftHistory||[]).find(d=>d.id===idv)}}
+    function restoreDraftVersion(idv){let {item,draft}=findDraft(idv);if(!item||!draft)return;if(!confirm('Restore this saved draft into the current Facebook draft fields?'))return;Object.assign(item,{fbTitle:draft.fbTitle||'',fbPrice:draft.fbPrice||'',fbDescription:draft.fbDescription||'',fbPickup:draft.fbPickup||'',draftTone:draft.tone||item.draftTone,pickupMode:draft.pickupMode||item.pickupMode,updatedAt:new Date().toISOString()});if(saveItemObject(item))loadItem(item.id)}
+    async function copyDraftVersion(idv){let {draft}=findDraft(idv);if(!draft)return;let text=`Title: ${draft.fbTitle||''}\nPrice: ${draft.fbPrice||''}\n\nDescription:\n${draft.fbDescription||''}\n\nPickup Notes:\n${draft.fbPickup||''}`;try{await navigator.clipboard.writeText(text);alert('Saved draft copied to clipboard.')}catch{alert('Could not copy automatically. Restore the draft, then use the field copy buttons.')}}
+    function deleteDraftVersion(idv){let {item}=findDraft(idv);if(!item)return;if(!confirm('Delete this saved draft version?'))return;item.draftHistory=(item.draftHistory||[]).filter(d=>d.id!==idv);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function renderItemPhotos(item){let imgs=$('itemDetailImages');imgs.innerHTML='';let photos=item.photos||[];if(!photos.length){imgs.innerHTML='<div class="empty-state">No photos saved for this item.</div>';return}photos.forEach((p,idx)=>{let card=document.createElement('div');card.className='photo-manage-card'+(idx===0?' primary-photo':'');card.innerHTML=`<img src="${p.dataUrl}" alt="${p.label||'photo'}"><div class="photo-manage-body"><p class="photo-manage-note">${idx===0?'Primary listing photo':'Photo '+(idx+1)}</p><div class="photo-label-row"><input value="${escapeAttr(p.label||'Photo '+(idx+1))}" data-photo-label="${idx}" aria-label="Photo label"><button class="secondary" data-photo-save-label="${idx}">Save Label</button></div><div class="photo-actions"><button class="success" data-photo-primary="${idx}" ${idx===0?'disabled':''}>Set Primary</button><button class="secondary" data-photo-up="${idx}" ${idx===0?'disabled':''}>Move Up</button><button class="secondary" data-photo-down="${idx}" ${idx===photos.length-1?'disabled':''}>Move Down</button><button class="secondary" data-photo-rotate="${idx}">Rotate Right</button><button class="danger" data-photo-delete="${idx}">Delete</button></div></div>`;imgs.appendChild(card)});wirePhotoButtons()}
     function escapeAttr(v){return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
     function updateSelectedPhotos(mutator){let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;item.photos=item.photos||[];mutator(item.photos,item);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=async()=>{let idx=Number(b.dataset.photoRotate);let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item||!item.photos?.[idx])return;b.disabled=true;try{item.photos[idx].dataUrl=await rotateDataUrlRight(item.photos[idx].dataUrl);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}catch(e){alert('Could not rotate photo: '+e.message)}finally{b.disabled=false}})}
     function rotateDataUrlRight(dataUrl){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>{try{let c=document.createElement('canvas');c.width=img.height;c.height=img.width;let ctx=c.getContext('2d');ctx.translate(c.width/2,c.height/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-img.width/2,-img.height/2);resolve(c.toDataURL('image/jpeg',0.84))}catch(e){reject(e)}};img.onerror=()=>reject(new Error('Image load failed'));img.src=dataUrl})}
     function collectItem(){if(!selectedItemId)return null;let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return null;Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});setItems(items);return item}
-    function saveItem(){let i=collectItem();if(i){renderInventory();loadItem(i.id)}} function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    function saveItem(){let i=collectItem();if(i){renderInventory();loadItem(i.id)}} function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
+    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
@@ -349,6 +368,13 @@
     .photo-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
     .photo-actions button,.photo-label-row button{padding:9px 8px;font-size:.82rem;border-radius:12px}
     .photo-manage-note{margin:0;color:var(--muted);font-size:.82rem;line-height:1.35}
+
+    .draft-history-list{display:grid;gap:10px;margin-top:10px}
+    .draft-history-card{background:rgba(2,6,23,.48);border:1px solid var(--border);border-radius:16px;padding:12px}
+    .draft-history-card strong{display:block;margin-bottom:4px}
+    .draft-preview{white-space:pre-wrap;color:var(--muted);font-size:.84rem;line-height:1.35;max-height:96px;overflow:auto;background:rgba(15,23,42,.6);border-radius:12px;padding:8px;margin:8px 0}
+    .draft-history-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .draft-history-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
 </style></head><body><h1>Item Posting Assistant Rebuild Backup</h1><p>Version: ${esc(VERSION)} · Exported: ${esc(b.exportedAt)} · Items: ${b.items.length}</p>${items}</body></html>`}
     $('exportJsonBtn').onclick=()=>download(`item-posting-backup-${VERSION}.json`,JSON.stringify(backupObj(),null,2));
     $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));download(`item-posting-inventory-${VERSION}.csv`,toCsv(rows),'text/csv')};
