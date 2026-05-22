@@ -3,773 +3,522 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant — Turntable Calibration</title>
+  <title>Item Posting Assistant — Camera Capture</title>
   <style>
     :root {
       --bg: #0f172a;
-      --panel: rgba(17, 24, 39, 0.82);
-      --panel-soft: rgba(31, 41, 55, 0.7);
+      --panel: #111827;
+      --panel2: #1f2937;
       --text: #f8fafc;
       --muted: #cbd5e1;
-      --subtle: #94a3b8;
+      --soft: #94a3b8;
       --accent: #38bdf8;
-      --accent-strong: #0284c7;
+      --accent2: #0284c7;
       --success: #22c55e;
       --warning: #facc15;
-      --danger: #f97316;
+      --danger: #fb7185;
       --border: rgba(255,255,255,0.12);
-      --shadow: 0 18px 40px rgba(0,0,0,0.25);
     }
-
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
       min-height: 100vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #1e293b 0%, var(--bg) 55%);
       color: var(--text);
+      background: radial-gradient(circle at top, #1e293b 0%, var(--bg) 58%);
     }
-
-    .app {
-      width: min(1080px, 100%);
-      margin: 0 auto;
-      padding: 16px;
+    .app { width: min(1100px, 100%); margin: 0 auto; padding: 16px; }
+    header { padding: 14px 2px 16px; }
+    .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+    h1 { margin: 0; font-size: clamp(1.75rem, 7vw, 3.2rem); line-height: 1.04; }
+    .subtitle { margin: 12px 0 0; color: var(--muted); max-width: 780px; line-height: 1.5; }
+    .nav { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 16px; }
+    .tab {
+      white-space: nowrap; border: 1px solid var(--border); background: rgba(255,255,255,.07); color: var(--text);
+      border-radius: 999px; padding: 10px 13px; font-weight: 800; cursor: pointer;
     }
-
-    header { padding: 12px 4px 16px; }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 18px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 900;
-      letter-spacing: 0.01em;
-    }
-
-    .brand-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      display: grid;
-      place-items: center;
-      box-shadow: 0 10px 28px rgba(56,189,248,0.25);
-    }
-
-    .version {
-      color: #bae6fd;
-      background: rgba(56,189,248,0.12);
-      border: 1px solid rgba(56,189,248,0.28);
-      padding: 8px 11px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 800;
-    }
-
-    .eyebrow {
-      margin: 0 0 8px;
-      color: var(--accent);
-      font-size: 0.82rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(1.85rem, 7vw, 3.4rem);
-      line-height: 1.03;
-    }
-
-    .subtitle {
-      margin: 12px 0 0;
-      color: var(--muted);
-      font-size: 1rem;
-      line-height: 1.5;
-      max-width: 780px;
-    }
-
-    .tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin: 14px 0 16px;
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      padding: 8px 0;
-      background: linear-gradient(180deg, rgba(15,23,42,0.94), rgba(15,23,42,0.76));
-      backdrop-filter: blur(10px);
-    }
-
-    .tab-btn {
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 13px 12px;
-      background: rgba(255,255,255,0.06);
-      color: var(--muted);
-      font-weight: 900;
-      cursor: pointer;
-    }
-
-    .tab-btn.active {
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      color: white;
-      box-shadow: 0 10px 26px rgba(2,132,199,0.32);
-    }
-
+    .tab.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); border-color: transparent; }
     .screen { display: none; }
     .screen.active { display: block; }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    @media (min-width: 820px) {
-      .grid.two { grid-template-columns: 1.05fr 0.95fr; }
-      .grid.three { grid-template-columns: repeat(3, 1fr); }
-    }
-
+    .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 820px) { .grid.two { grid-template-columns: 1fr 1fr; } .grid.capture { grid-template-columns: 1.3fr .7fr; } }
     .card {
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035));
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 18px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
+      background: linear-gradient(180deg, rgba(255,255,255,.065), rgba(255,255,255,.03));
+      border: 1px solid var(--border); border-radius: 22px; padding: 16px;
+      box-shadow: 0 16px 34px rgba(0,0,0,.25); backdrop-filter: blur(10px);
     }
-
-    .card h2 { margin: 0 0 12px; font-size: 1.22rem; }
-    .card h3 { margin: 0 0 8px; font-size: 1rem; }
-
-    .setup-visual {
-      min-height: 270px;
-      display: grid;
-      place-items: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .phone {
-      width: 92px;
-      height: 172px;
-      border: 5px solid #e2e8f0;
-      border-radius: 24px;
-      position: relative;
-      background: #020617;
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.15), 0 18px 34px rgba(0,0,0,0.35);
-      transform: translateY(-16px);
-      z-index: 2;
-    }
-
-    .phone:before {
-      content: "";
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 34px;
-      height: 5px;
-      border-radius: 999px;
-      background: #475569;
-    }
-
-    .lens {
-      position: absolute;
-      top: 34px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      border: 3px solid var(--accent);
-      box-shadow: 0 0 26px rgba(56,189,248,0.6);
-    }
-
-    .tripod {
-      position: absolute;
-      top: calc(50% + 66px);
-      left: 50%;
-      transform: translateX(-50%);
-      width: 8px;
-      height: 56px;
-      background: #94a3b8;
-      border-radius: 999px;
-    }
-
-    .tripod:before, .tripod:after {
-      content: "";
-      position: absolute;
-      top: 36px;
-      width: 7px;
-      height: 78px;
-      background: #94a3b8;
-      border-radius: 999px;
-      transform-origin: top;
-    }
-
-    .tripod:before { left: 0; transform: rotate(28deg); }
-    .tripod:after { right: 0; transform: rotate(-28deg); }
-
-    .turntable {
-      position: absolute;
-      bottom: 30px;
-      width: 220px;
-      height: 48px;
-      border-radius: 50%;
-      background: linear-gradient(180deg, #334155, #020617);
-      border: 1px solid rgba(255,255,255,0.18);
-    }
-
-    .item-box {
-      position: absolute;
-      bottom: 66px;
-      width: 88px;
-      height: 82px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #f8fafc, #94a3b8);
-      box-shadow: 0 18px 28px rgba(0,0,0,0.28);
-    }
-
-    .scan-line {
-      position: absolute;
-      left: 50%;
-      top: 66px;
-      transform: translateX(-50%);
-      width: 250px;
-      height: 130px;
-      border: 1px solid rgba(56,189,248,0.4);
-      border-radius: 28px;
-      box-shadow: 0 0 34px rgba(56,189,248,0.25) inset;
-    }
-
+    .card h2 { margin: 0 0 12px; font-size: 1.15rem; }
+    .card h3 { margin: 14px 0 8px; font-size: 1rem; }
     .checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-
-    .check-item {
-      display: grid;
-      grid-template-columns: 34px 1fr;
-      gap: 10px;
-      align-items: start;
-      background: rgba(15,23,42,0.52);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 12px;
-      cursor: pointer;
-      user-select: none;
-    }
-
+    .check-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; background: rgba(15,23,42,.52); border: 1px solid var(--border); border-radius: 16px; padding: 12px; cursor: pointer; }
     .check-item input { display: none; }
-
-    .box {
-      width: 28px;
-      height: 28px;
-      border-radius: 10px;
-      border: 2px solid rgba(255,255,255,0.24);
-      display: grid;
-      place-items: center;
-      color: transparent;
-      font-weight: 900;
-      transition: 0.15s ease;
-    }
-
+    .box { width: 28px; height: 28px; border-radius: 10px; border: 2px solid rgba(255,255,255,.24); display: grid; place-items: center; color: transparent; font-weight: 900; }
     .check-item input:checked + .box { background: var(--success); border-color: var(--success); color: #052e16; }
     .check-text strong { display: block; margin-bottom: 3px; }
-    .check-text span { color: var(--muted); font-size: 0.9rem; line-height: 1.35; }
-
-    .status { margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 9px 12px;
-      border-radius: 999px;
-      background: rgba(56,189,248,0.12);
-      color: #bae6fd;
-      border: 1px solid rgba(56,189,248,0.28);
-      font-size: 0.9rem;
-      font-weight: 800;
-    }
-
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 14px rgba(250,204,21,0.7); }
-    .dot.ready { background: var(--success); box-shadow: 0 0 14px rgba(34,197,94,0.7); }
-
-    .actions { display: grid; gap: 10px; margin-top: 18px; }
-
-    button, input, select {
+    .check-text span { color: var(--muted); font-size: .9rem; line-height: 1.35; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 999px; background: rgba(56,189,248,.12); color: #bae6fd; border: 1px solid rgba(56,189,248,.28); font-size: .9rem; font-weight: 800; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 14px rgba(250,204,21,.7); }
+    .dot.ready { background: var(--success); box-shadow: 0 0 14px rgba(34,197,94,.7); }
+    .actions { display: grid; gap: 10px; margin-top: 14px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button, input, select, textarea {
       font: inherit;
     }
-
     button {
-      border: 0;
-      border-radius: 16px;
-      padding: 15px 16px;
-      font-size: 1rem;
-      font-weight: 900;
-      cursor: pointer;
-      transition: transform 0.12s ease, opacity 0.12s ease, background 0.12s ease;
+      border: 0; border-radius: 15px; padding: 13px 14px; font-size: 1rem; font-weight: 900; cursor: pointer;
     }
-
-    button:active { transform: scale(0.98); }
-
-    .primary { color: #f8fafc; background: linear-gradient(135deg, var(--accent), var(--accent-strong)); box-shadow: 0 12px 28px rgba(2,132,199,0.38); }
+    button:active { transform: scale(.98); }
+    button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .primary { color: #f8fafc; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 12px 28px rgba(2,132,199,.35); }
+    .secondary { color: var(--text); background: rgba(255,255,255,.08); border: 1px solid var(--border); }
+    .danger { color: #fff; background: linear-gradient(135deg, #fb7185, #e11d48); }
     .success { color: #052e16; background: linear-gradient(135deg, #86efac, var(--success)); }
-    .danger { color: #fff7ed; background: linear-gradient(135deg, #fb923c, #ea580c); }
-    .secondary { color: var(--text); background: rgba(255,255,255,0.08); border: 1px solid var(--border); }
-
-    button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
-
-    .note { margin-top: 14px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
-
-    .mode-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
-    @media (min-width: 650px) { .mode-grid { grid-template-columns: 1fr 1fr; } }
-
-    .mode-card {
-      border: 1px solid var(--border);
-      background: rgba(15,23,42,0.52);
-      border-radius: 20px;
-      padding: 15px;
-      cursor: pointer;
-      transition: 0.12s ease;
-    }
-
-    .mode-card.active { border-color: rgba(56,189,248,0.85); box-shadow: 0 0 0 3px rgba(56,189,248,0.16); }
-    .mode-card p { color: var(--muted); margin: 6px 0 0; line-height: 1.4; font-size: 0.92rem; }
-
-    .timer-display {
-      text-align: center;
-      padding: 22px 10px;
-      background: rgba(2, 6, 23, 0.42);
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      margin: 14px 0;
-    }
-
-    .timer-display .label { color: var(--subtle); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.74rem; }
-    .timer-display .time { margin-top: 4px; font-size: clamp(2.7rem, 14vw, 5.2rem); font-weight: 950; letter-spacing: -0.06em; }
-    .timer-display .hint { color: var(--muted); margin-top: 6px; }
-
-    .capture-points { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
-    @media (min-width: 720px) { .capture-points { grid-template-columns: repeat(4, 1fr); } }
-
-    .point {
-      background: rgba(15,23,42,0.55);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 13px;
-    }
-
-    .point .degree { color: var(--accent); font-weight: 900; font-size: 0.82rem; }
-    .point .name { margin-top: 4px; font-weight: 950; }
-    .point .seconds { margin-top: 3px; color: var(--muted); font-size: 0.95rem; }
-
-    .field { display: grid; gap: 7px; margin-top: 14px; }
-    label.field-label { color: var(--muted); font-size: 0.88rem; font-weight: 800; }
-
-    input[type="text"] {
-      width: 100%;
-      border: 1px solid var(--border);
-      background: rgba(15,23,42,0.68);
-      color: var(--text);
-      border-radius: 14px;
-      padding: 13px 14px;
-      outline: none;
-    }
-
-    input[type="text"]:focus { border-color: rgba(56,189,248,0.8); box-shadow: 0 0 0 3px rgba(56,189,248,0.15); }
-
-    .preset-list { display: grid; gap: 10px; margin-top: 12px; }
-
-    .preset {
-      background: rgba(15,23,42,0.55);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 12px;
-      display: grid;
-      gap: 8px;
-    }
-
-    .preset-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
-    .preset-name { font-weight: 950; }
-    .preset-meta { color: var(--muted); font-size: 0.88rem; line-height: 1.35; }
-    .preset-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .preset-actions button { padding: 10px; border-radius: 12px; font-size: 0.9rem; }
-
-    .empty { color: var(--subtle); text-align: center; padding: 18px; border: 1px dashed var(--border); border-radius: 16px; }
-
-    .footer-note { margin: 20px 2px 0; color: #94a3b8; font-size: 0.85rem; text-align: center; }
+    .ghost { color: var(--text); background: transparent; border: 1px solid var(--border); }
+    .note { color: var(--muted); font-size: .9rem; line-height: 1.45; }
+    .timer { font-variant-numeric: tabular-nums; font-size: clamp(2.2rem, 10vw, 4rem); font-weight: 950; letter-spacing: -.04em; margin: 8px 0; }
+    .cal-mode { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 620px) { .cal-mode { grid-template-columns: 1fr 1fr; } }
+    .mode-card { border: 1px solid var(--border); border-radius: 18px; padding: 14px; background: rgba(15,23,42,.42); cursor: pointer; }
+    .mode-card.active { border-color: rgba(56,189,248,.72); box-shadow: 0 0 0 2px rgba(56,189,248,.14) inset; }
+    .mode-card strong { display: block; margin-bottom: 5px; }
+    .result-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+    @media (min-width: 620px) { .result-grid { grid-template-columns: repeat(4,1fr); } }
+    .metric { background: rgba(15,23,42,.5); border: 1px solid var(--border); border-radius: 16px; padding: 12px; }
+    .metric .label { color: var(--soft); font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .metric .value { margin-top: 5px; font-size: 1.2rem; font-weight: 950; font-variant-numeric: tabular-nums; }
+    input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: rgba(15,23,42,.7); color: var(--text); }
+    label.small { color: var(--muted); font-size: .82rem; font-weight: 800; display:block; margin: 10px 0 6px; }
+    .preset-list { display: grid; gap: 8px; margin-top: 10px; }
+    .preset { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px; background: rgba(15,23,42,.48); border: 1px solid var(--border); border-radius: 14px; }
+    .preset strong { display:block; }
+    .preset span { color: var(--muted); font-size: .85rem; }
+    .camera-wrap { position: relative; width: 100%; aspect-ratio: 3/4; max-height: 72vh; background: #020617; border: 1px solid var(--border); border-radius: 22px; overflow: hidden; display:grid; place-items:center; }
+    @media (min-width: 820px) { .camera-wrap { aspect-ratio: 4/3; } }
+    video, canvas { width: 100%; height: 100%; object-fit: cover; }
+    canvas.hidden { display: none; }
+    .camera-placeholder { padding: 20px; text-align:center; color: var(--muted); }
+    .capture-badge { position: absolute; top: 12px; left: 12px; right: 12px; display:flex; justify-content: space-between; gap: 8px; align-items:center; pointer-events:none; }
+    .badge { background: rgba(2,6,23,.72); border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 8px 10px; font-size: .82rem; font-weight: 900; backdrop-filter: blur(8px); }
+    .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition: opacity .18s ease; }
+    .flash.on { opacity:.75; }
+    .shot-list { display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .shot { background: rgba(15,23,42,.5); border:1px solid var(--border); border-radius:16px; overflow:hidden; min-height: 150px; }
+    .shot img { width:100%; aspect-ratio: 1/1; object-fit:cover; display:block; background:#020617; }
+    .shot .shot-label { padding: 9px; font-weight:900; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+    .shot .shot-label span { color: var(--muted); font-size:.78rem; }
+    .progressbar { height: 10px; background: rgba(255,255,255,.08); border-radius: 999px; overflow:hidden; border: 1px solid var(--border); }
+    .progressbar > div { height:100%; width:0%; background: linear-gradient(90deg, var(--accent), var(--success)); transition: width .1s linear; }
+    .footer-note { margin: 20px 2px 0; color: var(--soft); font-size: .84rem; text-align:center; }
   </style>
 </head>
 <body>
   <main class="app">
     <header>
-      <div class="topbar">
-        <div class="brand"><div class="brand-mark">📦</div><span>Item Posting Assistant</span></div>
-        <div class="version">Prototype v0.2</div>
-      </div>
-      <p class="eyebrow">Stage 2 · Turntable Calibration</p>
-      <h1>Prepare, calibrate, and calculate capture timing.</h1>
-      <p class="subtitle">Use the setup checklist first, then measure your turntable with either a quick 1-rotation calibration or a more accurate 3-rotation calibration.</p>
+      <p class="eyebrow">Prototype v0.26.05.22.0001 · Camera Capture</p>
+      <h1>Item Posting Assistant</h1>
+      <p class="subtitle">Prepare your capture station, calibrate your turntable, then use your phone camera to automatically capture front, right, back, and left images.</p>
     </header>
 
-    <nav class="tabs" aria-label="Prototype screens">
-      <button id="setupTab" class="tab-btn active" type="button">1. Setup</button>
-      <button id="calibrationTab" class="tab-btn" type="button">2. Calibration</button>
+    <nav class="nav">
+      <button class="tab active" data-screen="setup">1 · Setup</button>
+      <button class="tab" data-screen="calibration">2 · Calibration</button>
+      <button class="tab" data-screen="capture">3 · Camera Capture</button>
     </nav>
 
-    <section id="setupScreen" class="screen active">
+    <section id="setup" class="screen active">
       <div class="grid two">
-        <div class="card setup-visual" aria-label="Capture station illustration">
-          <div class="scan-line"></div>
-          <div class="phone"><div class="lens"></div></div>
-          <div class="tripod"></div>
-          <div class="item-box"></div>
-          <div class="turntable"></div>
-        </div>
-
         <div class="card">
-          <h2>Capture Station Checklist</h2>
+          <h2>Prepare Capture Station</h2>
+          <p class="note">Place your phone on a tripod, center the item on the turntable, and confirm the checklist before calibration.</p>
           <ul class="checklist">
-            <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Phone is mounted</strong><span>Set your phone on a tripod or stand so it will not move during capture.</span></span></label></li>
-            <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Turntable is centered</strong><span>Place the rotating display directly in front of the camera.</span></span></label></li>
-            <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Item is stable</strong><span>Make sure the item will not slide, wobble, or fall while rotating.</span></span></label></li>
-            <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Lighting looks good</strong><span>Avoid harsh glare, deep shadows, and cluttered backgrounds.</span></span></label></li>
-            <li><label class="check-item"><input type="checkbox" class="setup-check" /><span class="box">✓</span><span class="check-text"><strong>Item front is facing camera</strong><span>Start with the front of the item facing the phone before calibration.</span></span></label></li>
+            <li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span class="check-text"><strong>Phone is mounted</strong><span>Set your phone on a tripod or stand so it will not move.</span></span></label></li>
+            <li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span class="check-text"><strong>Turntable is centered</strong><span>Place the rotating display directly in front of the camera.</span></span></label></li>
+            <li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span class="check-text"><strong>Item is stable</strong><span>Make sure the item will not slide, wobble, or fall while rotating.</span></span></label></li>
+            <li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span class="check-text"><strong>Lighting looks good</strong><span>Avoid harsh glare, deep shadows, and cluttered backgrounds.</span></span></label></li>
+            <li><label class="check-item"><input type="checkbox" class="setup-check"><span class="box">✓</span><span class="check-text"><strong>Item front is facing camera</strong><span>Start with the front of the item facing the phone.</span></span></label></li>
           </ul>
-
-          <div class="status"><span class="pill"><span id="readyDot" class="dot"></span><span id="readyText">0 of 5 ready</span></span></div>
-          <div class="actions">
-            <button id="continueBtn" class="primary" disabled>Continue to Turntable Calibration</button>
-            <button id="resetBtn" class="secondary">Reset Checklist</button>
-          </div>
-          <p class="note">Tip: for calibration, pick a clear “front” point on the item and tap Stop when that same point faces the camera again.</p>
+          <div class="row" style="margin-top:14px"><span class="pill"><span id="readyDot" class="dot"></span><span id="readyText">0 of 5 ready</span></span></div>
+          <div class="actions"><button id="toCalibrationBtn" class="primary" disabled>Continue to Calibration</button><button id="resetSetupBtn" class="secondary">Reset Checklist</button></div>
+        </div>
+        <div class="card">
+          <h2>Recommended Setup</h2>
+          <div class="metric"><div class="label">Phone</div><div class="value">Tripod-mounted</div></div><br>
+          <div class="metric"><div class="label">Item Start</div><div class="value">Front-facing</div></div><br>
+          <div class="metric"><div class="label">Lighting</div><div class="value">Even & steady</div></div>
+          <p class="note">Tip: keep the background uncluttered and make sure the full item stays inside the frame for the whole rotation.</p>
         </div>
       </div>
     </section>
 
-    <section id="calibrationScreen" class="screen">
+    <section id="calibration" class="screen">
       <div class="grid two">
         <div class="card">
-          <h2>Choose Calibration Mode</h2>
-          <div class="mode-grid">
-            <div id="quickMode" class="mode-card active" role="button" tabindex="0">
-              <h3>Quick Calibration</h3>
-              <p>Tap Start, then Stop after <strong>1 full rotation</strong>. Fast and good enough for most items.</p>
-            </div>
-            <div id="precisionMode" class="mode-card" role="button" tabindex="0">
-              <h3>Precision Calibration</h3>
-              <p>Tap Start, then Stop after <strong>3 full rotations</strong>. The app averages timing for better accuracy.</p>
-            </div>
+          <h2>Turntable Calibration</h2>
+          <div class="cal-mode">
+            <div id="quickMode" class="mode-card active" data-rotations="1"><strong>Quick Calibration</strong><span class="note">Tap Start, then Stop after 1 full rotation.</span></div>
+            <div id="precisionMode" class="mode-card" data-rotations="3"><strong>Precision Calibration</strong><span class="note">Tap Start, then Stop after 3 full rotations. The app averages the time.</span></div>
           </div>
-
-          <div class="timer-display">
-            <div class="label" id="timerLabel">Ready to calibrate</div>
-            <div class="time" id="timerDisplay">0.00</div>
-            <div class="hint" id="timerHint">Line up the front of the item, then tap Start.</div>
-          </div>
-
+          <div class="timer" id="calTimer">0.00s</div>
+          <div class="row"><span class="pill"><span id="calDot" class="dot"></span><span id="calStatus">Ready to calibrate</span></span></div>
           <div class="actions">
-            <button id="startBtn" class="success">Start Calibration</button>
-            <button id="stopBtn" class="danger" disabled>Stop After 1 Rotation</button>
-            <button id="clearResultBtn" class="secondary">Clear Current Result</button>
+            <button id="startCalBtn" class="primary">Start Calibration</button>
+            <button id="stopCalBtn" class="danger" disabled>Stop Calibration</button>
+            <button id="resetCalBtn" class="secondary">Reset Calibration</button>
           </div>
-
-          <p class="note">The timing is based on your taps, so the 3-rotation mode helps smooth out small reaction-time differences.</p>
         </div>
-
         <div class="card">
-          <h2>Calibration Result</h2>
-          <div id="noResult" class="empty">No calibration result yet.</div>
-          <div id="resultPanel" style="display:none;">
-            <div class="status">
-              <span class="pill"><span class="dot ready"></span><span id="resultSummary">Ready</span></span>
-            </div>
-
-            <div class="capture-points" style="margin-top:14px;">
-              <div class="point"><div class="degree">0°</div><div class="name">Front</div><div id="frontTime" class="seconds">0.00s</div></div>
-              <div class="point"><div class="degree">90°</div><div class="name">Right</div><div id="rightTime" class="seconds">0.00s</div></div>
-              <div class="point"><div class="degree">180°</div><div class="name">Back</div><div id="backTime" class="seconds">0.00s</div></div>
-              <div class="point"><div class="degree">270°</div><div class="name">Left</div><div id="leftTime" class="seconds">0.00s</div></div>
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="presetName">Preset name</label>
-              <input id="presetName" type="text" placeholder="Example: Small white turntable" />
-            </div>
-
-            <div class="actions">
-              <button id="savePresetBtn" class="primary">Save Calibration Preset</button>
-            </div>
+          <h2>Capture Timing</h2>
+          <div class="result-grid">
+            <div class="metric"><div class="label">Front</div><div class="value" id="frontTime">0.00s</div></div>
+            <div class="metric"><div class="label">Right</div><div class="value" id="rightTime">—</div></div>
+            <div class="metric"><div class="label">Back</div><div class="value" id="backTime">—</div></div>
+            <div class="metric"><div class="label">Left</div><div class="value" id="leftTime">—</div></div>
           </div>
+          <label class="small" for="presetName">Preset name</label>
+          <input id="presetName" placeholder="Example: Small black turntable" />
+          <div class="actions"><button id="savePresetBtn" class="success" disabled>Save Preset</button><button id="toCaptureBtn" class="primary" disabled>Continue to Camera Capture</button></div>
+          <h3>Saved Presets</h3>
+          <div id="presetList" class="preset-list"></div>
         </div>
-      </div>
-
-      <div class="card" style="margin-top:16px;">
-        <h2>Saved Turntable Presets</h2>
-        <div id="presetList" class="preset-list"></div>
       </div>
     </section>
 
-    <p class="footer-note">Prototype v0.2 · Next major build: live camera preview and auto image capture</p>
+    <section id="capture" class="screen">
+      <div class="grid capture">
+        <div class="card">
+          <h2>Camera Capture</h2>
+          <div class="camera-wrap">
+            <video id="video" playsinline autoplay muted></video>
+            <div id="cameraPlaceholder" class="camera-placeholder">Camera preview will appear here after you start the camera.</div>
+            <div class="capture-badge"><span class="badge" id="cameraStatus">Camera off</span><span class="badge" id="captureStatus">Waiting</span></div>
+            <div id="flash" class="flash"></div>
+          </div>
+          <canvas id="snapshotCanvas" class="hidden"></canvas>
+          <div style="margin-top:12px" class="progressbar"><div id="captureProgress"></div></div>
+          <div class="actions">
+            <button id="startCameraBtn" class="primary">Start Camera</button>
+            <button id="startCaptureBtn" class="success" disabled>Start Auto Capture</button>
+            <button id="manualShotBtn" class="secondary" disabled>Manual Test Shot</button>
+            <button id="stopCameraBtn" class="ghost" disabled>Stop Camera</button>
+          </div>
+          <p class="note">For best results, select the rear camera when your browser asks for permission. GitHub Pages HTTPS should allow camera access on Android Chrome.</p>
+        </div>
+        <div class="card">
+          <h2>Capture Plan</h2>
+          <label class="small" for="capturePresetSelect">Turntable preset</label>
+          <select id="capturePresetSelect"></select>
+          <div class="result-grid" style="margin-top:10px">
+            <div class="metric"><div class="label">Rotation</div><div class="value" id="captureRotation">—</div></div>
+            <div class="metric"><div class="label">Shots</div><div class="value">4</div></div>
+          </div>
+          <h3>Captured Images</h3>
+          <div class="shot-list" id="shotList"></div>
+          <div class="actions"><button id="clearShotsBtn" class="secondary">Clear Captures</button></div>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer-note">Facebook Marketplace-first item posting assistant · local prototype data stays in this browser</p>
   </main>
 
   <script>
-    const setupTab = document.getElementById('setupTab');
-    const calibrationTab = document.getElementById('calibrationTab');
-    const setupScreen = document.getElementById('setupScreen');
-    const calibrationScreen = document.getElementById('calibrationScreen');
+    const STORAGE_PRESETS = 'ipa_turntable_presets_v1';
+    const STORAGE_SELECTED = 'ipa_selected_preset_v1';
+    const STORAGE_SHOTS = 'ipa_capture_shots_v1';
+
+    const tabs = document.querySelectorAll('.tab');
+    const screens = document.querySelectorAll('.screen');
+    function showScreen(id) {
+      screens.forEach(s => s.classList.toggle('active', s.id === id));
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.screen === id));
+    }
+    tabs.forEach(tab => tab.addEventListener('click', () => showScreen(tab.dataset.screen)));
 
     const checks = Array.from(document.querySelectorAll('.setup-check'));
     const readyText = document.getElementById('readyText');
     const readyDot = document.getElementById('readyDot');
-    const continueBtn = document.getElementById('continueBtn');
-    const resetBtn = document.getElementById('resetBtn');
-
-    const quickMode = document.getElementById('quickMode');
-    const precisionMode = document.getElementById('precisionMode');
-    const timerLabel = document.getElementById('timerLabel');
-    const timerDisplay = document.getElementById('timerDisplay');
-    const timerHint = document.getElementById('timerHint');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const clearResultBtn = document.getElementById('clearResultBtn');
-    const noResult = document.getElementById('noResult');
-    const resultPanel = document.getElementById('resultPanel');
-    const resultSummary = document.getElementById('resultSummary');
-    const frontTime = document.getElementById('frontTime');
-    const rightTime = document.getElementById('rightTime');
-    const backTime = document.getElementById('backTime');
-    const leftTime = document.getElementById('leftTime');
-    const presetName = document.getElementById('presetName');
-    const savePresetBtn = document.getElementById('savePresetBtn');
-    const presetList = document.getElementById('presetList');
-
-    let calibrationMode = 'quick';
-    let running = false;
-    let startTime = 0;
-    let timerFrame = null;
-    let latestResult = null;
-
-    function showScreen(name) {
-      const setupActive = name === 'setup';
-      setupScreen.classList.toggle('active', setupActive);
-      calibrationScreen.classList.toggle('active', !setupActive);
-      setupTab.classList.toggle('active', setupActive);
-      calibrationTab.classList.toggle('active', !setupActive);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    setupTab.addEventListener('click', () => showScreen('setup'));
-    calibrationTab.addEventListener('click', () => showScreen('calibration'));
-    continueBtn.addEventListener('click', () => showScreen('calibration'));
-
+    const toCalibrationBtn = document.getElementById('toCalibrationBtn');
     function updateReadyState() {
-      const completed = checks.filter(check => check.checked).length;
-      const total = checks.length;
-      const ready = completed === total;
-      readyText.textContent = ready ? 'Capture station ready' : `${completed} of ${total} ready`;
+      const completed = checks.filter(c => c.checked).length;
+      const ready = completed === checks.length;
+      readyText.textContent = ready ? 'Capture station ready' : `${completed} of ${checks.length} ready`;
       readyDot.classList.toggle('ready', ready);
-      continueBtn.disabled = !ready;
-      localStorage.setItem('ipa_setupChecks', JSON.stringify(checks.map(check => check.checked)));
+      toCalibrationBtn.disabled = !ready;
     }
+    checks.forEach(c => c.addEventListener('change', updateReadyState));
+    document.getElementById('resetSetupBtn').addEventListener('click', () => { checks.forEach(c => c.checked = false); updateReadyState(); });
+    toCalibrationBtn.addEventListener('click', () => showScreen('calibration'));
+    updateReadyState();
 
-    function loadSetupChecks() {
-      try {
-        const saved = JSON.parse(localStorage.getItem('ipa_setupChecks') || '[]');
-        checks.forEach((check, index) => { check.checked = Boolean(saved[index]); });
-      } catch (e) {}
-      updateReadyState();
-    }
+    let modeRotations = 1;
+    let calStart = 0;
+    let calInterval = null;
+    let latestRotation = null;
+    const calTimer = document.getElementById('calTimer');
+    const calStatus = document.getElementById('calStatus');
+    const calDot = document.getElementById('calDot');
+    const startCalBtn = document.getElementById('startCalBtn');
+    const stopCalBtn = document.getElementById('stopCalBtn');
+    const resetCalBtn = document.getElementById('resetCalBtn');
+    const savePresetBtn = document.getElementById('savePresetBtn');
+    const toCaptureBtn = document.getElementById('toCaptureBtn');
+    const presetName = document.getElementById('presetName');
 
-    checks.forEach(check => check.addEventListener('change', updateReadyState));
-    resetBtn.addEventListener('click', () => { checks.forEach(check => check.checked = false); updateReadyState(); });
-
-    function setMode(mode) {
-      if (running) return;
-      calibrationMode = mode;
-      quickMode.classList.toggle('active', mode === 'quick');
-      precisionMode.classList.toggle('active', mode === 'precision');
-      stopBtn.textContent = mode === 'quick' ? 'Stop After 1 Rotation' : 'Stop After 3 Rotations';
-      timerHint.textContent = mode === 'quick'
-        ? 'Line up the front of the item, then tap Start. Stop after one full rotation.'
-        : 'Line up the front of the item, then tap Start. Stop after three full rotations.';
-    }
-
-    quickMode.addEventListener('click', () => setMode('quick'));
-    precisionMode.addEventListener('click', () => setMode('precision'));
-    quickMode.addEventListener('keydown', (event) => { if (event.key === 'Enter') setMode('quick'); });
-    precisionMode.addEventListener('keydown', (event) => { if (event.key === 'Enter') setMode('precision'); });
-
-    function formatSeconds(value) {
-      return `${value.toFixed(2)}s`;
-    }
-
-    function updateTimer() {
-      if (!running) return;
-      const elapsed = (performance.now() - startTime) / 1000;
-      timerDisplay.textContent = elapsed.toFixed(2);
-      timerFrame = requestAnimationFrame(updateTimer);
-    }
-
-    function startCalibration() {
-      running = true;
-      startTime = performance.now();
-      timerLabel.textContent = calibrationMode === 'quick' ? 'Timing 1 rotation' : 'Timing 3 rotations';
-      timerHint.textContent = calibrationMode === 'quick'
-        ? 'Tap Stop when the item front reaches the camera again.'
-        : 'Tap Stop after the item front reaches the camera for the third time.';
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      quickMode.style.pointerEvents = 'none';
-      precisionMode.style.pointerEvents = 'none';
-      updateTimer();
-    }
-
-    function stopCalibration() {
-      if (!running) return;
-      running = false;
-      cancelAnimationFrame(timerFrame);
-      const elapsed = (performance.now() - startTime) / 1000;
-      const rotations = calibrationMode === 'quick' ? 1 : 3;
-      const perRotation = elapsed / rotations;
-      latestResult = {
-        mode: calibrationMode,
-        rotations,
-        totalSeconds: elapsed,
-        perRotation,
-        createdAt: new Date().toISOString()
-      };
-      timerDisplay.textContent = elapsed.toFixed(2);
-      timerLabel.textContent = 'Calibration complete';
-      timerHint.textContent = `${formatSeconds(perRotation)} per rotation calculated.`;
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      quickMode.style.pointerEvents = '';
-      precisionMode.style.pointerEvents = '';
-      renderResult();
-    }
-
-    function clearResult() {
-      latestResult = null;
-      timerDisplay.textContent = '0.00';
-      timerLabel.textContent = 'Ready to calibrate';
-      timerHint.textContent = 'Line up the front of the item, then tap Start.';
-      noResult.style.display = 'block';
-      resultPanel.style.display = 'none';
-      presetName.value = '';
-    }
-
-    startBtn.addEventListener('click', startCalibration);
-    stopBtn.addEventListener('click', stopCalibration);
-    clearResultBtn.addEventListener('click', clearResult);
-
-    function renderResult() {
-      if (!latestResult) return;
-      const r = latestResult.perRotation;
-      noResult.style.display = 'none';
-      resultPanel.style.display = 'block';
-      resultSummary.textContent = `${formatSeconds(r)} per rotation · ${latestResult.rotations}-rotation calibration`;
-      frontTime.textContent = formatSeconds(0);
-      rightTime.textContent = formatSeconds(r * 0.25);
-      backTime.textContent = formatSeconds(r * 0.5);
-      leftTime.textContent = formatSeconds(r * 0.75);
-      if (!presetName.value.trim()) {
-        presetName.value = latestResult.mode === 'quick' ? 'Quick turntable preset' : 'Precision turntable preset';
-      }
-    }
-
-    function getPresets() {
-      try { return JSON.parse(localStorage.getItem('ipa_turntablePresets') || '[]'); }
-      catch (e) { return []; }
-    }
-
-    function setPresets(presets) {
-      localStorage.setItem('ipa_turntablePresets', JSON.stringify(presets));
-    }
-
-    function savePreset() {
-      if (!latestResult) return;
-      const name = presetName.value.trim() || 'Untitled turntable preset';
-      const presets = getPresets();
-      presets.unshift({
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-        name,
-        ...latestResult
+    document.querySelectorAll('.mode-card').forEach(card => {
+      card.addEventListener('click', () => {
+        if (calInterval) return;
+        document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        modeRotations = Number(card.dataset.rotations);
+        calStatus.textContent = modeRotations === 1 ? 'Quick mode selected' : 'Precision mode selected';
       });
-      setPresets(presets);
-      renderPresets();
-    }
+    });
 
-    function usePreset(id) {
-      const preset = getPresets().find(item => item.id === id);
-      if (!preset) return;
-      latestResult = {
-        mode: preset.mode,
-        rotations: preset.rotations,
-        totalSeconds: preset.totalSeconds,
-        perRotation: preset.perRotation,
-        createdAt: preset.createdAt
-      };
-      setMode(preset.mode || 'quick');
-      presetName.value = preset.name;
-      timerLabel.textContent = 'Preset loaded';
-      timerDisplay.textContent = latestResult.totalSeconds.toFixed(2);
-      timerHint.textContent = `${formatSeconds(latestResult.perRotation)} per rotation loaded from saved presets.`;
-      renderResult();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    function fmt(sec) { return `${sec.toFixed(2)}s`; }
+    function updateTiming(rotation) {
+      document.getElementById('frontTime').textContent = fmt(0);
+      document.getElementById('rightTime').textContent = fmt(rotation * 0.25);
+      document.getElementById('backTime').textContent = fmt(rotation * 0.5);
+      document.getElementById('leftTime').textContent = fmt(rotation * 0.75);
     }
-
-    function deletePreset(id) {
-      const presets = getPresets().filter(item => item.id !== id);
-      setPresets(presets);
-      renderPresets();
+    function resetTiming() {
+      latestRotation = null;
+      calTimer.textContent = '0.00s';
+      document.getElementById('frontTime').textContent = '0.00s';
+      document.getElementById('rightTime').textContent = '—';
+      document.getElementById('backTime').textContent = '—';
+      document.getElementById('leftTime').textContent = '—';
+      savePresetBtn.disabled = true;
+      toCaptureBtn.disabled = getPresets().length === 0;
+      calDot.classList.remove('ready');
+      calStatus.textContent = 'Ready to calibrate';
     }
+    startCalBtn.addEventListener('click', () => {
+      calStart = performance.now();
+      startCalBtn.disabled = true;
+      stopCalBtn.disabled = false;
+      calDot.classList.remove('ready');
+      calStatus.textContent = `Timing ${modeRotations} rotation${modeRotations > 1 ? 's' : ''}...`;
+      calInterval = setInterval(() => {
+        calTimer.textContent = fmt((performance.now() - calStart) / 1000);
+      }, 50);
+    });
+    stopCalBtn.addEventListener('click', () => {
+      const elapsed = (performance.now() - calStart) / 1000;
+      clearInterval(calInterval);
+      calInterval = null;
+      latestRotation = elapsed / modeRotations;
+      calTimer.textContent = fmt(elapsed);
+      updateTiming(latestRotation);
+      startCalBtn.disabled = false;
+      stopCalBtn.disabled = true;
+      savePresetBtn.disabled = false;
+      toCaptureBtn.disabled = false;
+      calDot.classList.add('ready');
+      calStatus.textContent = `Calibrated: ${fmt(latestRotation)} per rotation`;
+      if (!presetName.value.trim()) presetName.value = modeRotations === 1 ? 'Quick turntable preset' : 'Precision turntable preset';
+    });
+    resetCalBtn.addEventListener('click', () => {
+      if (calInterval) clearInterval(calInterval);
+      calInterval = null;
+      startCalBtn.disabled = false;
+      stopCalBtn.disabled = true;
+      resetTiming();
+    });
 
+    function getPresets() { try { return JSON.parse(localStorage.getItem(STORAGE_PRESETS) || '[]'); } catch { return []; } }
+    function setPresets(presets) { localStorage.setItem(STORAGE_PRESETS, JSON.stringify(presets)); }
     function renderPresets() {
+      const list = document.getElementById('presetList');
+      const select = document.getElementById('capturePresetSelect');
       const presets = getPresets();
-      if (!presets.length) {
-        presetList.innerHTML = '<div class="empty">No saved presets yet. Run a calibration and save it here.</div>';
+      list.innerHTML = '';
+      select.innerHTML = '';
+      if (presets.length === 0) {
+        list.innerHTML = '<p class="note">No saved presets yet. Calibrate and save one before auto capture.</p>';
+        select.innerHTML = '<option value="">No preset saved yet</option>';
+        toCaptureBtn.disabled = !latestRotation;
+        updateCapturePresetInfo();
         return;
       }
-      presetList.innerHTML = presets.map(preset => {
-        const created = new Date(preset.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-        return `
-          <div class="preset">
-            <div class="preset-head">
-              <div>
-                <div class="preset-name">${escapeHtml(preset.name)}</div>
-                <div class="preset-meta">${formatSeconds(preset.perRotation)} per rotation · ${preset.rotations || 1}-rotation mode · ${created}</div>
-              </div>
-            </div>
-            <div class="preset-actions">
-              <button class="secondary" onclick="usePreset('${preset.id}')">Use Preset</button>
-              <button class="secondary" onclick="deletePreset('${preset.id}')">Delete</button>
-            </div>
-          </div>`;
-      }).join('');
+      presets.forEach((p, idx) => {
+        const el = document.createElement('div');
+        el.className = 'preset';
+        el.innerHTML = `<div><strong>${p.name}</strong><span>${fmt(p.rotation)} per rotation · ${p.mode}</span></div><button class="ghost" data-delete="${idx}">Delete</button>`;
+        list.appendChild(el);
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        opt.textContent = `${p.name} — ${fmt(p.rotation)}`;
+        select.appendChild(opt);
+      });
+      document.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.delete);
+        const next = getPresets().filter((_, i) => i !== idx);
+        setPresets(next);
+        localStorage.setItem(STORAGE_SELECTED, '0');
+        renderPresets();
+      }));
+      const savedSelected = localStorage.getItem(STORAGE_SELECTED) || '0';
+      if (presets[Number(savedSelected)]) select.value = savedSelected;
+      else select.value = '0';
+      toCaptureBtn.disabled = false;
+      updateCapturePresetInfo();
     }
+    savePresetBtn.addEventListener('click', () => {
+      if (!latestRotation) return;
+      const presets = getPresets();
+      presets.push({ name: presetName.value.trim() || `Turntable ${presets.length + 1}`, rotation: latestRotation, mode: modeRotations === 1 ? 'Quick' : 'Precision', savedAt: new Date().toISOString() });
+      setPresets(presets);
+      localStorage.setItem(STORAGE_SELECTED, String(presets.length - 1));
+      savePresetBtn.disabled = true;
+      renderPresets();
+    });
+    toCaptureBtn.addEventListener('click', () => showScreen('capture'));
 
-    function escapeHtml(text) {
-      return String(text).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('snapshotCanvas');
+    const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+    const cameraStatus = document.getElementById('cameraStatus');
+    const captureStatus = document.getElementById('captureStatus');
+    const flash = document.getElementById('flash');
+    const startCameraBtn = document.getElementById('startCameraBtn');
+    const stopCameraBtn = document.getElementById('stopCameraBtn');
+    const startCaptureBtn = document.getElementById('startCaptureBtn');
+    const manualShotBtn = document.getElementById('manualShotBtn');
+    const clearShotsBtn = document.getElementById('clearShotsBtn');
+    const captureProgress = document.getElementById('captureProgress');
+    const capturePresetSelect = document.getElementById('capturePresetSelect');
+    let stream = null;
+    let capturing = false;
+    let captureTimers = [];
+    let progressInterval = null;
+
+    function getSelectedPreset() {
+      const presets = getPresets();
+      const idx = Number(capturePresetSelect.value || 0);
+      return presets[idx] || null;
     }
+    function updateCapturePresetInfo() {
+      const p = getSelectedPreset();
+      document.getElementById('captureRotation').textContent = p ? fmt(p.rotation) : '—';
+      startCaptureBtn.disabled = !stream || !p || capturing;
+    }
+    capturePresetSelect.addEventListener('change', () => { localStorage.setItem(STORAGE_SELECTED, capturePresetSelect.value); updateCapturePresetInfo(); });
 
-    savePresetBtn.addEventListener('click', savePreset);
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+        video.srcObject = stream;
+        cameraPlaceholder.style.display = 'none';
+        cameraStatus.textContent = 'Camera on';
+        startCameraBtn.disabled = true;
+        stopCameraBtn.disabled = false;
+        manualShotBtn.disabled = false;
+        updateCapturePresetInfo();
+      } catch (err) {
+        cameraStatus.textContent = 'Camera blocked';
+        alert('Camera could not be started. Make sure you are using HTTPS/GitHub Pages and allow camera permission in the browser.');
+      }
+    }
+    function stopCamera() {
+      if (capturing) stopCaptureTimers();
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      video.srcObject = null;
+      cameraPlaceholder.style.display = 'block';
+      cameraStatus.textContent = 'Camera off';
+      captureStatus.textContent = 'Waiting';
+      startCameraBtn.disabled = false;
+      stopCameraBtn.disabled = true;
+      manualShotBtn.disabled = true;
+      startCaptureBtn.disabled = true;
+    }
+    function flashScreen() {
+      flash.classList.add('on');
+      setTimeout(() => flash.classList.remove('on'), 130);
+    }
+    function takeSnapshot(label) {
+      if (!stream || video.readyState < 2) return null;
+      const w = video.videoWidth || 1280;
+      const h = video.videoHeight || 720;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      const shots = getShots();
+      const existing = shots.findIndex(s => s.label === label);
+      const shot = { label, dataUrl, capturedAt: new Date().toISOString() };
+      if (existing >= 0) shots[existing] = shot;
+      else shots.push(shot);
+      setShots(shots);
+      renderShots();
+      flashScreen();
+      return shot;
+    }
+    function getShots() { try { return JSON.parse(localStorage.getItem(STORAGE_SHOTS) || '[]'); } catch { return []; } }
+    function setShots(shots) { localStorage.setItem(STORAGE_SHOTS, JSON.stringify(shots)); }
+    function renderShots() {
+      const shotList = document.getElementById('shotList');
+      const labels = ['Front', 'Right', 'Back', 'Left'];
+      const shots = getShots();
+      shotList.innerHTML = '';
+      labels.forEach(label => {
+        const shot = shots.find(s => s.label === label);
+        const div = document.createElement('div');
+        div.className = 'shot';
+        div.innerHTML = shot ? `<img src="${shot.dataUrl}" alt="${label} capture"><div class="shot-label">${label}<span>${new Date(shot.capturedAt).toLocaleTimeString([], {hour:'numeric', minute:'2-digit', second:'2-digit'})}</span></div>` : `<div style="aspect-ratio:1/1;display:grid;place-items:center;color:#94a3b8;background:#020617">No ${label} shot</div><div class="shot-label">${label}<span>pending</span></div>`;
+        shotList.appendChild(div);
+      });
+    }
+    function stopCaptureTimers() {
+      captureTimers.forEach(t => clearTimeout(t));
+      captureTimers = [];
+      if (progressInterval) clearInterval(progressInterval);
+      progressInterval = null;
+      capturing = false;
+      updateCapturePresetInfo();
+    }
+    function startAutoCapture() {
+      const p = getSelectedPreset();
+      if (!stream || !p || capturing) return;
+      setShots([]); renderShots();
+      capturing = true;
+      startCaptureBtn.disabled = true;
+      captureStatus.textContent = 'Capturing...';
+      const rotationMs = p.rotation * 1000;
+      const plan = [
+        { label: 'Front', at: 0 },
+        { label: 'Right', at: rotationMs * 0.25 },
+        { label: 'Back', at: rotationMs * 0.5 },
+        { label: 'Left', at: rotationMs * 0.75 }
+      ];
+      const start = performance.now();
+      plan.forEach(shot => {
+        captureTimers.push(setTimeout(() => {
+          captureStatus.textContent = `Captured ${shot.label}`;
+          takeSnapshot(shot.label);
+        }, shot.at));
+      });
+      captureTimers.push(setTimeout(() => {
+        stopCaptureTimers();
+        captureProgress.style.width = '100%';
+        captureStatus.textContent = 'Capture complete';
+      }, rotationMs + 250));
+      progressInterval = setInterval(() => {
+        const pct = Math.min(100, ((performance.now() - start) / rotationMs) * 100);
+        captureProgress.style.width = `${pct}%`;
+      }, 80);
+    }
+    startCameraBtn.addEventListener('click', startCamera);
+    stopCameraBtn.addEventListener('click', stopCamera);
+    startCaptureBtn.addEventListener('click', startAutoCapture);
+    manualShotBtn.addEventListener('click', () => takeSnapshot('Front'));
+    clearShotsBtn.addEventListener('click', () => { setShots([]); renderShots(); captureStatus.textContent = 'Waiting'; captureProgress.style.width = '0%'; });
 
-    loadSetupChecks();
-    setMode('quick');
     renderPresets();
+    renderShots();
+    resetTiming();
   </script>
 </body>
 </html>
