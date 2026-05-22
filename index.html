@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1136</title>
+  <title>Item Posting Assistant v0.26.05.22.1218</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -56,6 +56,12 @@
     .storage-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
     .recent-storage-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}
     .storage-chip{border:1px solid rgba(56,189,248,.28);background:rgba(56,189,248,.12);color:#bae6fd;border-radius:999px;padding:7px 9px;font-size:.78rem;font-weight:900;cursor:pointer}
+
+    .storage-photo-panel{margin-top:10px;background:rgba(2,6,23,.45);border:1px solid var(--border);border-radius:16px;padding:12px;display:grid;gap:10px}
+    .storage-photo-preview{width:100%;min-height:120px;border:1px dashed rgba(255,255,255,.22);border-radius:14px;display:grid;place-items:center;overflow:hidden;background:rgba(15,23,42,.55);color:var(--muted);font-size:.86rem;text-align:center;padding:10px}
+    .storage-photo-preview img{width:100%;max-height:240px;object-fit:cover;display:block;border-radius:12px}
+    .storage-photo-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .storage-photo-actions button{padding:9px 8px;font-size:.82rem;border-radius:12px}
     .preset-list{display:grid;gap:7px;margin-top:8px}
     .preset-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:rgba(2,6,23,.38);border:1px solid var(--border);border-radius:13px;padding:8px}
     .preset-row button{padding:8px 10px;font-size:.78rem;border-radius:10px}
@@ -64,7 +70,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1136 · storage presets</p>
+      <p class="eyebrow">v0.26.05.22.1218 · storage presets</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds inventory search, filters, sorting, quick status updates, and a Needs Listing workflow view.</p>
     </header>
@@ -216,6 +222,18 @@
               <div class="storage-actions"><button id="applyStoragePresetBtn" class="secondary">Apply Preset</button><button id="saveStoragePresetBtn" class="success">Save Preset</button><button id="removeStoragePresetBtn" class="danger">Remove Preset</button></div>
               <div id="recentStorageList" class="recent-storage-list"></div>
             </div>
+
+            <div class="storage-photo-panel">
+              <label class="small">Storage location photo</label>
+              <div id="storagePhotoPreview" class="storage-photo-preview">No storage location photo saved yet.</div>
+              <input id="storagePhotoFile" type="file" accept="image/*" capture="environment" style="display:none">
+              <div class="storage-photo-actions">
+                <button id="chooseStoragePhotoBtn" class="secondary" type="button">Take / Choose Photo</button>
+                <button id="captureStorageFromCameraBtn" class="secondary" type="button">Use Active Camera</button>
+                <button id="clearStoragePhotoBtn" class="danger" type="button">Clear Photo</button>
+              </div>
+              <p class="photo-manage-note">Use this for the bin, shelf, tote, or room where the item is stored. It is included in JSON and rebuildable HTML backups.</p>
+            </div>
             <label class="small">Notes</label><textarea id="itemNotes" rows="3"></textarea>
             <h3 style="margin-top:16px">Facebook Marketplace Draft</h3>
             <label class="small">Tone</label><select id="draftTone"><option value="friendly">Friendly</option><option value="direct">Direct</option><option value="detailed">Detailed</option></select>
@@ -268,7 +286,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1136';
+    const VERSION='v0.26.05.22.1218';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -392,7 +410,7 @@
         const buttons=[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean);buttons.forEach(b=>b.disabled=true);
         $('captureStatus').textContent='Creating inventory item...';
         let items=getItems(),title=(titleHint||$('sessionName').value||'').trim()||`Inventory item ${items.length+1}`;
-        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',draftHistory:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
+        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',draftHistory:[],storagePhoto:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
         Object.assign(item,generateDraft(item));
         items.push(item);
         if(!setItems(items))return;
@@ -457,7 +475,7 @@
         renderInventory();refreshBackupViews();
       }
     }
-    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderInventory()}
+    function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;renderItemPhotos(item);renderStoragePhoto(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderInventory()}
     function saveItemObject(item){let items=getItems().map(i=>i.id===item.id?item:i);return setItems(items)}
     function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
     function currentDraftSnapshot(item,label){return {id:id('draft'),label:label||`Draft ${((item.draftHistory||[]).length)+1}`,savedAt:new Date().toISOString(),fbTitle:item.fbTitle||'',fbPrice:item.fbPrice||'',fbDescription:item.fbDescription||'',fbPickup:item.fbPickup||'',tone:item.draftTone||'friendly',pickupMode:item.pickupMode||'Local pickup preferred'}}
@@ -473,6 +491,74 @@
     function updateSelectedPhotos(mutator){let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;item.photos=item.photos||[];mutator(item.photos,item);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=async()=>{let idx=Number(b.dataset.photoRotate);let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item||!item.photos?.[idx])return;b.disabled=true;try{item.photos[idx].dataUrl=await rotateDataUrlRight(item.photos[idx].dataUrl);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}catch(e){alert('Could not rotate photo: '+e.message)}finally{b.disabled=false}})}
     function rotateDataUrlRight(dataUrl){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>{try{let c=document.createElement('canvas');c.width=img.height;c.height=img.width;let ctx=c.getContext('2d');ctx.translate(c.width/2,c.height/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-img.width/2,-img.height/2);resolve(c.toDataURL('image/jpeg',0.84))}catch(e){reject(e)}};img.onerror=()=>reject(new Error('Image load failed'));img.src=dataUrl})}
+
+    function renderStoragePhoto(item){
+      let el=$('storagePhotoPreview');
+      if(!el)return;
+      let sp=item?.storagePhoto;
+      if(sp?.dataUrl){
+        el.innerHTML=`<img src="${sp.dataUrl}" alt="Storage location photo"><p class="photo-manage-note">Saved ${sp.takenAt?new Date(sp.takenAt).toLocaleString():'with this item'}${sp.source?` · ${escapeHtml(sp.source)}`:''}</p>`;
+      }else{
+        el.textContent='No storage location photo saved yet.';
+      }
+    }
+    async function imageFileToStoragePhoto(file){
+      return new Promise((resolve,reject)=>{
+        if(!file){reject(new Error('No file selected'));return}
+        let reader=new FileReader();
+        reader.onload=()=>{
+          let img=new Image();
+          img.onload=()=>{
+            try{
+              let maxW=900,maxH=675,ratio=Math.min(maxW/img.width,maxH/img.height,1);
+              let c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*ratio));c.height=Math.max(1,Math.round(img.height*ratio));
+              c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+              resolve({label:'Storage location photo',dataUrl:c.toDataURL('image/jpeg',.74),takenAt:new Date().toISOString(),source:'device camera/gallery',width:c.width,height:c.height});
+            }catch(e){reject(e)}
+          };
+          img.onerror=()=>reject(new Error('Could not load selected image'));
+          img.src=reader.result;
+        };
+        reader.onerror=()=>reject(new Error('Could not read selected image'));
+        reader.readAsDataURL(file);
+      });
+    }
+    function saveStoragePhotoToSelected(storagePhoto){
+      if(!selectedItemId){alert('Select or create an inventory item first.');return false}
+      let items=getItems(),item=items.find(i=>i.id===selectedItemId);
+      if(!item){alert('The selected item could not be found.');return false}
+      item.storagePhoto=storagePhoto;
+      item.updatedAt=new Date().toISOString();
+      if(!setItems(items))return false;
+      renderStoragePhoto(item);refreshBackupViews();
+      return true;
+    }
+    async function chooseStoragePhoto(){
+      let input=$('storagePhotoFile');
+      if(input)input.click();
+    }
+    async function handleStoragePhotoFile(){
+      let file=$('storagePhotoFile')?.files?.[0];
+      if(!file)return;
+      try{
+        let photo=await imageFileToStoragePhoto(file);
+        if(saveStoragePhotoToSelected(photo))alert('Storage location photo saved.');
+      }catch(e){alert('Could not save storage location photo: '+(e.message||e))}
+      $('storagePhotoFile').value='';
+    }
+    function captureStoragePhotoFromActiveCamera(){
+      if(!stream||!video.videoWidth){alert('Start the camera first, then try Use Active Camera again. You can also use Take / Choose Photo.');return}
+      try{
+        let shot=canvasShot('Storage location photo');
+        let photo={...shot,label:'Storage location photo',source:'active camera preview'};
+        if(saveStoragePhotoToSelected(photo))alert('Storage location photo captured from active camera.');
+      }catch(e){alert('Could not capture storage photo: '+(e.message||e))}
+    }
+    function clearStoragePhoto(){
+      if(!selectedItemId){alert('Select an inventory item first.');return}
+      if(!confirm('Clear the saved storage location photo for this item?'))return;
+      if(saveStoragePhotoToSelected(null))alert('Storage location photo cleared.');
+    }
     function collectItem(){
       if(!selectedItemId){alert('No inventory item is selected.');return null}
       let items=getItems(),item=items.find(i=>i.id===selectedItemId);
@@ -495,7 +581,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v)$('itemStorage').value=v};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v)$('itemStorage').value=v};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};$('chooseStoragePhotoBtn').onclick=chooseStoragePhoto;$('storagePhotoFile').onchange=handleStoragePhotoFile;$('captureStorageFromCameraBtn').onclick=captureStoragePhotoFromActiveCamera;$('clearStoragePhotoBtn').onclick=clearStoragePhoto;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
@@ -505,9 +591,9 @@
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
     function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
     function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
-    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
-    function buildSheetsDriveRows(){let rows=[['Date Created','Item ID','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Facebook Title','Facebook Description','Pickup Notes']];getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});return rows}
-    function buildRebuildHtml(){let b=backupObj();let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));let items=b.items.map((item,index)=>{let imgs=(item.photos||[]).map((p,pi)=>`<figure><img src="${p.dataUrl}" alt="${esc(p.label||'photo')}"><figcaption>${esc(p.label||`Photo ${pi+1}`)} · Suggested file: ${esc(shotFileName(item,index,p,pi))}</figcaption></figure>`).join('');return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`}).join('');return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Rebuild Backup ${VERSION}</title><style>body{font-family:system-ui,sans-serif;margin:24px;background:#f8fafc;color:#0f172a}.item{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin:0 0 18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}
+    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),storageLocationPhoto:item.storagePhoto?.dataUrl?{label:item.storagePhoto.label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:item.storagePhoto.takenAt||'',hasEmbeddedDataUrl:true}:null,listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
+    function buildSheetsDriveRows(){let rows=[['Date Created','Item ID','Item Title','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,i.storagePhoto?.dataUrl?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});return rows}
+    function buildRebuildHtml(){let b=backupObj();let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));let items=b.items.map((item,index)=>{let storageImg=item.storagePhoto?.dataUrl?`<figure><img src="${item.storagePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';let imgs=(item.photos||[]).map((p,pi)=>`<figure><img src="${p.dataUrl}" alt="${esc(p.label||'photo')}"><figcaption>${esc(p.label||`Photo ${pi+1}`)} · Suggested file: ${esc(shotFileName(item,index,p,pi))}</figcaption></figure>`).join('');return `<section class="item"><h2>${esc(item.title||'Untitled item')}</h2><p><b>Status:</b> ${esc(item.status||'Draft')} &nbsp; <b>Condition:</b> ${esc(item.condition||'')} &nbsp; <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><h3>Facebook Marketplace Draft</h3><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p><h3>Storage Location Photo</h3><div class="photos">${storageImg||'<p>No storage location photo saved for this item.</p>'}</div><h3>Listing Photos</h3><div class="photos">${imgs||'<p>No photos saved for this item.</p>'}</div></section>`}).join('');return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Rebuild Backup ${VERSION}</title><style>body{font-family:system-ui,sans-serif;margin:24px;background:#f8fafc;color:#0f172a}.item{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin:0 0 18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}
     .photo-manage-grid{display:grid;grid-template-columns:1fr;gap:12px;margin:10px 0 16px}
     @media(min-width:760px){.photo-manage-grid{grid-template-columns:repeat(2,1fr)}}
     .photo-manage-card{background:rgba(2,6,23,.5);border:1px solid var(--border);border-radius:16px;overflow:hidden}
@@ -543,8 +629,8 @@
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
-    function renderBackupPreview(){let el=$('backupPreview');if(!el)return;let items=getItems();if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names and photo filenames.</div>';return}let sample=items.slice(-3).reverse().map((item,revIndex)=>{let index=items.indexOf(item);let files=(item.photos||[]).map((p,pi)=>`<li>${shotFileName(item,index,p,pi)}</li>`).join('')||'<li>No photos attached</li>';return `<div class="result-box"><strong>${item.title||'Untitled item'}</strong><p>Suggested Drive folder: <b>${itemFolderName(item,index)}</b></p><ul>${files}</ul></div>`}).join('');el.innerHTML=sample}
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(i.storagePhoto?.dataUrl?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Storage location photos: <b>${storagePhotoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
+    function renderBackupPreview(){let el=$('backupPreview');if(!el)return;let items=getItems();if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names and photo filenames.</div>';return}let sample=items.slice(-3).reverse().map((item,revIndex)=>{let index=items.indexOf(item);let files=(item.photos||[]).map((p,pi)=>`<li>${shotFileName(item,index,p,pi)}</li>`).join('')||'<li>No photos attached</li>';return `<div class="result-box"><strong>${item.title||'Untitled item'}</strong><p>Suggested Drive folder: <b>${itemFolderName(item,index)}</b></p>${item.storagePhoto?.dataUrl?`<p>Storage photo file: <b>${itemFolderName(item,index)}-storage-location.jpg</b></p>`:''}<ul>${files}</ul></div>`}).join('');el.innerHTML=sample}
     function refreshBackupViews(){try{renderCounts();renderBackupPreview()}catch(e){}}
 
     // Init
