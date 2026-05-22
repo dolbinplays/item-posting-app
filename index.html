@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1248</title>
+  <title>Item Posting Assistant v0.26.05.22.1315</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -87,7 +87,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1248 · backup polish</p>
+      <p class="eyebrow">v0.26.05.22.1315 · storage photo item link fix</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds backup readiness checks, clearer Google Sheets/Drive export previews, and improved rebuild instructions.</p>
     </header>
@@ -313,7 +313,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1248';
+    const VERSION='v0.26.05.22.1315';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -522,11 +522,21 @@
     function renderStoragePhoto(item){
       let el=$('storagePhotoPreview');
       if(!el)return;
-      let sp=item?.storagePhoto;
+      // Always render the storage photo from the currently selected item record.
+      // This prevents the preview area from showing the most recently captured
+      // storage photo when a different inventory item is opened.
+      let currentItem=item;
+      if(selectedItemId){
+        currentItem=getItems().find(i=>i.id===selectedItemId)||item;
+      }
+      el.innerHTML='';
+      let sp=currentItem?.storagePhoto;
       if(sp?.dataUrl){
-        el.innerHTML=`<img src="${sp.dataUrl}" alt="Storage location photo"><p class="photo-manage-note">Saved ${sp.takenAt?new Date(sp.takenAt).toLocaleString():'with this item'}${sp.source?` · ${escapeHtml(sp.source)}`:''}</p>`;
+        let linkedTitle=escapeHtml(currentItem?.title||'Selected item');
+        let linkedLocation=escapeHtml(currentItem?.storage||'No storage location text saved');
+        el.innerHTML=`<img src="${sp.dataUrl}" alt="Storage location photo for ${linkedTitle}"><p class="photo-manage-note">Storage photo for: <b>${linkedTitle}</b><br>Location: ${linkedLocation}<br>Saved ${sp.takenAt?new Date(sp.takenAt).toLocaleString():'with this item'}${sp.source?` · ${escapeHtml(sp.source)}`:''}</p>`;
       }else{
-        el.textContent='No storage location photo saved yet.';
+        el.textContent='No storage location photo saved for this item yet.';
       }
     }
     async function imageFileToStoragePhoto(file){
@@ -554,10 +564,17 @@
       if(!selectedItemId){alert('Select or create an inventory item first.');return false}
       let items=getItems(),item=items.find(i=>i.id===selectedItemId);
       if(!item){alert('The selected item could not be found.');return false}
-      item.storagePhoto=storagePhoto;
+      if(storagePhoto){
+        item.storagePhoto={...storagePhoto,itemId:item.id,itemTitle:item.title||'',storageLocation:item.storage||'',savedAt:new Date().toISOString()};
+      }else{
+        item.storagePhoto=null;
+      }
       item.updatedAt=new Date().toISOString();
       if(!setItems(items))return false;
-      renderStoragePhoto(item);refreshBackupViews();
+      // Re-load the selected item from storage so the screen cannot retain a
+      // stale preview from the previously edited item.
+      loadItem(item.id);
+      refreshBackupViews();
       return true;
     }
     async function chooseStoragePhoto(){
