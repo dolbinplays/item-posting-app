@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.0822</title>
+  <title>Item Posting Assistant v0.26.05.22.0936</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -26,7 +26,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.0914 · session/create item + backup preview fix</p>
+      <p class="eyebrow">v0.26.05.22.0936 · create item storage fix</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds Google Sheets/Drive-ready backup exports and a rebuildable media backup file.</p>
     </header>
@@ -184,11 +184,19 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.0914';
+    const VERSION='v0.26.05.22.0936';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
-    const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+    function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+    function storageError(e){
+      const msg=(e&&e.name==='QuotaExceededError')?'Storage is full. Try Export Rebuildable HTML Backup, then clear older saved sessions or current captures before creating more items.':(e?.message||e||'Unknown storage error');
+      alert('Could not save data: '+msg);
+      try{$('captureStatus').textContent='Save failed: '+msg}catch{}
+      console.error(e);
+      return false;
+    }
+    function safeWrite(k,v){try{write(k,v);return true}catch(e){return storageError(e)}}
     const fmt=n=>Number(n).toFixed(2)+'s';
     const id=p=>p+'_'+Date.now()+'_'+Math.random().toString(16).slice(2);
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
@@ -204,7 +212,7 @@
     // Calibration
     let calStart=0,calTimer=null,latestRotation=null;
     function updateTiming(r){$('rotationResult').textContent=r?fmt(r):'—';$('frontResult').textContent='0.00s';$('rightResult').textContent=r?fmt(r*.25):'—';$('backResult').textContent=r?fmt(r*.5):'—';$('leftResult').textContent=r?fmt(r*.75):'—'}
-    const getPresets=()=>read(K.presets,[]), setPresets=v=>write(K.presets,v);
+    const getPresets=()=>read(K.presets,[]), setPresets=v=>safeWrite(K.presets,v);
     function getSelectedPreset(){let ps=getPresets();let i=Number($('presetSelect').value||localStorage.getItem(K.selected)||0);return ps[i]||null}
     function renderPresets(){let ps=getPresets(),sel=$('presetSelect');sel.innerHTML=''; if(!ps.length){sel.innerHTML='<option>No saved presets yet</option>';$('toCaptureBtn').disabled=true;updateCapturePresetInfo();return} ps.forEach((p,i)=>{let o=document.createElement('option');o.value=i;o.textContent=`${p.name} · ${fmt(p.rotation)}/rotation`;sel.appendChild(o)});let saved=localStorage.getItem(K.selected)||'0';sel.value=ps[saved]?saved:'0';$('toCaptureBtn').disabled=false;updateCapturePresetInfo()}
     $('startCalBtn').onclick=()=>{calStart=performance.now();$('startCalBtn').disabled=true;$('stopCalBtn').disabled=false;$('savePresetBtn').disabled=true;calTimer=setInterval(()=>{$('timerText').textContent=((performance.now()-calStart)/1000).toFixed(2)+'s'},50)};
@@ -237,26 +245,70 @@
     }
     async function startRear(){const attempts=[{name:'Rear exact environment',c:{video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Rear ideal environment',c:{video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Any camera fallback',c:{video:true,audio:false}}];let errs=[];for(const a of attempts){try{await startWithConstraints(a.name,a.c);return}catch(e){errs.push(`${a.name}: ${e.name} ${e.message}`)}}alert('Camera could not start.\n\n'+errs.join('\n'))}
     $('startRearBtn').onclick=()=>{showScreen('capture');startRear()}; $('startDefaultBtn').onclick=()=>startWithConstraints('Default camera',{video:{width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('startFrontBtn').onclick=()=>startWithConstraints('Front camera',{video:{facingMode:{ideal:'user'},width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('stopCameraBtn').onclick=stopCamera;
-    function getShots(){return read(K.shots,[])} function setShots(s){write(K.shots,s);renderShots();refreshBackupViews()}
+    function getShots(){return read(K.shots,[])} function setShots(s){if(safeWrite(K.shots,s)){renderShots();refreshBackupViews();return true}return false}
     function updateCapturePresetInfo(){let p=getSelectedPreset();$('capturePresetInfo').textContent=p?`Using ${p.name}: ${fmt(p.rotation)} per rotation. Capture points: 0s, ${fmt(p.rotation*.25)}, ${fmt(p.rotation*.5)}, ${fmt(p.rotation*.75)}.`:'Save or select a calibration preset first.';$('startAutoCaptureBtn').disabled=!p||!stream}
-    function canvasShot(label){if(!stream||!video.videoWidth){alert('Camera is not running yet.');throw new Error('Camera not running')}let c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;c.getContext('2d').drawImage(video,0,0,c.width,c.height);return{label,dataUrl:c.toDataURL('image/jpeg',.88),takenAt:new Date().toISOString()}}
+    function canvasShot(label){
+      if(!stream||!video.videoWidth){alert('Camera is not running yet.');throw new Error('Camera not running')}
+      let maxW=960,maxH=720,ratio=Math.min(maxW/video.videoWidth,maxH/video.videoHeight,1);
+      let c=document.createElement('canvas');c.width=Math.round(video.videoWidth*ratio);c.height=Math.round(video.videoHeight*ratio);
+      c.getContext('2d').drawImage(video,0,0,c.width,c.height);
+      return{label,dataUrl:c.toDataURL('image/jpeg',.74),takenAt:new Date().toISOString(),width:c.width,height:c.height}
+    }
     function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}} function beep(){try{let C=window.AudioContext||window.webkitAudioContext;if(!C)return;let ac=new C(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
     function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=canvasShot(a[i].label);setShots(a)})}
     async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';for(let i=3;i>0;i--){cd.textContent=i;await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(canvasShot(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. Review photos or create an inventory item.'}
     $('manualShotBtn').onclick=()=>{let s=getShots();s.push(canvasShot('Manual shot '+(s.length+1)));setShots(s);$('captureStatus').textContent='Manual test shot saved to current captures.'}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
     function cloneShots(shots){return (shots||[]).map(s=>({...s}))}
-    function saveSession(){let shots=getShots();if(!shots.length){alert('No captures to save. Take photos first, or load an existing saved session.');return}let sessions=read(K.sessions,[]);let name=$('sessionName').value.trim()||'Untitled session';sessions.push({id:id('session'),name,createdAt:new Date().toISOString(),photos:cloneShots(shots),preset:getSelectedPreset()?.name||''});write(K.sessions,sessions);renderSessions();refreshBackupViews();$('captureStatus').textContent=`Saved session: ${name}`;alert('Capture session saved. It should now appear under Saved Sessions.')} $('saveSessionBtn').onclick=saveSession;
+    function compressDataUrl(dataUrl,maxW=900,maxH=675,quality=.72){
+      return new Promise(resolve=>{
+        if(!dataUrl||!dataUrl.startsWith('data:image/')) return resolve(dataUrl);
+        let img=new Image();
+        img.onload=()=>{
+          try{
+            let ratio=Math.min(maxW/img.width,maxH/img.height,1);
+            let c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*ratio));c.height=Math.max(1,Math.round(img.height*ratio));
+            c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+            resolve(c.toDataURL('image/jpeg',quality));
+          }catch(e){resolve(dataUrl)}
+        };
+        img.onerror=()=>resolve(dataUrl);
+        img.src=dataUrl;
+      });
+    }
+    async function compactShots(shots){
+      let out=[];
+      for(const s of (shots||[])){
+        out.push({...s,dataUrl:await compressDataUrl(s.dataUrl),compressedForInventory:true});
+      }
+      return out;
+    }
+    function saveSession(){let shots=getShots();if(!shots.length){alert('No captures to save. Take photos first, or load an existing saved session.');return}let sessions=read(K.sessions,[]);let name=$('sessionName').value.trim()||'Untitled session';sessions.push({id:id('session'),name,createdAt:new Date().toISOString(),photos:cloneShots(shots),preset:getSelectedPreset()?.name||''});if(!safeWrite(K.sessions,sessions))return;renderSessions();refreshBackupViews();$('captureStatus').textContent=`Saved session: ${name}`;alert('Capture session saved. It should now appear under Saved Sessions.')} $('saveSessionBtn').onclick=saveSession;
     function renderSessions(){let sessions=read(K.sessions,[]),el=$('sessionsList');el.innerHTML=sessions.length?'':'<div class="empty-state">No saved sessions yet.</div>';sessions.slice().reverse().forEach(s=>{let d=document.createElement('div');d.className='result-box';d.innerHTML=`<strong>${s.name}</strong><p class="note">${s.photos?.length||0} photos · ${new Date(s.createdAt).toLocaleString()}</p><div class="actions"><button class="secondary" data-load-session="${s.id}">Load Photos</button><button class="primary" data-item-session="${s.id}">Create Item</button></div>`;el.appendChild(d)});el.querySelectorAll('[data-load-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.loadSession);if(!s)return;setShots(cloneShots(s.photos));$('sessionName').value=s.name||'';$('captureStatus').textContent=`Loaded saved session: ${s.name}`});el.querySelectorAll('[data-item-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.itemSession);if(!s)return;createItemFromShots(cloneShots(s.photos),s.name||'Saved session item')})}
 
     // Inventory
-    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{write(K.items,v);refreshBackupViews()}, getField=idv=>$(idv).value.trim();
+    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
     function generateDraft(item){let name=item.title?.trim()||'Item for sale',cond=item.condition||'Used - Good',cat=item.category?.trim(),acc=item.accessories?.trim(),flaws=item.flaws?.trim(),notes=item.notes?.trim(),tone=item.draftTone||'friendly',pickup=item.pickupMode||'Local pickup preferred';let title=titleCase(name).slice(0,80);let lines=[];if(tone==='direct')lines.push(`${name} for sale.`);else if(tone==='detailed')lines.push(`Selling ${name}. This is a ${cond.toLowerCase()} item${cat?` in the ${cat} category`:''}.`);else lines.push(`Selling ${name}.`);lines.push(`Condition: ${cond}.`);if(acc)lines.push(`Includes: ${acc}.`);if(flaws)lines.push(`Please note: ${flaws}.`);if(notes)lines.push(notes);lines.push('Please review the photos and message me with any questions.');return{fbTitle:title,fbPrice:moneyText(item.price),fbDescription:lines.join('\n\n'),fbPickup:pickup+'.'}}
-    function createItemFromShots(shots,titleHint){if(!shots||!shots.length){alert('Capture at least one photo first.');return}let items=getItems(),title=(titleHint||$('sessionName').value||'').trim()||`Inventory item ${items.length+1}`;let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:cloneShots(shots)};Object.assign(item,generateDraft(item));items.push(item);setItems(items);selectedItemId=item.id;renderInventory();loadItem(item.id);showScreen('inventory');alert(`Inventory item created: ${title}`)}
-    function createItemFromCurrentShots(){let shots=getShots();if(!shots.length){alert('Capture at least one photo first, or use Create Item from a saved session.');return}createItemFromShots(shots,$('sessionName').value.trim())}
+    async function createItemFromShots(shots,titleHint){
+      if(!shots||!shots.length){alert('Capture at least one photo first.');return}
+      try{
+        const buttons=[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean);buttons.forEach(b=>b.disabled=true);
+        $('captureStatus').textContent='Creating inventory item...';
+        let items=getItems(),title=(titleHint||$('sessionName').value||'').trim()||`Inventory item ${items.length+1}`;
+        let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',category:'',accessories:'',flaws:'',storage:'',notes:'',draftTone:'friendly',pickupMode:'Local pickup preferred',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
+        Object.assign(item,generateDraft(item));
+        items.push(item);
+        if(!setItems(items))return;
+        selectedItemId=item.id;renderInventory();loadItem(item.id);showScreen('inventory');
+        $('captureStatus').textContent=`Inventory item created: ${title}`;
+        alert(`Inventory item created: ${title}`);
+      }catch(e){storageError(e)}
+      finally{[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean).forEach(b=>b.disabled=false)}
+    }
+    async function createItemFromCurrentShots(){let shots=getShots();if(!shots.length){alert('Capture at least one photo first, or use Create Item from a saved session.');return}await createItemFromShots(shots,$('sessionName').value.trim())}
     function renderInventory(){let items=getItems(),q=$('inventorySearch').value.toLowerCase().trim(),list=$('inventoryList');list.innerHTML='';let filtered=q?items.filter(i=>JSON.stringify(i).toLowerCase().includes(q)):items;if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items yet. Create one from current captures.</div>';return}filtered.slice().reverse().forEach(i=>{let first=i.photos?.[0]?.dataUrl||'',card=document.createElement('div');card.className='item-card'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;card.innerHTML=`${first?`<img src="${first}">`:'<div class="empty-state">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${i.title||'Untitled'}</div><div class="item-meta"><span class="mini-pill">${i.status||'Draft'}</span><span>${moneyText(i.price)||'No price'}</span><span>${i.condition||''}</span></div><div class="item-meta">${i.storage||'No storage location yet'}</div></div>`;list.appendChild(card)});list.querySelectorAll('.item-card').forEach(c=>c.onclick=()=>loadItem(c.dataset.id))}
     function loadItem(idv){let item=getItems().find(i=>i.id===idv);if(!item)return;selectedItemId=idv;$('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';$('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';$('itemCategory').value=item.category||'';$('itemAccessories').value=item.accessories||'';$('itemFlaws').value=item.flaws||'';$('itemStorage').value=item.storage||'';$('itemNotes').value=item.notes||'';$('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';$('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;let imgs=$('itemDetailImages');imgs.innerHTML='';(item.photos||[]).forEach(p=>{let im=document.createElement('img');im.src=p.dataUrl;imgs.appendChild(im)});renderInventory()}
     function collectItem(){if(!selectedItemId)return null;let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return null;Object.assign(item,{title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,status:$('itemStatus').value,category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),storage:getField('itemStorage'),notes:getField('itemNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),fbPrice:getField('fbPrice'),fbDescription:getField('fbDescription'),fbPickup:getField('fbPickup'),updatedAt:new Date().toISOString()});setItems(items);return item}
-    function saveItem(){let i=collectItem();if(i){renderInventory();loadItem(i.id)}} function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));setItems(getItems().map(i=>i.id===item.id?item:i));loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;setItems(getItems().filter(i=>i.id!==selectedItemId));selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
+    function saveItem(){let i=collectItem();if(i){renderInventory();loadItem(i.id)}} function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
     $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('deleteItemBtn').onclick=delItem;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
@@ -275,7 +327,7 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;write(K.presets,b.presets||[]);write(K.shots,b.shots||[]);write(K.sessions,b.sessions||[]);write(K.items,b.items||[]);renderPresets();renderShots();renderSessions();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;renderPresets();renderShots();renderSessions();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p>`}
     function renderBackupPreview(){let el=$('backupPreview');if(!el)return;let items=getItems();if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names and photo filenames.</div>';return}let sample=items.slice(-3).reverse().map((item,revIndex)=>{let index=items.indexOf(item);let files=(item.photos||[]).map((p,pi)=>`<li>${shotFileName(item,index,p,pi)}</li>`).join('')||'<li>No photos attached</li>';return `<div class="result-box"><strong>${item.title||'Untitled item'}</strong><p>Suggested Drive folder: <b>${itemFolderName(item,index)}</b></p><ul>${files}</ul></div>`}).join('');el.innerHTML=sample}
     function refreshBackupViews(){try{renderCounts();renderBackupPreview()}catch(e){}}
