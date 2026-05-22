@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.22.1458</title>
+  <title>Item Posting Assistant v0.26.05.22.1512</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -93,7 +93,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1458 · storage optimization</p>
+      <p class="eyebrow">v0.26.05.22.1512 · storage optimization</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds storage optimization, compressed session saves, storage usage estimates, and cleanup tools to reduce browser quota errors.</p>
     </header>
@@ -343,7 +343,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1458';
+    const VERSION='v0.26.05.22.1512';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -651,7 +651,8 @@
     async function copyDraftVersion(idv){let {draft}=findDraft(idv);if(!draft)return;let text=`Title: ${draft.fbTitle||''}\nPrice: ${draft.fbPrice||''}\n\nDescription:\n${draft.fbDescription||''}\n\nPickup Notes:\n${draft.fbPickup||''}`;try{await navigator.clipboard.writeText(text);alert('Saved draft copied to clipboard.')}catch{alert('Could not copy automatically. Restore the draft, then use the field copy buttons.')}}
     function deleteDraftVersion(idv){let {item}=findDraft(idv);if(!item)return;if(!confirm('Delete this saved draft version?'))return;item.draftHistory=(item.draftHistory||[]).filter(d=>d.id!==idv);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function renderItemPhotos(item){let imgs=$('itemDetailImages');imgs.innerHTML='';let photos=item.photos||[];if(!photos.length){imgs.innerHTML='<div class="empty-state">No photos saved for this item.</div>';return}photos.forEach((p,idx)=>{let card=document.createElement('div');card.className='photo-manage-card'+(idx===0?' primary-photo':'');card.innerHTML=`<img src="${p.dataUrl}" alt="${p.label||'photo'}"><div class="photo-manage-body"><p class="photo-manage-note">${idx===0?'Primary listing photo':'Photo '+(idx+1)}</p><div class="photo-label-row"><input value="${escapeAttr(p.label||'Photo '+(idx+1))}" data-photo-label="${idx}" aria-label="Photo label"><button class="secondary" data-photo-save-label="${idx}">Save Label</button></div><div class="photo-actions"><button class="success" data-photo-primary="${idx}" ${idx===0?'disabled':''}>Set Primary</button><button class="secondary" data-photo-up="${idx}" ${idx===0?'disabled':''}>Move Up</button><button class="secondary" data-photo-down="${idx}" ${idx===photos.length-1?'disabled':''}>Move Down</button><button class="secondary" data-photo-rotate="${idx}">Rotate Right</button><button class="danger" data-photo-delete="${idx}">Delete</button></div></div>`;imgs.appendChild(card)});wirePhotoButtons()}
-    function escapeAttr(v){return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+    function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+    function escapeAttr(v){return escapeHtml(v)}
     function updateSelectedPhotos(mutator){let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;item.photos=item.photos||[];mutator(item.photos,item);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=async()=>{let idx=Number(b.dataset.photoRotate);let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item||!item.photos?.[idx])return;b.disabled=true;try{item.photos[idx].dataUrl=await rotateDataUrlRight(item.photos[idx].dataUrl);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}catch(e){alert('Could not rotate photo: '+e.message)}finally{b.disabled=false}})}
     function rotateDataUrlRight(dataUrl){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>{try{let c=document.createElement('canvas');c.width=img.height;c.height=img.width;let ctx=c.getContext('2d');ctx.translate(c.width/2,c.height/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-img.width/2,-img.height/2);resolve(c.toDataURL('image/jpeg',0.84))}catch(e){reject(e)}};img.onerror=()=>reject(new Error('Image load failed'));img.src=dataUrl})}
