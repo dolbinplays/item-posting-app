@@ -93,9 +93,9 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.22.1544 · storage optimization</p>
+      <p class="eyebrow">v0.26.05.23.0007 · indexeddb media foundation</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds storage optimization, compressed session saves, storage usage estimates, and cleanup tools to reduce browser quota errors.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds an IndexedDB media-library foundation, media migration diagnostics, storage usage estimates, and cleanup tools to reduce browser quota errors.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -312,6 +312,22 @@
             <button id="compressInventoryBtn" class="secondary" type="button">Compress Existing Inventory Photos</button>
             <button id="refreshStorageStatsBtn" class="secondary" type="button">Refresh Storage Stats</button>
           </div>
+          <div class="media-db-panel">
+            <h3>IndexedDB Media Library Foundation</h3>
+            <p class="note">This is the first step toward moving heavy photos out of regular app data. It copies current item/session/storage photos into a browser media library and adds diagnostics before we fully switch the app to media references.</p>
+            <div class="media-stat-grid">
+              <div class="media-stat-card"><strong id="mediaDbCount">0</strong>Media records</div>
+              <div class="media-stat-card"><strong id="mediaDbBytes">0 KB</strong>Estimated media size</div>
+            </div>
+            <div id="mediaDbStatus" class="note">Media library has not been scanned yet.</div>
+            <div class="media-db-actions">
+              <button id="migrateMediaBtn" class="primary" type="button">Copy Existing Photos to Media Library</button>
+              <button id="scanMediaBtn" class="secondary" type="button">Scan Media Library</button>
+              <button id="cleanupOrphanMediaBtn" class="secondary" type="button">Clean Orphan Media</button>
+              <button id="clearMediaDbBtn" class="danger" type="button">Clear Media Library</button>
+            </div>
+            <p class="note">This patch is intentionally non-destructive: it does not remove the original photos from inventory records yet. The next migration can safely replace originals with thumbnails/media references after this foundation is verified.</p>
+          </div>
           <h3 style="margin-top:16px">Backup Readiness</h3>
           <p class="note">This checks whether each item has enough saved information to rebuild a listing later.</p>
           <div id="backupReadiness" class="backup-ready-grid"></div>
@@ -343,7 +359,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.22.1544';
+    const VERSION='v0.26.05.23.0007';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -360,11 +376,149 @@
     function approxLocalStorageBytes(){let total=0;try{for(let i=0;i<localStorage.length;i++){let k=localStorage.key(i);total+=bytesOfString(k)+bytesOfString(localStorage.getItem(k)||'')}}catch{}return total}
     function fmtBytes(bytes){if(!bytes)return '0 KB';let units=['B','KB','MB','GB'],i=0,n=bytes;while(n>=1024&&i<units.length-1){n/=1024;i++}return (i? n.toFixed(1):Math.round(n))+' '+units[i]}
     async function storageEstimate(){if(navigator.storage?.estimate){try{return await navigator.storage.estimate()}catch{}}return {usage:approxLocalStorageBytes(),quota:null}}
+    const MEDIA_DB_NAME='ipa_media_library_v1';
+    const MEDIA_STORE='media';
+    function dataUrlToBlob(dataUrl){
+      const parts=String(dataUrl||'').split(',');
+      const meta=parts[0]||''; const b64=parts[1]||'';
+      const mime=(meta.match(/data:([^;]+)/)||[])[1]||'image/jpeg';
+      const bin=atob(b64); const arr=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+      return new Blob([arr],{type:mime});
+    }
+    function openMediaDb(){
+      return new Promise((resolve,reject)=>{
+        if(!('indexedDB' in window)){reject(new Error('IndexedDB is not available in this browser.'));return}
+        const req=indexedDB.open(MEDIA_DB_NAME,1);
+        req.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(MEDIA_STORE)){const store=db.createObjectStore(MEDIA_STORE,{keyPath:'id'});store.createIndex('sourceKey','sourceKey',{unique:false});store.createIndex('itemId','itemId',{unique:false});store.createIndex('kind','kind',{unique:false});}};
+        req.onsuccess=()=>resolve(req.result);
+        req.onerror=()=>reject(req.error||new Error('Could not open IndexedDB media library.'));
+      });
+    }
+    async function mediaPut(record){
+      const db=await openMediaDb();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(MEDIA_STORE,'readwrite');
+        tx.objectStore(MEDIA_STORE).put(record);
+        tx.oncomplete=()=>{db.close();resolve(record.id)};
+        tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not write media record.'))};
+      });
+    }
+    async function mediaGetAll(){
+      const db=await openMediaDb();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(MEDIA_STORE,'readonly');
+        const req=tx.objectStore(MEDIA_STORE).getAll();
+        req.onsuccess=()=>{db.close();resolve(req.result||[])};
+        req.onerror=()=>{db.close();reject(req.error||new Error('Could not read media library.'))};
+      });
+    }
+    async function mediaDeleteMany(ids){
+      const db=await openMediaDb();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(MEDIA_STORE,'readwrite');
+        const store=tx.objectStore(MEDIA_STORE); ids.forEach(x=>store.delete(x));
+        tx.oncomplete=()=>{db.close();resolve(ids.length)};
+        tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not delete media records.'))};
+      });
+    }
+    async function mediaClearAll(){
+      const db=await openMediaDb();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(MEDIA_STORE,'readwrite'); tx.objectStore(MEDIA_STORE).clear();
+        tx.oncomplete=()=>{db.close();resolve(true)};
+        tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not clear media library.'))};
+      });
+    }
+    function collectReferencedMediaIds(){
+      const ids=new Set();
+      const add=p=>{if(p?.mediaId)ids.add(p.mediaId)};
+      getShots().forEach(add);
+      read(K.sessions,[]).forEach(s=>(s.photos||[]).forEach(add));
+      getItems().forEach(item=>{(item.photos||[]).forEach(add);add(item.storagePhoto)});
+      Object.values(getStorageLocationPhotos()).forEach(add);
+      return ids;
+    }
+    async function storePhotoInMediaLibrary(photo,meta){
+      if(!photo?.dataUrl)return null;
+      const sourceKey=meta.sourceKey;
+      const existing=(await mediaGetAll()).find(r=>r.sourceKey===sourceKey);
+      if(existing)return existing.id;
+      const blob=dataUrlToBlob(photo.dataUrl);
+      const rec={
+        id:photo.mediaId||id('media'),
+        sourceKey,
+        itemId:meta.itemId||'',
+        itemTitle:meta.itemTitle||'',
+        kind:meta.kind||'photo',
+        label:photo.label||meta.label||'Photo',
+        storageLocation:meta.storageLocation||'',
+        bytes:blob.size,
+        type:blob.type,
+        createdAt:new Date().toISOString(),
+        blob
+      };
+      await mediaPut(rec);
+      photo.mediaId=rec.id;
+      photo.mediaBackedUpAt=rec.createdAt;
+      return rec.id;
+    }
+    async function migrateExistingMediaToIndexedDb(){
+      try{
+        const btn=$('migrateMediaBtn'); if(btn)btn.disabled=true;
+        if($('mediaDbStatus'))$('mediaDbStatus').textContent='Copying current photos into IndexedDB media library...';
+        let changed=false, copied=0;
+        let shots=getShots();
+        for(let i=0;i<shots.length;i++){if(shots[i]?.dataUrl&&!shots[i].mediaId){await storePhotoInMediaLibrary(shots[i],{sourceKey:`current-shots:${i}:${shots[i].label||''}:${shots[i].dataUrl.length}`,kind:'current-capture',label:shots[i].label});changed=true;copied++;}}
+        if(changed)setShots(shots); changed=false;
+        let sessions=read(K.sessions,[]);
+        for(const s of sessions){for(let i=0;i<(s.photos||[]).length;i++){let p=s.photos[i];if(p?.dataUrl&&!p.mediaId){await storePhotoInMediaLibrary(p,{sourceKey:`session:${s.id}:${i}:${p.label||''}:${p.dataUrl.length}`,kind:'saved-session-photo',label:p.label,itemTitle:s.name});changed=true;copied++;}}}
+        if(changed)safeWrite(K.sessions,sessions); changed=false;
+        let items=getItems();
+        for(const item of items){
+          for(let i=0;i<(item.photos||[]).length;i++){let p=item.photos[i];if(p?.dataUrl&&!p.mediaId){await storePhotoInMediaLibrary(p,{sourceKey:`item:${item.id}:photo:${i}:${p.label||''}:${p.dataUrl.length}`,kind:'inventory-photo',label:p.label,itemId:item.id,itemTitle:item.title});changed=true;copied++;}}
+          if(item.storagePhoto?.dataUrl&&!item.storagePhoto.mediaId){await storePhotoInMediaLibrary(item.storagePhoto,{sourceKey:`item:${item.id}:storage:${item.storage||''}:${item.storagePhoto.dataUrl.length}`,kind:'item-storage-photo',label:'Storage location photo',itemId:item.id,itemTitle:item.title,storageLocation:item.storage});changed=true;copied++;}
+        }
+        if(changed)setItems(items); changed=false;
+        let locs=getStorageLocationPhotos();
+        for(const [loc,p] of Object.entries(locs)){if(p?.dataUrl&&!p.mediaId){await storePhotoInMediaLibrary(p,{sourceKey:`shared-storage:${loc}:${p.dataUrl.length}`,kind:'shared-storage-photo',label:'Shared storage location photo',storageLocation:loc});changed=true;copied++;}}
+        if(changed)setStorageLocationPhotos(locs);
+        renderShots();renderSessions();renderInventory();if(selectedItemId)loadItem(selectedItemId);
+        await renderMediaDbStats();refreshBackupViews();
+        alert(`Media library migration complete. ${copied} photo${copied===1?'':'s'} copied or linked.`);
+      }catch(e){alert('Media migration failed: '+(e?.message||e));console.error(e)}finally{const btn=$('migrateMediaBtn'); if(btn)btn.disabled=false;}
+    }
+    async function renderMediaDbStats(){
+      try{
+        const records=await mediaGetAll();
+        const bytes=records.reduce((s,r)=>s+(Number(r.bytes)||0),0);
+        const refs=collectReferencedMediaIds();
+        const orphan=records.filter(r=>!refs.has(r.id)).length;
+        if($('mediaDbCount'))$('mediaDbCount').textContent=String(records.length);
+        if($('mediaDbBytes'))$('mediaDbBytes').textContent=fmtBytes(bytes);
+        if($('mediaDbStatus'))$('mediaDbStatus').innerHTML=`IndexedDB media records: <b>${records.length}</b> · Estimated media bytes: <b>${fmtBytes(bytes)}</b> · Orphan records: <b>${orphan}</b><br><span class="note">This build verifies media-library storage without removing original item photos yet.</span>`;
+      }catch(e){
+        if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media library scan failed: '+(e?.message||e);
+      }
+    }
+    async function cleanupOrphanMedia(){
+      try{
+        const records=await mediaGetAll(); const refs=collectReferencedMediaIds(); const orphan=records.filter(r=>!refs.has(r.id)).map(r=>r.id);
+        if(!orphan.length){alert('No orphan media records found.');await renderMediaDbStats();return}
+        if(!confirm(`Delete ${orphan.length} orphan media record${orphan.length===1?'':'s'} from the IndexedDB media library? This does not delete inventory item photos.`))return;
+        await mediaDeleteMany(orphan); await renderMediaDbStats(); alert('Orphan media records cleaned.');
+      }catch(e){alert('Could not clean orphan media: '+(e?.message||e))}
+    }
+    async function clearMediaLibrary(){
+      if(!confirm('Clear the IndexedDB media library? This does not delete the photos still stored in your inventory records, but it removes the new media-library copies.'))return;
+      try{await mediaClearAll(); await renderMediaDbStats(); alert('IndexedDB media library cleared.')}catch(e){alert('Could not clear media library: '+(e?.message||e))}
+    }
+
     const fmt=n=>Number(n).toFixed(2)+'s';
     const id=p=>p+'_'+Date.now()+'_'+Math.random().toString(16).slice(2);
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
     const titleCase=s=>String(s||'').replace(/\w\S*/g,t=>t[0].toUpperCase()+t.slice(1).toLowerCase());
-    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name); if(name==='backup') renderCounts();}
+    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name); if(name==='backup') {renderCounts();renderMediaDbStats();}}
     document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>showScreen(t.dataset.screen)));
 
     // Setup
@@ -888,6 +1042,10 @@
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
+    if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
+    if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
+    if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
 
     async function renderStorageUsage(){
       const est=await storageEstimate();
@@ -953,7 +1111,7 @@
     function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
