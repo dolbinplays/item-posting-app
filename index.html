@@ -93,9 +93,9 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.23.0007 · indexeddb media foundation</p>
+      <p class="eyebrow">v0.26.05.23.0031 · media thumbnails foundation</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds an IndexedDB media-library foundation, media migration diagnostics, storage usage estimates, and cleanup tools to reduce browser quota errors.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds an optional thumbnail optimization layer on top of the IndexedDB media library so full photos can be copied to media storage while lighter thumbnails remain in the main inventory records.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -322,11 +322,13 @@
             <div id="mediaDbStatus" class="note">Media library has not been scanned yet.</div>
             <div class="media-db-actions">
               <button id="migrateMediaBtn" class="primary" type="button">Copy Existing Photos to Media Library</button>
+              <button id="optimizeMediaRefsBtn" class="success" type="button">Optimize Inventory Photos to Thumbnails</button>
+              <button id="restoreMediaRefsBtn" class="secondary" type="button">Restore Full Photos from Media Library</button>
               <button id="scanMediaBtn" class="secondary" type="button">Scan Media Library</button>
               <button id="cleanupOrphanMediaBtn" class="secondary" type="button">Clean Orphan Media</button>
               <button id="clearMediaDbBtn" class="danger" type="button">Clear Media Library</button>
             </div>
-            <p class="note">This patch is intentionally non-destructive: it does not remove the original photos from inventory records yet. The next migration can safely replace originals with thumbnails/media references after this foundation is verified.</p>
+            <p class="note">Copy first, then optimize. Optimize keeps smaller thumbnail previews in inventory records while full-size copies live in IndexedDB media storage.</p><div class="media-migration-note"><b>Safety note:</b> This is still a local-browser storage system. Export a JSON/Rebuildable backup before major cleanup. Restore Full Photos can rehydrate optimized inventory records from the media library while those media records still exist.</div>
           </div>
           <h3 style="margin-top:16px">Backup Readiness</h3>
           <p class="note">This checks whether each item has enough saved information to rebuild a listing later.</p>
@@ -359,7 +361,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.23.0007';
+    const VERSION='v0.26.05.23.0031';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -402,6 +404,41 @@
         tx.objectStore(MEDIA_STORE).put(record);
         tx.oncomplete=()=>{db.close();resolve(record.id)};
         tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not write media record.'))};
+      });
+    }
+    async function mediaGet(id){
+      const db=await openMediaDb();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(MEDIA_STORE,'readonly');
+        const req=tx.objectStore(MEDIA_STORE).get(id);
+        req.onsuccess=()=>{db.close();resolve(req.result||null)};
+        req.onerror=()=>{db.close();reject(req.error||new Error('Could not read media record.'))};
+      });
+    }
+    function blobToDataUrl(blob){
+      return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject(new Error('Could not read media blob.'));
+        reader.readAsDataURL(blob);
+      });
+    }
+    function makeThumbnailDataUrl(dataUrl,maxW=360,maxH=270,quality=.68){
+      return new Promise((resolve,reject)=>{
+        if(!dataUrl){resolve('');return}
+        const img=new Image();
+        img.onload=()=>{
+          try{
+            const ratio=Math.min(maxW/img.width,maxH/img.height,1);
+            const c=document.createElement('canvas');
+            c.width=Math.max(1,Math.round(img.width*ratio));
+            c.height=Math.max(1,Math.round(img.height*ratio));
+            c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+            resolve(c.toDataURL('image/jpeg',quality));
+          }catch(e){reject(e)}
+        };
+        img.onerror=()=>reject(new Error('Could not load image for thumbnail.'));
+        img.src=dataUrl;
       });
     }
     async function mediaGetAll(){
@@ -496,7 +533,7 @@
         const orphan=records.filter(r=>!refs.has(r.id)).length;
         if($('mediaDbCount'))$('mediaDbCount').textContent=String(records.length);
         if($('mediaDbBytes'))$('mediaDbBytes').textContent=fmtBytes(bytes);
-        if($('mediaDbStatus'))$('mediaDbStatus').innerHTML=`IndexedDB media records: <b>${records.length}</b> · Estimated media bytes: <b>${fmtBytes(bytes)}</b> · Orphan records: <b>${orphan}</b><br><span class="note">This build verifies media-library storage without removing original item photos yet.</span>`;
+        if($('mediaDbStatus'))$('mediaDbStatus').innerHTML=`IndexedDB media records: <b>${records.length}</b> · Estimated media bytes: <b>${fmtBytes(bytes)}</b> · Orphan records: <b>${orphan}</b><br><span class="note">This build can copy full photos to IndexedDB, then optionally keep smaller thumbnail previews in regular inventory records.</span>`;
       }catch(e){
         if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media library scan failed: '+(e?.message||e);
       }
@@ -509,8 +546,89 @@
         await mediaDeleteMany(orphan); await renderMediaDbStats(); alert('Orphan media records cleaned.');
       }catch(e){alert('Could not clean orphan media: '+(e?.message||e))}
     }
+    async function optimizeInventoryPhotosToThumbnails(){
+      if(!confirm('Optimize inventory/storage photos by keeping smaller thumbnails in the main app data while full copies remain in the IndexedDB media library? Export a backup first if you want an extra safety copy.'))return;
+      try{
+        const btn=$('optimizeMediaRefsBtn'); if(btn)btn.disabled=true;
+        if($('mediaDbStatus'))$('mediaDbStatus').textContent='Copying full photos to media library and creating thumbnails...';
+        await migrateExistingMediaToIndexedDb();
+        let changed=false, optimized=0;
+        let items=getItems();
+        for(const item of items){
+          for(let i=0;i<(item.photos||[]).length;i++){
+            let p=item.photos[i];
+            if(p?.dataUrl && p.mediaId && !p.optimizedToThumbnail){
+              p.fullPhotoMediaId=p.mediaId;
+              p.originalBytesApprox=bytesOfString(p.dataUrl);
+              p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,360,270,.68);
+              p.dataUrl=p.thumbnailDataUrl;
+              p.optimizedToThumbnail=true;
+              p.optimizedAt=new Date().toISOString();
+              optimized++; changed=true;
+            }
+          }
+          if(item.storagePhoto?.dataUrl && item.storagePhoto.mediaId && !item.storagePhoto.optimizedToThumbnail){
+            let p=item.storagePhoto;
+            p.fullPhotoMediaId=p.mediaId;
+            p.originalBytesApprox=bytesOfString(p.dataUrl);
+            p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,360,270,.68);
+            p.dataUrl=p.thumbnailDataUrl;
+            p.optimizedToThumbnail=true;
+            p.optimizedAt=new Date().toISOString();
+            optimized++; changed=true;
+          }
+        }
+        if(changed&&!setItems(items))return;
+        changed=false;
+        let locs=getStorageLocationPhotos();
+        for(const [loc,p] of Object.entries(locs)){
+          if(p?.dataUrl && p.mediaId && !p.optimizedToThumbnail){
+            p.fullPhotoMediaId=p.mediaId;
+            p.originalBytesApprox=bytesOfString(p.dataUrl);
+            p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,360,270,.68);
+            p.dataUrl=p.thumbnailDataUrl;
+            p.optimizedToThumbnail=true;
+            p.optimizedAt=new Date().toISOString();
+            optimized++; changed=true;
+          }
+        }
+        if(changed)setStorageLocationPhotos(locs);
+        renderInventory(); if(selectedItemId)loadItem(selectedItemId); refreshBackupViews(); await renderMediaDbStats(); await renderStorageUsage();
+        alert(`Optimization complete. ${optimized} photo${optimized===1?'':'s'} now use lighter thumbnail previews in inventory.`);
+      }catch(e){alert('Thumbnail optimization failed: '+(e?.message||e));console.error(e)}finally{const btn=$('optimizeMediaRefsBtn'); if(btn)btn.disabled=false;}
+    }
+    async function restoreFullPhotosFromMediaLibrary(){
+      if(!confirm('Restore optimized inventory/storage photos from the IndexedDB media library? This can increase regular browser storage usage again.'))return;
+      try{
+        const btn=$('restoreMediaRefsBtn'); if(btn)btn.disabled=true;
+        if($('mediaDbStatus'))$('mediaDbStatus').textContent='Restoring full photos from media library...';
+        let restored=0, missing=0, changed=false;
+        let restorePhoto=async(p)=>{
+          if(!p?.optimizedToThumbnail || !(p.fullPhotoMediaId||p.mediaId))return false;
+          const rec=await mediaGet(p.fullPhotoMediaId||p.mediaId);
+          if(!rec?.blob){missing++;return false;}
+          p.dataUrl=await blobToDataUrl(rec.blob);
+          p.optimizedToThumbnail=false;
+          p.restoredAt=new Date().toISOString();
+          restored++;
+          return true;
+        };
+        let items=getItems();
+        for(const item of items){
+          for(const p of (item.photos||[])){if(await restorePhoto(p))changed=true;}
+          if(await restorePhoto(item.storagePhoto))changed=true;
+        }
+        if(changed&&!setItems(items))return;
+        changed=false;
+        let locs=getStorageLocationPhotos();
+        for(const p of Object.values(locs)){if(await restorePhoto(p))changed=true;}
+        if(changed)setStorageLocationPhotos(locs);
+        renderInventory(); if(selectedItemId)loadItem(selectedItemId); refreshBackupViews(); await renderMediaDbStats(); await renderStorageUsage();
+        alert(`Restore complete. ${restored} full photo${restored===1?'':'s'} restored.${missing?` ${missing} media record${missing===1?' was':'s were'} missing.`:''}`);
+      }catch(e){alert('Could not restore full photos: '+(e?.message||e));console.error(e)}finally{const btn=$('restoreMediaRefsBtn'); if(btn)btn.disabled=false;}
+    }
     async function clearMediaLibrary(){
-      if(!confirm('Clear the IndexedDB media library? This does not delete the photos still stored in your inventory records, but it removes the new media-library copies.'))return;
+      if(!confirm('Clear the IndexedDB media library? This removes full-size media copies. If you optimized inventory photos to thumbnails, restore full photos first or keep an exported backup.'))return;
       try{await mediaClearAll(); await renderMediaDbStats(); alert('IndexedDB media library cleared.')}catch(e){alert('Could not clear media library: '+(e?.message||e))}
     }
 
@@ -1043,6 +1161,8 @@
     $('exportRebuildHtmlBtn').onclick=()=>download(`item-posting-rebuild-backup-${VERSION}.html`,buildRebuildHtml(),'text/html');
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
+    if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
+    if($('restoreMediaRefsBtn'))$('restoreMediaRefsBtn').onclick=restoreFullPhotosFromMediaLibrary;
     if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
     if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
