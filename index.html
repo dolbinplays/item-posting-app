@@ -93,9 +93,9 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.23.0031 · media thumbnails foundation</p>
+      <p class="eyebrow">v0.26.05.23.0104 · selective media restore</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds an optional thumbnail optimization layer on top of the IndexedDB media library so full photos can be copied to media storage while lighter thumbnails remain in the main inventory records.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds selective full-photo restore/export tools so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -323,12 +323,14 @@
             <div class="media-db-actions">
               <button id="migrateMediaBtn" class="primary" type="button">Copy Existing Photos to Media Library</button>
               <button id="optimizeMediaRefsBtn" class="success" type="button">Optimize Inventory Photos to Thumbnails</button>
-              <button id="restoreMediaRefsBtn" class="secondary" type="button">Restore Full Photos from Media Library</button>
+              <button id="restoreSelectedMediaBtn" class="success" type="button">Restore Selected Item Photos</button>
+              <button id="exportSelectedMediaBackupBtn" class="secondary" type="button">Export Selected Item Full Backup</button>
+              <button id="restoreMediaRefsBtn" class="secondary" type="button">Restore ALL Full Photos (Use Caution)</button>
               <button id="scanMediaBtn" class="secondary" type="button">Scan Media Library</button>
               <button id="cleanupOrphanMediaBtn" class="secondary" type="button">Clean Orphan Media</button>
               <button id="clearMediaDbBtn" class="danger" type="button">Clear Media Library</button>
             </div>
-            <p class="note">Copy first, then optimize. Optimize keeps smaller thumbnail previews in inventory records while full-size copies live in IndexedDB media storage.</p><div class="media-migration-note"><b>Safety note:</b> This is still a local-browser storage system. Export a JSON/Rebuildable backup before major cleanup. Restore Full Photos can rehydrate optimized inventory records from the media library while those media records still exist.</div>
+            <p class="note">Copy first, then optimize. Optimize keeps smaller thumbnail previews in inventory records while full-size copies live in IndexedDB media storage.</p><div class="media-migration-note"><b>Safety note:</b> This is still a local-browser storage system. Use <b>Restore Selected Item Photos</b> or <b>Export Selected Item Full Backup</b> when possible. Restoring ALL photos can quickly fill browser storage again.</div>
           </div>
           <h3 style="margin-top:16px">Backup Readiness</h3>
           <p class="note">This checks whether each item has enough saved information to rebuild a listing later.</p>
@@ -361,7 +363,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.23.0031';
+    const VERSION='v0.26.05.23.0104';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -596,6 +598,75 @@
         renderInventory(); if(selectedItemId)loadItem(selectedItemId); refreshBackupViews(); await renderMediaDbStats(); await renderStorageUsage();
         alert(`Optimization complete. ${optimized} photo${optimized===1?'':'s'} now use lighter thumbnail previews in inventory.`);
       }catch(e){alert('Thumbnail optimization failed: '+(e?.message||e));console.error(e)}finally{const btn=$('optimizeMediaRefsBtn'); if(btn)btn.disabled=false;}
+    }
+
+    async function restorePhotoObjectFromMedia(p){
+      if(!p || !(p.fullPhotoMediaId||p.mediaId)) return {restored:false,missing:false};
+      const rec=await mediaGet(p.fullPhotoMediaId||p.mediaId);
+      if(!rec?.blob) return {restored:false,missing:true};
+      p.dataUrl=await blobToDataUrl(rec.blob);
+      p.optimizedToThumbnail=false;
+      p.restoredAt=new Date().toISOString();
+      return {restored:true,missing:false};
+    }
+    async function restoreSelectedItemFullPhotosFromMediaLibrary(){
+      if(!selectedItemId){alert('Open/select an inventory item first, then use Restore Selected Item Photos.');return;}
+      const item=getItems().find(i=>i.id===selectedItemId);
+      if(!item){alert('Selected item could not be found. Try Scan / Repair Inventory first.');return;}
+      if(!confirm(`Restore full photos for only "${item.title||'selected item'}"? This uses much less storage than restoring the whole library.`))return;
+      try{
+        const btn=$('restoreSelectedMediaBtn'); if(btn)btn.disabled=true;
+        if($('mediaDbStatus'))$('mediaDbStatus').textContent='Restoring full photos for selected item only...';
+        let items=getItems();
+        let target=items.find(i=>i.id===selectedItemId);
+        let restored=0, missing=0;
+        const apply=async(p)=>{const r=await restorePhotoObjectFromMedia(p); if(r.restored)restored++; if(r.missing)missing++;};
+        for(const p of (target.photos||[])) await apply(p);
+        if(target.storagePhoto) await apply(target.storagePhoto);
+        if(target.storage){
+          let locs=getStorageLocationPhotos();
+          if(locs[target.storage]){
+            const r=await restorePhotoObjectFromMedia(locs[target.storage]);
+            if(r.restored){restored++; setStorageLocationPhotos(locs);} if(r.missing)missing++;
+          }
+        }
+        if(!setItems(items))return;
+        renderInventory(); loadItem(selectedItemId); refreshBackupViews(); await renderMediaDbStats(); await renderStorageUsage();
+        alert(`Selected item restore complete. ${restored} full photo${restored===1?'':'s'} restored.${missing?` ${missing} media record${missing===1?' was':'s were'} missing.`:''}`);
+      }catch(e){alert('Could not restore selected item photos: '+(e?.message||e));console.error(e)}finally{const btn=$('restoreSelectedMediaBtn'); if(btn)btn.disabled=false;}
+    }
+    async function bestPhotoDataUrlFromMedia(p){
+      if(!p) return '';
+      const mediaId=p.fullPhotoMediaId||p.mediaId;
+      if(mediaId){
+        try{const rec=await mediaGet(mediaId); if(rec?.blob) return await blobToDataUrl(rec.blob);}catch(e){console.warn('Could not read media for export',e)}
+      }
+      return p.dataUrl||p.thumbnailDataUrl||'';
+    }
+    async function exportSelectedItemFullBackup(){
+      if(!selectedItemId){alert('Open/select an inventory item first, then export its full backup.');return;}
+      const item=getItems().find(i=>i.id===selectedItemId);
+      if(!item){alert('Selected item could not be found. Try Scan / Repair Inventory first.');return;}
+      try{
+        const btn=$('exportSelectedMediaBackupBtn'); if(btn)btn.disabled=true;
+        if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building selected item full-photo backup from media library...';
+        const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        let index=Math.max(0,getItems().findIndex(i=>i.id===item.id));
+        let photos=[];
+        for(let pi=0; pi<(item.photos||[]).length; pi++){
+          const p=item.photos[pi];
+          const data=await bestPhotoDataUrlFromMedia(p);
+          if(data) photos.push({label:p.label||`Photo ${pi+1}`,file:shotFileName(item,index,p,pi),data});
+        }
+        let storagePhoto=getEffectiveStoragePhoto(item);
+        let storageData=await bestPhotoDataUrlFromMedia(storagePhoto);
+        const photoHtml=photos.map(p=>`<figure><img src="${p.data}" alt="${esc(p.label)}"><figcaption>${esc(p.label)} · ${esc(p.file)}</figcaption></figure>`).join('')||'<p>No listing photos available.</p>';
+        const storageHtml=storageData?`<figure><img src="${storageData}" alt="Storage location"><figcaption>Storage location · ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'<p>No storage photo available.</p>';
+        const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(item.title||'Selected Item')} Full Backup</title><style>body{font-family:system-ui,sans-serif;margin:22px;background:#f8fafc;color:#0f172a}.card{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin-bottom:18px}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}</style></head><body><h1>${esc(item.title||'Selected Item')}</h1><section class="card"><p><b>Exported:</b> ${esc(new Date().toISOString())}</p><p><b>Version:</b> ${esc(VERSION)}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><p><b>Status:</b> ${esc(item.status||'Draft')} · <b>Condition:</b> ${esc(item.condition||'')} · <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Details:</b> ${esc(joinParts([item.brand,item.model,item.itemType,item.color,item.dimensions,item.material], ' · ')||'')}</p></section><section class="card"><h2>Facebook Marketplace Draft</h2><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p></section><section class="card"><h2>Storage Location Photo</h2><div class="photos">${storageHtml}</div></section><section class="card"><h2>Listing Photos</h2><div class="photos">${photoHtml}</div></section></body></html>`;
+        download(`item-posting-selected-item-full-backup-${safeName(item.title||'item')}-${VERSION}.html`,html,'text/html');
+        await renderMediaDbStats();
+        alert('Selected item full backup exported. This does not restore all photos into regular browser storage.');
+      }catch(e){alert('Could not export selected item full backup: '+(e?.message||e));console.error(e)}finally{const btn=$('exportSelectedMediaBackupBtn'); if(btn)btn.disabled=false;}
     }
     async function restoreFullPhotosFromMediaLibrary(){
       if(!confirm('Restore optimized inventory/storage photos from the IndexedDB media library? This can increase regular browser storage usage again.'))return;
@@ -1162,6 +1233,8 @@
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
     if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
+    if($('restoreSelectedMediaBtn'))$('restoreSelectedMediaBtn').onclick=restoreSelectedItemFullPhotosFromMediaLibrary;
+    if($('exportSelectedMediaBackupBtn'))$('exportSelectedMediaBackupBtn').onclick=exportSelectedItemFullBackup;
     if($('restoreMediaRefsBtn'))$('restoreMediaRefsBtn').onclick=restoreFullPhotosFromMediaLibrary;
     if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
