@@ -95,7 +95,7 @@
     <header>
       <p class="eyebrow">v0.26.05.23.0129 · media-aware exports</p>
       <h1>Item Posting Assistant</h1>
-      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds selective full-photo restore/export tools so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
+      <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
 
     <nav class="tabs" aria-label="App sections">
@@ -296,11 +296,11 @@
           <div class="actions">
             <button id="exportJsonBtn" class="primary">Export Full JSON Backup</button>
             <button id="exportCsvBtn" class="secondary">Export Basic CSV</button>
-            <button id="exportSheetsDriveCsvBtn" class="secondary">Export Sheets + Drive CSV</button>
-            <button id="exportManifestBtn" class="secondary">Export Media Manifest JSON</button>
+            <button id="exportSheetsDriveCsvBtn" class="secondary">Export Media-Aware Sheets + Drive CSV</button>
+            <button id="exportManifestBtn" class="secondary">Export Media-Aware Manifest JSON</button>
             <button id="exportRebuildHtmlBtn" class="success">Export Media-Aware Rebuildable HTML Backup</button>
           </div>
-          <p class="note">For now, Google Sheets/Drive support is export-based: the CSV acts as the spreadsheet index, while the manifest suggests Drive folders and filenames. Rebuildable HTML export now pulls full photos from the IndexedDB media library when available, without restoring all photos into regular inventory storage.</p>
+          <p class="note">For now, Google Sheets/Drive support is export-based: the CSV acts as the spreadsheet index, while the manifest suggests Drive folders and filenames. These exports now include media status so future Google Drive sync can tell whether each photo is media-backed, thumbnail-only, local-only, or missing.</p>
           <div id="countsBox" class="note"></div>
           <h3 style="margin-top:16px">Storage Usage & Cleanup</h3>
           <p class="note">This prototype stores photos locally in your browser. These tools help recover space before the phone browser hits its storage limit.</p>
@@ -345,7 +345,7 @@
           <p class="note">These common storage locations are included in JSON backups and appear as quick-select options while editing items.</p>
           <div id="storagePresetList" class="preset-list"></div>
           <h3 style="margin-top:16px">Sheets/Drive Preview</h3>
-          <p class="note">This preview shows spreadsheet row data plus suggested Drive folder names and media filenames before you export.</p>
+          <p class="note">This preview shows spreadsheet row data, suggested Drive folder names, media filenames, and media backup status before you export.</p>
           <div id="backupPreview" class="note"></div>
           <h3 style="margin-top:16px">Recommended Recovery Workflow</h3>
           <ol class="backup-step-list">
@@ -363,7 +363,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.23.0129';
+    const VERSION='v0.26.05.23.0148';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -1195,17 +1195,46 @@
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
     function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
     function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
-    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links back to the Google Sheets CSV columns.',items:items.map((item,index)=>({itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>({label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',hasEmbeddedDataUrl:!!shot.dataUrl})),storageLocationPhoto:getEffectiveStoragePhoto(item)?.dataUrl?{label:getEffectiveStoragePhoto(item).label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:getEffectiveStoragePhoto(item).takenAt||'',hasEmbeddedDataUrl:true,source:getEffectiveStoragePhoto(item)._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}))}}
+    function photoMediaStatus(photo){
+      if(!photo) return {label:'Missing',mediaBacked:false,thumbnailOnly:false,localOnly:false,missing:true,ready:'missing'};
+      const hasMedia=!!(photo.fullPhotoMediaId||photo.mediaId);
+      const hasData=!!photo.dataUrl;
+      const isThumb=!!photo.optimizedToThumbnail;
+      if(hasMedia && isThumb) return {label:'Media-backed full photo + inventory thumbnail',mediaBacked:true,thumbnailOnly:false,localOnly:false,missing:false,ready:'ready_from_media_library'};
+      if(hasMedia && hasData) return {label:'Media-backed full/local photo',mediaBacked:true,thumbnailOnly:false,localOnly:false,missing:false,ready:'ready_from_media_library'};
+      if(hasMedia) return {label:'Media-backed photo',mediaBacked:true,thumbnailOnly:false,localOnly:false,missing:false,ready:'ready_from_media_library'};
+      if(isThumb && hasData) return {label:'Thumbnail-only, no media library ID',mediaBacked:false,thumbnailOnly:true,localOnly:false,missing:false,ready:'thumbnail_only_needs_full_photo_backup'};
+      if(hasData) return {label:'Local embedded photo only',mediaBacked:false,thumbnailOnly:false,localOnly:true,missing:false,ready:'ready_from_embedded_data'};
+      if(photo.thumbnailDataUrl) return {label:'Thumbnail-only, missing full photo',mediaBacked:false,thumbnailOnly:true,localOnly:false,missing:false,ready:'thumbnail_only_needs_full_photo_backup'};
+      return {label:'Missing photo data',mediaBacked:false,thumbnailOnly:false,localOnly:false,missing:true,ready:'missing'};
+    }
+    function itemMediaStatusSummary(item){
+      const photos=item.photos||[];
+      const statuses=photos.map(photoMediaStatus);
+      return {
+        photoCount:photos.length,
+        mediaBacked:statuses.filter(s=>s.mediaBacked).length,
+        thumbnailOnly:statuses.filter(s=>s.thumbnailOnly&&!s.mediaBacked).length,
+        localOnly:statuses.filter(s=>s.localOnly).length,
+        missing:statuses.filter(s=>s.missing).length,
+        labels:statuses.map(s=>s.label).join(' | '),
+        readiness:statuses.some(s=>s.missing)?'Needs photo recovery':statuses.some(s=>s.thumbnailOnly&&!s.mediaBacked)?'Thumbnail-only photos need full backup':statuses.every(s=>s.mediaBacked)?'Ready for Drive sync from media library':statuses.some(s=>s.localOnly)?'Ready, but copy to media library recommended':'No photos'
+      };
+    }
+    function storagePhotoMediaStatus(item){
+      return photoMediaStatus(getEffectiveStoragePhoto(item));
+    }
+    function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links and upload status back to the Google Sheets CSV columns. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);return {itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);return {label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
     function buildSheetsDriveRows(){
-      let rows=[['Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];
-      getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');rows.push([i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),itemFolderName(i,index),'','','','','','',filenames,getEffectiveStoragePhoto(i)?.dataUrl?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
+      let rows=[['Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Listing Photo Media Status','Storage Photo Media Status','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];
+      getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');let summary=itemMediaStatusSummary(i);let storageStatus=storagePhotoMediaStatus(i);rows.push([i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,summary.labels,storageStatus.label,itemFolderName(i,index),'','','','','','',filenames,(getEffectiveStoragePhoto(i)?.dataUrl||getEffectiveStoragePhoto(i)?.thumbnailDataUrl||getEffectiveStoragePhoto(i)?.mediaId)?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
       return rows
     }
     function buildRebuildHtml(){
       let b=backupObj();
       let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
       let rows=buildSheetsDriveRows();
-      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[22]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
+      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[29]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let items=b.items.map((item,index)=>{
         let effectiveStoragePhoto=getEffectiveStoragePhoto(item);
         let storageImg=effectiveStoragePhoto?.dataUrl?`<figure><img src="${effectiveStoragePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
@@ -1230,7 +1259,7 @@
       const itemsData=getItems();
       const esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
       let rows=buildSheetsDriveRows();
-      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[22]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
+      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[29]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let mediaHits=0, fallbackHits=0, missingHits=0;
       let itemSections=[];
       for(let index=0; index<itemsData.length; index++){
@@ -1266,8 +1295,8 @@
 
     $('exportJsonBtn').onclick=()=>download(`item-posting-backup-${VERSION}.json`,JSON.stringify(backupObj(),null,2));
     $('exportCsvBtn').onclick=()=>{let rows=[['Date Created','Item Title','Brand','Model','Item Type','Color','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category','Tested Status','Accessories','Missing Parts','Flaws','Keywords','Notes','Photo Count','Facebook Description']];getItems().forEach(i=>rows.push([i.createdAt||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.testedStatus||'',i.accessories||'',i.missingParts||'',i.flaws||'',i.keywords||'',i.notes||'',String(i.photos?.length||0),i.fbDescription||'']));download(`item-posting-inventory-${VERSION}.csv`,toCsv(rows),'text/csv')};
-    $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
-    $('exportManifestBtn').onclick=()=>download(`item-posting-media-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
+    $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-media-aware-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
+    $('exportManifestBtn').onclick=()=>download(`item-posting-media-aware-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=async()=>{try{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=true; if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building media-aware rebuild backup from IndexedDB/full-photo sources...'; const html=await buildRebuildHtmlMediaAware(); download(`item-posting-media-aware-rebuild-backup-${VERSION}.html`,html,'text/html'); if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media-aware rebuild backup exported.';}catch(e){alert('Could not export media-aware rebuild backup: '+(e?.message||e)); console.error(e)}finally{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=false;}};
     $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
@@ -1330,15 +1359,16 @@
     function renderBackupPreview(){
       let el=$('backupPreview'); if(!el) return;
       let items=getItems();
-      if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names and photo filenames.</div>';return}
+      if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names, photo filenames, and media backup status.</div>';return}
       let rows=items.slice(-5).reverse().map(item=>{
         let index=items.indexOf(item);
         let photos=item.photos||[];
+        let summary=itemMediaStatusSummary(item);
         let files=photos.map((p,pi)=>shotFileName(item,index,p,pi)).join('<br>')||'No listing photo filenames yet';
-        let storageFile=getEffectiveStoragePhoto(item)?.dataUrl?`${itemFolderName(item,index)}-storage-location.jpg`:'No storage photo filename yet';
-        return `<tr><td>${item.title||'Untitled item'}</td><td>${itemFolderName(item,index)}</td><td>${files}</td><td>${storageFile}</td></tr>`;
+        let storageFile=(getEffectiveStoragePhoto(item)?.dataUrl||getEffectiveStoragePhoto(item)?.thumbnailDataUrl||getEffectiveStoragePhoto(item)?.mediaId)?`${itemFolderName(item,index)}-storage-location.jpg`:'No storage photo filename yet';
+        return `<tr><td>${item.title||'Untitled item'}</td><td>${itemFolderName(item,index)}</td><td>${summary.readiness}<br><span class="note">Media: ${summary.mediaBacked} · Thumbnail-only: ${summary.thumbnailOnly} · Local-only: ${summary.localOnly} · Missing: ${summary.missing}</span></td><td>${files}</td><td>${storageFile}<br><span class="note">${storagePhotoMediaStatus(item).label}</span></td></tr>`;
       }).join('');
-      el.innerHTML=`<table class="backup-table"><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Suggested Listing Photo Files</th><th>Storage Photo File</th></tr></thead><tbody>${rows}</tbody></table>`;
+      el.innerHTML=`<table class="backup-table"><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Media Status</th><th>Suggested Listing Photo Files</th><th>Storage Photo File</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness()}catch(e){}}
 
