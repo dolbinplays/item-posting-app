@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.23.0129</title>
+  <title>Item Posting Assistant v0.26.05.24.1630</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -93,7 +93,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.23.0129 · media-aware exports</p>
+      <p class="eyebrow">v0.26.05.24.1630 · capture + media cleanup fixes</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -363,9 +363,10 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.23.0148';
+    const VERSION='v0.26.05.24.1630';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
+    const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
     function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
     function storageError(e){
@@ -471,7 +472,7 @@
     }
     function collectReferencedMediaIds(){
       const ids=new Set();
-      const add=p=>{if(p?.mediaId)ids.add(p.mediaId)};
+      const add=p=>{if(p?.mediaId)ids.add(p.mediaId);if(p?.fullPhotoMediaId)ids.add(p.fullPhotoMediaId)};
       getShots().forEach(add);
       read(K.sessions,[]).forEach(s=>(s.photos||[]).forEach(add));
       getItems().forEach(item=>{(item.photos||[]).forEach(add);add(item.storagePhoto)});
@@ -707,7 +708,7 @@
     const id=p=>p+'_'+Date.now()+'_'+Math.random().toString(16).slice(2);
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
     const titleCase=s=>String(s||'').replace(/\w\S*/g,t=>t[0].toUpperCase()+t.slice(1).toLowerCase());
-    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name); if(name==='backup') {renderCounts();renderMediaDbStats();}}
+    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name); if(name==='backup') {refreshBackupViews();renderMediaDbStats();renderStorageUsage();}}
     document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>showScreen(t.dataset.screen)));
 
     // Setup
@@ -890,20 +891,21 @@
 
     const getStoragePresets=()=>read(K.storagePresets,[]), setStoragePresets=v=>{if(safeWrite(K.storagePresets,[...new Set((v||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)))){renderStoragePresets();renderInventory();refreshBackupViews();return true}return false};
     const normalizeStorageLocation=v=>String(v||'').trim().toLowerCase();
+    const hasPhotoRef=p=>!!(p?.dataUrl||p?.thumbnailDataUrl||p?.mediaId||p?.fullPhotoMediaId);
     const getStorageLocationPhotos=()=>read(K.storageLocationPhotos,{});
     const setStorageLocationPhotos=v=>safeWrite(K.storageLocationPhotos,v||{});
     function locationPhotoFromItems(location,excludeItemId){
       const key=normalizeStorageLocation(location);
       if(!key)return null;
-      return getItems().find(i=>i.id!==excludeItemId&&normalizeStorageLocation(i.storage)===key&&i.storagePhoto?.dataUrl)?.storagePhoto||null;
+      return getItems().find(i=>i.id!==excludeItemId&&normalizeStorageLocation(i.storage)===key&&hasPhotoRef(i.storagePhoto))?.storagePhoto||null;
     }
     function getSharedStoragePhoto(location,excludeItemId){
       const key=normalizeStorageLocation(location);
       if(!key)return null;
       const map=getStorageLocationPhotos();
-      if(map[key]?.dataUrl)return map[key];
+      if(hasPhotoRef(map[key]))return map[key];
       const fromItem=locationPhotoFromItems(location,excludeItemId);
-      if(fromItem?.dataUrl){
+      if(hasPhotoRef(fromItem)){
         map[key]={...fromItem,sharedLocation:location,source:(fromItem.source||'item storage photo')+' · shared location photo'};
         setStorageLocationPhotos(map);
         return map[key];
@@ -922,10 +924,10 @@
       const own=item.storagePhoto;
       const ownLocation=normalizeStorageLocation(own?.storageLocation);
       const currentLocation=normalizeStorageLocation(item.storage);
-      if(own?.dataUrl && (!ownLocation || !currentLocation || ownLocation===currentLocation))return {...own,_photoScope:'item'};
+      if(hasPhotoRef(own) && (!ownLocation || !currentLocation || ownLocation===currentLocation))return {...own,_photoScope:'item'};
       const shared=getSharedStoragePhoto(item.storage,item.id);
-      if(shared?.dataUrl)return {...shared,_photoScope:'shared'};
-      if(own?.dataUrl)return {...own,_photoScope:'item-other-location'};
+      if(hasPhotoRef(shared))return {...shared,_photoScope:'shared'};
+      if(hasPhotoRef(own))return {...own,_photoScope:'item-other-location'};
       return null;
     }
     function getRecentStorageLocations(){let seen=[];getItems().slice().reverse().forEach(i=>{let v=String(i.storage||'').trim();if(v&&!seen.includes(v))seen.push(v)});return seen.slice(0,6)}
@@ -1185,7 +1187,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    $('createItemBtn').onclick=createItemFromCurrentShots;$('newItemFromShotsBtn').onclick=createItemFromCurrentShots;$('inventorySearch').oninput=renderInventory;$('inventoryStatusFilter').onchange=renderInventory;$('inventoryStorageFilter').onchange=renderInventory;$('inventorySort').onchange=renderInventory;$('clearInventoryFiltersBtn').onclick=()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()};$('scanInventoryBtn').onclick=scanAndRepairInventory;$('deleteIncompleteItemsBtn').onclick=deleteIncompleteDraftItems;$('saveItemBtn').onclick=saveItem;$('generateDraftBtn').onclick=regenDraft;$('saveDraftVersionBtn').onclick=saveDraftVersion;$('deleteItemBtn').onclick=delItem;$('applyStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}};$('saveStoragePresetBtn').onclick=()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')};$('removeStoragePresetBtn').onclick=()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));};$('chooseStoragePhotoBtn').onclick=chooseStoragePhoto;$('storagePhotoFile').onchange=handleStoragePhotoFile;$('captureStorageFromCameraBtn').onclick=captureStoragePhotoFromActiveCamera;$('clearStoragePhotoBtn').onclick=clearStoragePhoto;document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
@@ -1227,7 +1229,7 @@
     function buildMediaManifest(){let items=getItems();return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Future Drive sync can use these folder and filename suggestions, then write Drive links and upload status back to the Google Sheets CSV columns. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);return {itemId:item.id,title:item.title,folderName:itemFolderName(item,index),createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);return {label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${itemFolderName(item,index)}-storage-location.jpg`,takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
     function buildSheetsDriveRows(){
       let rows=[['Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Listing Photo Media Status','Storage Photo Media Status','Suggested Drive Folder Name','Drive Folder Link','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Storage Location Photo Suggested Filename','Facebook Title','Facebook Description','Pickup Notes']];
-      getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');let summary=itemMediaStatusSummary(i);let storageStatus=storagePhotoMediaStatus(i);rows.push([i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,summary.labels,storageStatus.label,itemFolderName(i,index),'','','','','','',filenames,(getEffectiveStoragePhoto(i)?.dataUrl||getEffectiveStoragePhoto(i)?.thumbnailDataUrl||getEffectiveStoragePhoto(i)?.mediaId)?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
+      getItems().forEach((i,index)=>{let photos=i.photos||[];let filenames=photos.map((p,pi)=>shotFileName(i,index,p,pi)).join(' | ');let summary=itemMediaStatusSummary(i);let storageStatus=storagePhotoMediaStatus(i);rows.push([i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,summary.labels,storageStatus.label,itemFolderName(i,index),'','','','','','',filenames,hasPhotoRef(getEffectiveStoragePhoto(i))?`${itemFolderName(i,index)}-storage-location.jpg`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
       return rows
     }
     function buildRebuildHtml(){
@@ -1307,6 +1309,10 @@
     if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
     if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
+    on('clearTempCapturesBtn','onclick',clearTemporaryCaptures);
+    on('clearSavedSessionsBtn','onclick',clearSavedSessions);
+    on('compressInventoryBtn','onclick',compressExistingInventoryPhotos);
+    on('refreshStorageStatsBtn','onclick',()=>{renderStorageUsage();renderMediaDbStats();refreshBackupViews();});
 
     async function renderStorageUsage(){
       const est=await storageEstimate();
@@ -1330,10 +1336,19 @@
     }
     function clearSavedSessions(){
       if(!confirm('Clear all saved capture sessions? Inventory items and their photos will remain. Export a backup first if needed.'))return;
-      if(safeWrite(K.sessions,[])){renderSessions();refreshBackupViews();alert('Saved capture sessions cleared.');}
+      if(safeWrite(K.sessions,[])){renderSessions();refreshBackupViews();renderStorageUsage();alert('Saved capture sessions cleared.');}
+    }
+    function clearTemporaryCaptures(){
+      if(!confirm('Clear current temporary capture photos? Saved sessions and inventory items will remain.'))return;
+      if(setShots([])){
+        if($('captureBar'))$('captureBar').style.width='0%';
+        if($('captureStatus'))$('captureStatus').textContent='Temporary captures cleared.';
+        renderStorageUsage();
+        alert('Temporary captures cleared.');
+      }
     }
 
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(i.storagePhoto?.dataUrl?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
     function itemBackupReadiness(item){
       let missing=[];
       if(!(item.photos||[]).length) missing.push('listing photos');
@@ -1341,7 +1356,7 @@
       if(!(item.fbDescription||item.notes)) missing.push('description/notes');
       if(!item.price && !item.fbPrice) missing.push('price');
       if(!item.storage) missing.push('storage location');
-      if(!getEffectiveStoragePhoto(item)?.dataUrl) missing.push('storage photo');
+      if(!hasPhotoRef(getEffectiveStoragePhoto(item))) missing.push('storage photo');
       let level=missing.length===0?'ok':missing.length<=2?'warn':'bad';
       let label=level==='ok'?'Ready for rebuild':level==='warn'?'Mostly ready':'Needs attention';
       return {level,label,missing};
@@ -1353,7 +1368,7 @@
       el.innerHTML=items.slice().reverse().map(item=>{
         let r=itemBackupReadiness(item);
         let missingText=r.missing.length?`Missing: ${r.missing.join(', ')}`:'All key rebuild fields are present.';
-        return `<div class="backup-ready-card ${r.level}"><strong>${item.title||'Untitled item'}</strong><br><span class="readiness-pill ${r.level}">${r.label}</span><p class="note">${missingText}</p><p class="note">Photos: ${(item.photos||[]).length} · Storage photo: ${getEffectiveStoragePhoto(item)?.dataUrl?'Yes':'No'} · Status: ${item.status||'Draft'}</p></div>`;
+        return `<div class="backup-ready-card ${r.level}"><strong>${item.title||'Untitled item'}</strong><br><span class="readiness-pill ${r.level}">${r.label}</span><p class="note">${missingText}</p><p class="note">Photos: ${(item.photos||[]).length} · Storage photo: ${hasPhotoRef(getEffectiveStoragePhoto(item))?'Yes':'No'} · Status: ${item.status||'Draft'}</p></div>`;
       }).join('');
     }
     function renderBackupPreview(){
@@ -1365,7 +1380,7 @@
         let photos=item.photos||[];
         let summary=itemMediaStatusSummary(item);
         let files=photos.map((p,pi)=>shotFileName(item,index,p,pi)).join('<br>')||'No listing photo filenames yet';
-        let storageFile=(getEffectiveStoragePhoto(item)?.dataUrl||getEffectiveStoragePhoto(item)?.thumbnailDataUrl||getEffectiveStoragePhoto(item)?.mediaId)?`${itemFolderName(item,index)}-storage-location.jpg`:'No storage photo filename yet';
+        let storageFile=hasPhotoRef(getEffectiveStoragePhoto(item))?`${itemFolderName(item,index)}-storage-location.jpg`:'No storage photo filename yet';
         return `<tr><td>${item.title||'Untitled item'}</td><td>${itemFolderName(item,index)}</td><td>${summary.readiness}<br><span class="note">Media: ${summary.mediaBacked} · Thumbnail-only: ${summary.thumbnailOnly} · Local-only: ${summary.localOnly} · Missing: ${summary.missing}</span></td><td>${files}</td><td>${storageFile}<br><span class="note">${storagePhotoMediaStatus(item).label}</span></td></tr>`;
       }).join('');
       el.innerHTML=`<table class="backup-table"><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Media Status</th><th>Suggested Listing Photo Files</th><th>Storage Photo File</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -1373,7 +1388,7 @@
     function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
