@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.24.1740</title>
+  <title>Item Posting Assistant v0.26.05.24.1757</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -86,6 +86,10 @@
     .drive-plan-card{background:rgba(2,6,23,.42);border:1px solid var(--border);border-radius:14px;padding:10px;color:var(--muted)}
     .drive-plan-card strong{display:block;color:#fff;font-size:1.3rem;line-height:1.1;margin-bottom:4px}
     .drive-path-list{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:.86rem;line-height:1.45}
+    .drive-checklist{display:grid;gap:10px;margin-top:10px}
+    .drive-check-card{background:rgba(2,6,23,.42);border:1px solid var(--border);border-radius:14px;padding:11px}
+    .drive-check-card strong{display:block;color:#fff;margin-bottom:5px}
+    .drive-check-card code{display:block;white-space:normal;word-break:break-word;background:rgba(15,23,42,.78);border:1px solid var(--border);border-radius:10px;padding:8px;margin-top:6px;color:#bae6fd}
 
 
     .storage-meter{height:12px;background:rgba(255,255,255,.09);border-radius:999px;overflow:hidden;margin:10px 0}
@@ -98,7 +102,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.24.1740 · Drive upload plan polish</p>
+      <p class="eyebrow">v0.26.05.24.1757 · selected item Drive checklist</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -352,6 +356,10 @@
           <h3 style="margin-top:16px">Sheets/Drive Preview</h3>
           <p class="note">This preview shows what to upload, where to put it in Drive, and which records are ready, thumbnail-only, local-only, or missing before you export.</p>
           <div id="backupPreview" class="note"></div>
+          <h3 style="margin-top:16px">Selected Item Drive Checklist</h3>
+          <p class="note">Select an inventory item, then use this compact checklist while manually creating its Drive folder and pasting links back into the CSV.</p>
+          <div id="selectedDriveChecklist" class="note"></div>
+          <div class="actions"><button id="exportSelectedDriveChecklistBtn" class="secondary" type="button">Export Selected Drive Checklist</button></div>
           <h3 style="margin-top:16px">Recommended Recovery Workflow</h3>
           <ol class="backup-step-list">
             <li>Export Full JSON Backup for app restore.</li>
@@ -368,7 +376,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.24.1740';
+    const VERSION='v0.26.05.24.1757';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1245,6 +1253,60 @@
       const storageFile=hasPhotoRef(getEffectiveStoragePhoto(item))?`${folder}-storage-location.jpg`:'';
       return {folder,photoFiles,storageFile,action:driveUploadAction(summary),summary};
     }
+    function selectedDriveChecklistData(){
+      const items=getItems();
+      const item=items.find(i=>i.id===selectedItemId);
+      if(!item)return null;
+      const index=items.indexOf(item);
+      const plan=itemDrivePlan(item,index);
+      const photoLinks=['Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link'];
+      const csvColumns=[
+        'Drive Folder Link',
+        ...plan.photoFiles.map((_,i)=>photoLinks[i]||'Extra Photo Links'),
+        ...(plan.storageFile?['Storage Location Photo Suggested Path / Storage photo link note']:[])
+      ];
+      return {item,index,plan,csvColumns};
+    }
+    function selectedDriveChecklistText(){
+      const data=selectedDriveChecklistData();
+      if(!data)return '';
+      const {item,plan}=data;
+      const lines=[
+        `Item Posting Assistant - Selected Item Drive Checklist`,
+        `Version: ${VERSION}`,
+        `Generated: ${new Date().toISOString()}`,
+        ``,
+        `Item: ${item.title||'Untitled item'}`,
+        `Status: ${item.status||'Draft'}`,
+        `Upload action: ${plan.action}`,
+        `Media status: media-backed ${plan.summary.mediaBacked}, thumbnail-only ${plan.summary.thumbnailOnly}, local-only ${plan.summary.localOnly}, missing ${plan.summary.missing}`,
+        ``,
+        `1. Create this Google Drive folder:`,
+        `Item Posting Assistant/${plan.folder}`,
+        ``,
+        `2. Upload listing photos with these filenames:`,
+        ...(plan.photoFiles.length?plan.photoFiles.map((f,i)=>`${i+1}. ${f}`):['No listing photo filenames yet.']),
+        ``,
+        `3. Upload storage photo:`,
+        plan.storageFile||'No storage photo filename yet.',
+        ``,
+        `4. Paste Drive links back into these CSV columns:`,
+        `Drive Folder Link`,
+        `Front Photo Link / Right Photo Link / Back Photo Link / Left Photo Link / Extra Photo Links as needed`,
+        `Storage photo link note: use Storage Location Photo Suggested Path as the filename/path reference`,
+        ``,
+        `5. Listing reference:`,
+        `Facebook Title: ${item.fbTitle||item.title||''}`,
+        `Facebook Price: ${item.fbPrice||moneyText(item.price)||''}`,
+        `Storage Location: ${item.storage||''}`
+      ];
+      return lines.join('\n');
+    }
+    function exportSelectedDriveChecklist(){
+      const data=selectedDriveChecklistData();
+      if(!data){alert('Select an inventory item first, then export its Drive checklist.');return}
+      download(`item-posting-drive-checklist-${safeName(data.item.title||'item')}-${VERSION}.txt`,selectedDriveChecklistText(),'text/plain');
+    }
     function driveUploadPlanSummary(items=getItems()){
       let plan={itemCount:items.length,folderCount:items.length,listingPhotoCount:0,storagePhotoCount:0,mediaBackedPhotoCount:0,thumbnailOnlyPhotoCount:0,localOnlyPhotoCount:0,missingPhotoCount:0,readyItemCount:0,needsAttentionItemCount:0};
       items.forEach((item,index)=>{
@@ -1343,6 +1405,7 @@
     if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
     if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
+    on('exportSelectedDriveChecklistBtn','onclick',exportSelectedDriveChecklist);
     on('clearTempCapturesBtn','onclick',clearTemporaryCaptures);
     on('clearSavedSessionsBtn','onclick',clearSavedSessions);
     on('compressInventoryBtn','onclick',compressExistingInventoryPhotos);
@@ -1422,7 +1485,18 @@
       }).join('');
       el.innerHTML=`${summaryHtml}<ol class="drive-path-list">${pathList}</ol><table class="backup-table"><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Upload Action</th><th>Suggested Listing Photo Files</th><th>Storage Photo File</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
-    function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness()}catch(e){}}
+    function renderSelectedDriveChecklist(){
+      const el=$('selectedDriveChecklist'); if(!el)return;
+      const data=selectedDriveChecklistData();
+      const btn=$('exportSelectedDriveChecklistBtn');
+      if(btn)btn.disabled=!data;
+      if(!data){el.innerHTML='<div class="empty-state">No inventory item selected. Open Inventory, select an item, then return here.</div>';return}
+      const {item,plan}=data;
+      const photoList=plan.photoFiles.length?plan.photoFiles.map((f,i)=>`<li>${escapeHtml(f)}<br><span class="note">${escapeHtml('Item Posting Assistant/'+plan.folder+'/'+f)}</span></li>`).join(''):'<li>No listing photo filenames yet.</li>';
+      const storageLine=plan.storageFile?`${escapeHtml(plan.storageFile)}<br><span class="note">${escapeHtml('Item Posting Assistant/'+plan.folder+'/'+plan.storageFile)}</span>`:'No storage photo filename yet.';
+      el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}</span></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong><code>${escapeHtml('Item Posting Assistant/'+plan.folder)}</code></div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
+    }
+    function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
     updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
