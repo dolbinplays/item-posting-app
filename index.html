@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.24.1858</title>
+  <title>Item Posting Assistant v0.26.05.24.1938</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.24.1858 · Google auth design prep</p>
+      <p class="eyebrow">v0.26.05.24.1938 · Google sync action queue</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -316,6 +316,13 @@
           <p class="note">This simulates a future Google Sheets + Drive sync without signing in or uploading anything.</p>
           <div id="googleSyncDryRun" class="note"></div>
           <div class="actions"><button id="refreshGoogleSyncDryRunBtn" class="secondary" type="button">Refresh Dry Run</button><button id="exportGoogleSyncDryRunBtn" class="secondary" type="button">Export Dry Run JSON</button></div>
+          <h3 style="margin-top:16px">Future Google Sync Readiness Gate</h3>
+          <p class="note">Checks each inventory item for the minimum data needed before a future direct Google Sheets + Drive sync should be allowed.</p>
+          <div id="googleSyncGate" class="note"></div>
+          <h3 style="margin-top:16px">Future Google Sync Action Queue</h3>
+          <p class="note">Preview the exact Sheets + Drive operations a future sync button would run. This is still a local plan only.</p>
+          <div id="googleSyncActionQueue" class="note"></div>
+          <div class="actions"><button id="exportGoogleSyncQueueBtn" class="secondary" type="button">Export Sync Queue JSON</button></div>
           <h3 style="margin-top:16px">Google Authorization Requirements</h3>
           <p class="note">Planned permissions for a future direct Google Sheets + Drive sync. This build does not sign in, request access, upload files, or store Google tokens.</p>
           <div id="googleAuthRequirements" class="note"></div>
@@ -393,7 +400,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.24.1858';
+    const VERSION='v0.26.05.24.1938';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1246,7 +1253,7 @@
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
     const GOOGLE_SYNC_SCHEMA_VERSION='google-sync-schema-v1';
-    function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','future-api-sync'],entities:['googleSyncSettings','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun'],tokenStorage:'not implemented; this build stores no Google tokens'}}
+    function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','future-api-sync'],entities:['googleSyncSettings','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun','googleSyncReadinessGate','googleSyncActionQueue'],tokenStorage:'not implemented; this build stores no Google tokens'}}
     function googleAuthorizationRequirements(){return{status:'planned-not-requested',noAuthInThisBuild:true,scopes:[{scope:'https://www.googleapis.com/auth/spreadsheets',service:'Google Sheets API',purpose:'Create or update the inventory spreadsheet rows and write Drive links/status columns.'},{scope:'https://www.googleapis.com/auth/drive.file',service:'Google Drive API',purpose:'Create app-managed folders and upload item/storage photos selected or created by this app.'}],plannedOperations:['Sign in with Google after user action','Create or select target Sheet','Create Drive root and item folders','Upload media-backed listing and storage photos','Write folder/photo links and sync status back to the Sheet','Run incremental sync using Item ID and media IDs'],notPlanned:['Read unrelated Drive files','Delete Drive files','Post listings to Facebook','Store Google password']}}
     function defaultGoogleSyncSettings(){return {sheetName:'Item Posting Inventory',driveRootFolder:'Item Posting Assistant',updatedAt:''}}
     function getGoogleSyncSettings(){let s=read(K.googleSyncSettings,defaultGoogleSyncSettings());return {...defaultGoogleSyncSettings(),...(s&&typeof s==='object'?s:{})}}
@@ -1260,7 +1267,8 @@
     }
     function buildGoogleSyncDryRun(){
       const settings=getGoogleSyncSettings(), items=getItems(), readiness=googleSyncReadinessSummary(items);
-      const report={version:VERSION,generatedAt:new Date().toISOString(),mode:'dry-run-no-google-api-calls',syncSchemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,authorizationStatus:'planned-not-requested',targetSheetName:settings.sheetName,targetDriveRootFolder:settings.driveRootFolder,summary:{itemsScanned:items.length,rowsToCreateOrUpdate:items.length,foldersToCreate:0,listingPhotosToUpload:0,storagePhotosToUpload:0,blockedItems:0,alreadyMarkedComplete:0,readyItems:readiness.readyItems,needsAttentionItems:readiness.needsAttentionItems},items:[]};
+      const gate=buildGoogleSyncReadinessGate(items);
+      const report={version:VERSION,generatedAt:new Date().toISOString(),mode:'dry-run-no-google-api-calls',syncSchemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,authorizationStatus:'planned-not-requested',targetSheetName:settings.sheetName,targetDriveRootFolder:settings.driveRootFolder,readinessGate:gate.summary,summary:{itemsScanned:items.length,rowsToCreateOrUpdate:items.length,foldersToCreate:0,listingPhotosToUpload:0,storagePhotosToUpload:0,blockedItems:0,alreadyMarkedComplete:0,readyItems:readiness.readyItems,needsAttentionItems:readiness.needsAttentionItems},items:[]};
       items.forEach((item,index)=>{
         const plan=itemDrivePlan(item,index), media=plan.summary, sync=driveSyncStatus(item);
         const blockers=[];
@@ -1276,7 +1284,7 @@
         if(plan.storageFile&&!sync.sync.storagePhotoUploaded)report.summary.storagePhotosToUpload++;
         if(blockers.length)report.summary.blockedItems++;
         if(alreadyComplete)report.summary.alreadyMarkedComplete++;
-        report.items.push({itemId:item.id,title:item.title||'Untitled item',rowAction:'create_or_update_sheet_row',folderAction,listingPhotosAction,storagePhotoAction,csvLinksAction:sync.sync.csvLinksPasted?'skip_marked_pasted':'write_links_after_upload',suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,mediaStatus:{mediaBacked:media.mediaBacked,thumbnailOnly:media.thumbnailOnly,localOnly:media.localOnly,missing:media.missing},driveProgress:{status:sync.label,doneSteps:sync.done,totalSteps:sync.total,...sync.sync},blocked:!!blockers.length,blockers});
+        report.items.push({itemId:item.id,title:item.title||'Untitled item',rowAction:'create_or_update_sheet_row',futureSyncReady:googleSyncItemReadiness(item,index).readyForFutureSync,rowReadiness:googleSyncItemReadiness(item,index).status,folderAction,listingPhotosAction,storagePhotoAction,csvLinksAction:sync.sync.csvLinksPasted?'skip_marked_pasted':'write_links_after_upload',suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,mediaStatus:{mediaBacked:media.mediaBacked,thumbnailOnly:media.thumbnailOnly,localOnly:media.localOnly,missing:media.missing},driveProgress:{status:sync.label,doneSteps:sync.done,totalSteps:sync.total,...sync.sync},blocked:!!blockers.length,blockers});
       });
       return report;
     }
@@ -1287,6 +1295,31 @@
       el.innerHTML=`Dry run target: <b>${escapeHtml(r.targetSheetName)}</b> sheet · <b>${escapeHtml(r.targetDriveRootFolder)}</b> Drive root<br>Rows create/update: <b>${r.summary.rowsToCreateOrUpdate}</b> · Folders create: <b>${r.summary.foldersToCreate}</b> · Listing photos upload: <b>${r.summary.listingPhotosToUpload}</b> · Storage photos upload: <b>${r.summary.storagePhotosToUpload}</b><br>Blocked items: <b>${r.summary.blockedItems}</b> · Already marked complete: <b>${r.summary.alreadyMarkedComplete}</b>${blocked?`<ol class="drive-path-list">${blocked}</ol>`:''}`;
     }
     function exportGoogleSyncDryRun(){download(`item-posting-google-sync-dry-run-${VERSION}.json`,JSON.stringify(buildGoogleSyncDryRun(),null,2),'application/json')}
+    function renderGoogleSyncGate(){
+      const el=$('googleSyncGate'); if(!el)return;
+      const gate=buildGoogleSyncReadinessGate();
+      if(!gate.items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to see future sync readiness.</div>';return}
+      const rows=gate.items.slice().reverse().map(item=>{
+        const level=item.readyForFutureSync?'ok':(item.blockers.length<=2?'warn':'bad');
+        const blockers=item.blockers.length?`Needs: ${item.blockers.join(', ')}`:'All required future sync checks pass.';
+        const checks=item.checks.map(c=>`${c.pass?'OK':'Review'} ${escapeHtml(c.label)}${c.value?`: ${escapeHtml(c.value)}`:''}`).join('<br>');
+        return `<tr><td>${escapeHtml(item.title)}</td><td><span class="readiness-pill ${level}">${escapeHtml(item.status)}</span><br><span class="note">${escapeHtml(blockers)}</span></td><td>${escapeHtml(item.suggestedDrivePath)}</td><td>${checks}</td><td>${escapeHtml(item.driveProgress.status)} (${item.driveProgress.doneSteps}/${item.driveProgress.totalSteps})</td></tr>`;
+      }).join('');
+      el.innerHTML=`<div class="drive-plan-summary"><div class="drive-plan-card"><strong>${gate.summary.readyForFutureSync}</strong>Ready</div><div class="drive-plan-card"><strong>${gate.summary.needsReview}</strong>Need review</div><div class="drive-plan-card"><strong>${gate.summary.thumbnailOnlyPhotos}</strong>Thumbnail-only</div><div class="drive-plan-card"><strong>${gate.summary.missingPhotos}</strong>Missing photos</div></div><table class="backup-table"><thead><tr><th>Item</th><th>Gate</th><th>Suggested Drive Path</th><th>Checks</th><th>Manual Progress</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    function renderGoogleSyncActionQueue(){
+      const el=$('googleSyncActionQueue'); if(!el)return;
+      const q=buildGoogleSyncActionQueue();
+      if(!q.items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview future sync actions.</div>';return}
+      const rows=q.items.slice().reverse().map(item=>{
+        const level=item.readyForFutureSync?'ok':'warn';
+        const note=item.readyForFutureSync?`${item.actionCount} planned action${item.actionCount===1?'':'s'}`:`Held: ${item.holdReasons.join(', ')}`;
+        const actionText=item.actions.slice(0,4).map(a=>escapeHtml(a.type)).join('<br>') || 'No actions queued';
+        return `<tr><td>${escapeHtml(item.title)}</td><td><span class="readiness-pill ${level}">${item.readyForFutureSync?'Queued':'Held'}</span><br><span class="note">${escapeHtml(note)}</span></td><td>${escapeHtml(item.suggestedDrivePath)}</td><td>${actionText}</td></tr>`;
+      }).join('');
+      el.innerHTML=`<div class="drive-plan-summary"><div class="drive-plan-card"><strong>${q.summary.totalActions}</strong>Total actions</div><div class="drive-plan-card"><strong>${q.summary.readyItems}</strong>Queued items</div><div class="drive-plan-card"><strong>${q.summary.heldItems}</strong>Held items</div><div class="drive-plan-card"><strong>${q.summary.mediaUploads}</strong>Media uploads</div></div><table class="backup-table"><thead><tr><th>Item</th><th>Status</th><th>Suggested Drive Path</th><th>First Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    function exportGoogleSyncQueue(){download(`item-posting-google-sync-action-queue-${VERSION}.json`,JSON.stringify(buildGoogleSyncActionQueue(),null,2),'application/json')}
     function renderGoogleAuthRequirements(){
       const el=$('googleAuthRequirements'); if(!el)return;
       const req=googleAuthorizationRequirements(), schema=googleSyncSchema();
@@ -1303,7 +1336,7 @@
       if($('googleSyncReadiness'))$('googleSyncReadiness').innerHTML=`Future sync target: <b>${escapeHtml(s.settings.sheetName)}</b> sheet · <b>${escapeHtml(s.settings.driveRootFolder)}</b> Drive root<br>Ready items: <b>${s.readyItems}</b> · Need review: <b>${s.needsAttentionItems}</b> · Manual Drive complete: <b>${s.driveCompleteItems}</b> of <b>${s.itemCount}</b>`;
     }
     function saveGoogleSyncSettingsFromForm(){if(setGoogleSyncSettings({sheetName:$('googleSheetName')?.value,driveRootFolder:$('googleDriveRoot')?.value}))alert('Google sync settings saved.')}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncSettings:getGoogleSyncSettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncSettings:getGoogleSyncSettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
@@ -1351,6 +1384,47 @@
       const photoFiles=(item.photos||[]).map((shot,shotIndex)=>shotFileName(item,index,shot,shotIndex));
       const storageFile=hasPhotoRef(getEffectiveStoragePhoto(item))?`${folder}-storage-location.jpg`:'';
       return {folder,photoFiles,storageFile,drivePath:suggestedDrivePath(folder),action:driveUploadAction(summary),summary};
+    }
+    function googleSyncItemReadiness(item,index){
+      const settings=getGoogleSyncSettings(), plan=itemDrivePlan(item,index), media=plan.summary, storageStatus=storagePhotoMediaStatus(item), sync=driveSyncStatus(item);
+      const checks=[
+        {key:'sheetName',label:'Target Sheet name set',pass:!!String(settings.sheetName||'').trim(),required:true},
+        {key:'driveRoot',label:'Target Drive root set',pass:!!String(settings.driveRootFolder||'').trim(),required:true},
+        {key:'itemId',label:'Stable item ID present',pass:!!item.id,required:true},
+        {key:'driveFolder',label:'Suggested Drive folder ready',pass:!!plan.folder&&!!plan.drivePath,required:true,value:plan.drivePath},
+        {key:'listingPhotos',label:'Listing photos upload-ready',pass:!!media.photoCount&&!media.missing&&!media.thumbnailOnly,required:true,value:media.readiness},
+        {key:'storagePhoto',label:'Storage photo status known',pass:!storageStatus.missing,required:true,value:storageStatus.label},
+        {key:'manualDriveProgress',label:'Manual Drive checklist progress tracked',pass:true,required:false,value:`${sync.done}/${sync.total} - ${sync.label}`}
+      ];
+      const blockers=checks.filter(c=>c.required&&!c.pass).map(c=>c.label);
+      return {itemId:item.id||'',title:item.title||'Untitled item',readyForFutureSync:!blockers.length,status:blockers.length?'Needs review':'Ready for future sync',blockers,checks,mediaStatus:{mediaBacked:media.mediaBacked,thumbnailOnly:media.thumbnailOnly,localOnly:media.localOnly,missing:media.missing},suggestedDrivePath:plan.drivePath,driveProgress:{status:sync.label,doneSteps:sync.done,totalSteps:sync.total,...sync.sync}};
+    }
+    function buildGoogleSyncReadinessGate(items=getItems()){
+      const rows=items.map((item,index)=>googleSyncItemReadiness(item,index));
+      return {version:VERSION,schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,generatedAt:new Date().toISOString(),summary:{itemsScanned:rows.length,readyForFutureSync:rows.filter(r=>r.readyForFutureSync).length,needsReview:rows.filter(r=>!r.readyForFutureSync).length,mediaBackedPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.mediaBacked,0),thumbnailOnlyPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.thumbnailOnly,0),localOnlyPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.localOnly,0),missingPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.missing,0)},items:rows};
+    }
+    function buildGoogleSyncActionQueue(items=getItems()){
+      const settings=getGoogleSyncSettings(), queue={version:VERSION,schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,generatedAt:new Date().toISOString(),mode:'planned-actions-no-google-api-calls',targetSheetName:settings.sheetName,targetDriveRootFolder:settings.driveRootFolder,summary:{itemsScanned:items.length,readyItems:0,heldItems:0,totalActions:0,driveFolderCreates:0,mediaUploads:0,sheetRowUpserts:0,sheetLinkUpdates:0},items:[]};
+      items.forEach((item,index)=>{
+        const readiness=googleSyncItemReadiness(item,index), plan=itemDrivePlan(item,index), actions=[];
+        if(readiness.readyForFutureSync){
+          actions.push({order:1,type:'sheets.upsertRow',target:settings.sheetName,itemId:item.id,title:item.title||'Untitled item'});
+          actions.push({order:2,type:'drive.createFolder',target:plan.drivePath,itemId:item.id});
+          plan.photoFiles.forEach((fileName,i)=>actions.push({order:3+i,type:'drive.uploadListingPhoto',target:suggestedDrivePath(plan.folder,fileName),itemId:item.id,fileName,photoIndex:i}));
+          if(plan.storageFile)actions.push({order:3+plan.photoFiles.length,type:'drive.uploadStoragePhoto',target:suggestedDrivePath(plan.folder,plan.storageFile),itemId:item.id,fileName:plan.storageFile});
+          actions.push({order:99,type:'sheets.writeDriveLinks',target:settings.sheetName,itemId:item.id,dependsOn:'uploaded Drive folder and photo links'});
+          queue.summary.readyItems++;
+        }else{
+          queue.summary.heldItems++;
+        }
+        queue.summary.totalActions+=actions.length;
+        queue.summary.driveFolderCreates+=actions.filter(a=>a.type==='drive.createFolder').length;
+        queue.summary.mediaUploads+=actions.filter(a=>a.type.startsWith('drive.upload')).length;
+        queue.summary.sheetRowUpserts+=actions.filter(a=>a.type==='sheets.upsertRow').length;
+        queue.summary.sheetLinkUpdates+=actions.filter(a=>a.type==='sheets.writeDriveLinks').length;
+        queue.items.push({itemId:item.id||'',title:item.title||'Untitled item',readyForFutureSync:readiness.readyForFutureSync,holdReasons:readiness.blockers,suggestedDrivePath:plan.drivePath,actionCount:actions.length,actions});
+      });
+      return queue;
     }
     function selectedDriveChecklistData(){
       const items=getItems();
@@ -1438,7 +1512,7 @@
       plan.totalSuggestedFileCount=plan.listingPhotoCount+plan.storagePhotoCount;
       return plan;
     }
-    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const readiness=googleSyncReadinessSummary(items);const dryRun=buildGoogleSyncDryRun();return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncSettings,googleSyncReadiness:readiness,googleSyncDryRun:dryRun,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:suggestedDrivePath(plan.folder,`${plan.folder}-storage-location.jpg`),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
+    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const readiness=googleSyncReadinessSummary(items);const readinessGate=buildGoogleSyncReadinessGate(items);const actionQueue=buildGoogleSyncActionQueue(items);const dryRun=buildGoogleSyncDryRun();return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:readinessGate,googleSyncActionQueue:actionQueue,googleSyncSettings,googleSyncReadiness:readiness,googleSyncDryRun:dryRun,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',futureGoogleSyncReadiness:googleSyncItemReadiness(item,index),driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:suggestedDrivePath(plan.folder,`${plan.folder}-storage-location.jpg`),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
     function buildSheetsDriveRows(){
       let rows=[['Google Sheet Target','Drive Root Target','Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Drive Upload Action','Drive Sync Status','Drive Folder Created','Listing Photos Uploaded','Storage Photo Uploaded','CSV Links Pasted','Suggested Drive Folder Name','Suggested Drive Path','Drive Folder Link','Listing Photo Media Status','Storage Photo Media Status','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Suggested Photo Drive Paths','Storage Location Photo Suggested Filename','Storage Location Photo Suggested Path','Facebook Title','Facebook Description','Pickup Notes']];
       const gs=getGoogleSyncSettings();
@@ -1525,6 +1599,7 @@
     on('saveGoogleSyncSettingsBtn','onclick',saveGoogleSyncSettingsFromForm);
     on('refreshGoogleSyncDryRunBtn','onclick',renderGoogleSyncDryRun);
     on('exportGoogleSyncDryRunBtn','onclick',exportGoogleSyncDryRun);
+    on('exportGoogleSyncQueueBtn','onclick',exportGoogleSyncQueue);
     on('exportSelectedDriveChecklistBtn','onclick',exportSelectedDriveChecklist);
     on('clearTempCapturesBtn','onclick',clearTemporaryCaptures);
     on('clearSavedSessionsBtn','onclick',clearSavedSessions);
@@ -1565,7 +1640,7 @@
       }
     }
 
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Future sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p>`}
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);let gate=b.googleSyncReadinessGate.summary;$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Future sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p><p>Future sync gate: <b>${gate.readyForFutureSync}</b> ready · <b>${gate.needsReview}</b> need review</p>`}
     function itemBackupReadiness(item){
       let missing=[];
       if(!(item.photos||[]).length) missing.push('listing photos');
@@ -1620,7 +1695,7 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong><code>${escapeHtml(plan.drivePath)}</code></div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleSyncDryRun();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
     updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderGoogleSyncSettings(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
