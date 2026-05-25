@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.0105</title>
+  <title>Item Posting Assistant v0.26.05.25.0111</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.0105 · Sheets first rows</p>
+      <p class="eyebrow">v0.26.05.25.0111 · Sheets ready rows</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -338,9 +338,9 @@
           <div id="googleSheetStatus" class="note"></div>
           <div class="actions"><button id="connectGoogleSheetBtn" class="success" type="button">Find/Create Sheet + Header</button></div>
           <h3 style="margin-top:16px">Google Sheet First Rows</h3>
-          <p class="note">Write the first 3 ready inventory rows to the connected Sheet for inspection. This clears rows 2-4 before writing them.</p>
+          <p class="note">Write ready inventory rows to the connected Sheet. Test mode writes 3 rows; full mode writes all readiness-passing rows and clears the old synced range first.</p>
           <div id="googleSheetRowsStatus" class="note"></div>
-          <div class="actions"><button id="writeGoogleSheetRowsBtn" class="success" type="button">Write First 3 Ready Rows</button></div>
+          <div class="actions"><button id="writeGoogleSheetRowsBtn" class="success" type="button">Write First 3 Ready Rows</button><button id="writeAllGoogleSheetRowsBtn" class="success" type="button">Write All Ready Rows</button></div>
           <h3 style="margin-top:16px">Google Sync Dry Run</h3>
           <p class="note">This simulates a future Google Sheets + Drive sync without signing in or uploading anything.</p>
           <div id="googleSyncDryRun" class="note"></div>
@@ -440,7 +440,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.0105';
+    const VERSION='v0.26.05.25.0111';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1315,6 +1315,7 @@
       if($('connectGoogleDriveItemFoldersBtn'))$('connectGoogleDriveItemFoldersBtn').disabled=!tokenReady;
       if($('connectGoogleSheetBtn'))$('connectGoogleSheetBtn').disabled=!tokenReady;
       if($('writeGoogleSheetRowsBtn'))$('writeGoogleSheetRowsBtn').disabled=!tokenReady;
+      if($('writeAllGoogleSheetRowsBtn'))$('writeAllGoogleSheetRowsBtn').disabled=!tokenReady;
     }
     function renderGoogleApiProbeStatus(message=''){
       const el=$('googleApiProbeStatus'); if(!el)return;
@@ -1341,6 +1342,7 @@
       const el=$('googleSheetRowsStatus'); if(!el)return;
       el.innerHTML=message||'<p>No inventory rows have been written in this page session.</p>';
       if($('writeGoogleSheetRowsBtn'))$('writeGoogleSheetRowsBtn').disabled=!googleAccessTokenInfo;
+      if($('writeAllGoogleSheetRowsBtn'))$('writeAllGoogleSheetRowsBtn').disabled=!googleAccessTokenInfo;
     }
     function loadGoogleIdentity(){
       return new Promise((resolve,reject)=>{
@@ -1495,21 +1497,22 @@
       }
       return {...sheet,action};
     }
-    function firstReadySheetRows(limit=3){
+    function readySheetRows(limit=Infinity){
       const rows=buildSheetsDriveRows();
       const items=getItems();
       const readyIds=new Set(items.map((item,index)=>googleSyncItemReadiness(item,index).readyForFutureSync?item.id:'').filter(Boolean));
       return rows.slice(1).filter(row=>readyIds.has(row[3])).slice(0,limit);
     }
-    async function writeGoogleSheetFirstRows(){
+    async function writeGoogleSheetRows(limit=3,label='first 3 ready rows'){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
-      renderGoogleSheetRowsStatus('<p>Preparing first 3 ready rows...</p>');
+      renderGoogleSheetRowsStatus(`<p>Preparing ${escapeHtml(label)}...</p>`);
       try{
         const sheet=await findOrCreateGoogleSheet();
         const headers={Authorization:`Bearer ${googleAccessTokenInfo.accessToken}`,'Content-Type':'application/json'};
-        const header=sheetsHeaderRow(), rows=firstReadySheetRows(3);
+        const header=sheetsHeaderRow(), rows=readySheetRows(limit);
         await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A1:AZ1?valueInputOption=RAW`,{method:'PUT',headers,body:JSON.stringify({range:'Inventory!A1:AZ1',majorDimension:'ROWS',values:[header]})});
-        const clearRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A2:AZ4:clear`,{method:'POST',headers,body:'{}'});
+        const clearEnd=Math.max(rows.length+1,200);
+        const clearRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A2:AZ${clearEnd}:clear`,{method:'POST',headers,body:'{}'});
         const clearData=await clearRes.json();
         if(!clearRes.ok)throw new Error(clearData.error?.message||clearRes.statusText);
         if(rows.length){
@@ -1517,11 +1520,13 @@
           const writeData=await writeRes.json();
           if(!writeRes.ok)throw new Error(writeData.error?.message||writeRes.statusText);
         }
-        renderGoogleSheetRowsStatus(`<p>Wrote <b>${rows.length}</b> ready row(s) to <b>${escapeHtml(sheet.name)}</b>.${sheet.webViewLink?`<br><a href="${escapeHtml(sheet.webViewLink)}" target="_blank" rel="noopener">Open sheet</a>`:''}</p>`);
+        renderGoogleSheetRowsStatus(`<p>Wrote <b>${rows.length}</b> row(s) for ${escapeHtml(label)} to <b>${escapeHtml(sheet.name)}</b>. Cleared rows 2-${clearEnd}.${sheet.webViewLink?`<br><a href="${escapeHtml(sheet.webViewLink)}" target="_blank" rel="noopener">Open sheet</a>`:''}</p>`);
       }catch(e){
         renderGoogleSheetRowsStatus(`<p><b>Row write failed:</b> ${escapeHtml(e?.message||e)}</p>`);
       }
     }
+    function writeGoogleSheetFirstRows(){return writeGoogleSheetRows(3,'first 3 ready rows')}
+    function writeAllGoogleSheetReadyRows(){return writeGoogleSheetRows(Infinity,'all ready rows')}
     function driveRootFolder(){return String(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant').trim().replace(/[\\/:*?"<>|]+/g,'-')||'Item Posting Assistant'}
     function suggestedDrivePath(...parts){return [driveRootFolder(),...parts].filter(Boolean).join('/')}
     function setGoogleSyncSettings(v){let next={sheetName:String(v.sheetName||'').trim()||'Item Posting Inventory',driveRootFolder:String(v.driveRootFolder||'').trim()||'Item Posting Assistant',updatedAt:new Date().toISOString()};if(safeWrite(K.googleSyncSettings,next)){renderGoogleSyncSettings();refreshBackupViews();return true}return false}
@@ -1952,6 +1957,7 @@
     on('connectGoogleDriveItemFoldersBtn','onclick',connectGoogleDriveItemFolders);
     on('connectGoogleSheetBtn','onclick',connectGoogleSheet);
     on('writeGoogleSheetRowsBtn','onclick',writeGoogleSheetFirstRows);
+    on('writeAllGoogleSheetRowsBtn','onclick',writeAllGoogleSheetReadyRows);
     on('refreshGoogleSyncDryRunBtn','onclick',renderGoogleSyncDryRun);
     on('exportGoogleSyncDryRunBtn','onclick',exportGoogleSyncDryRun);
     on('exportGoogleSyncQueueBtn','onclick',exportGoogleSyncQueue);
