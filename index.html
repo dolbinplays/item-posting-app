@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.0043</title>
+  <title>Item Posting Assistant v0.26.05.25.0052</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.0043 · Drive item folders</p>
+      <p class="eyebrow">v0.26.05.25.0052 · Drive folder links</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -432,7 +432,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.0043';
+    const VERSION='v0.26.05.25.0052';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -892,7 +892,7 @@
       ['storagePhotoUploaded','Storage photo uploaded'],
       ['csvLinksPasted','CSV links pasted']
     ];
-    function defaultDriveSync(){return {folderCreated:false,listingPhotosUploaded:false,storagePhotoUploaded:false,csvLinksPasted:false,updatedAt:'',completedAt:''}}
+    function defaultDriveSync(){return {folderCreated:false,listingPhotosUploaded:false,storagePhotoUploaded:false,csvLinksPasted:false,driveFolderId:'',driveFolderLink:'',driveFolderName:'',updatedAt:'',completedAt:''}}
     function normalizeDriveSync(item){
       const base=defaultDriveSync(), current=item?.driveSync&&typeof item.driveSync==='object'?item.driveSync:{};
       return {...base,...current};
@@ -1408,10 +1408,23 @@
         const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant');
         const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index)})).filter(x=>x.readiness.readyForFutureSync).slice(0,3);
         const results=[];
+        const allItems=getItems();
         for(const row of ready){
           const folder=await findOrCreateDriveFolder(row.plan.folder,root.id);
           results.push({title:row.item.title||'Untitled item',folder});
+          const target=allItems.find(i=>i.id===row.item.id);
+          if(target){
+            const sync=normalizeDriveSync(target);
+            sync.folderCreated=true;
+            sync.driveFolderId=folder.id||sync.driveFolderId||'';
+            sync.driveFolderLink=folder.webViewLink||sync.driveFolderLink||'';
+            sync.driveFolderName=folder.name||sync.driveFolderName||row.plan.folder;
+            sync.updatedAt=new Date().toISOString();
+            target.driveSync=sync;
+            target.updatedAt=sync.updatedAt;
+          }
         }
+        if(results.length)setItems(allItems);
         const rows=results.map(r=>`<li>${escapeHtml(r.title)}: <b>${escapeHtml(r.folder.action)}</b> ${escapeHtml(r.folder.name)}<br><code>${escapeHtml(r.folder.id)}</code></li>`).join('');
         renderGoogleDriveItemFoldersStatus(`<p>Drive root: <b>${escapeHtml(root.action)}</b> ${escapeHtml(root.name)}. Item folders processed: <b>${results.length}</b>.</p>${rows?`<ol class="drive-path-list">${rows}</ol>`:'<p>No ready item folders to process.</p>'}`);
       }catch(e){
@@ -1708,7 +1721,7 @@
         `Drive progress: ${driveSyncStatus(item).label} (${driveSyncStatus(item).done}/${driveSyncStatus(item).total})`,
         ``,
         `1. Create this Google Drive folder:`,
-        plan.drivePath,
+        normalizeDriveSync(item).driveFolderLink||plan.drivePath,
         ``,
         `2. Upload listing photos with these filenames:`,
         ...(plan.photoFiles.length?plan.photoFiles.map((f,i)=>`${i+1}. ${f}`):['No listing photo filenames yet.']),
@@ -1720,6 +1733,8 @@
         `Drive Folder Link`,
         `Front Photo Link / Right Photo Link / Back Photo Link / Left Photo Link / Extra Photo Links as needed`,
         `Storage photo link note: use Storage Location Photo Suggested Path as the filename/path reference`,
+        ``,
+        `Drive Folder ID: ${normalizeDriveSync(item).driveFolderId||''}`,
         ``,
         `Progress tracker:`,
         ...DRIVE_SYNC_STEPS.map(([key,label])=>`[${normalizeDriveSync(item)[key]?'x':' '}] ${label}`),
@@ -1755,7 +1770,7 @@
     function buildSheetsDriveRows(){
       let rows=[['Google Sheet Target','Drive Root Target','Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Drive Upload Action','Drive Sync Status','Drive Folder Created','Listing Photos Uploaded','Storage Photo Uploaded','CSV Links Pasted','Suggested Drive Folder Name','Suggested Drive Path','Drive Folder Link','Listing Photo Media Status','Storage Photo Media Status','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Suggested Photo Drive Paths','Storage Location Photo Suggested Filename','Storage Location Photo Suggested Path','Facebook Title','Facebook Description','Pickup Notes']];
       const gs=getGoogleSyncSettings();
-      getItems().forEach((i,index)=>{let photos=i.photos||[];let plan=itemDrivePlan(i,index);let filenames=plan.photoFiles.join(' | ');let paths=plan.photoFiles.map(f=>suggestedDrivePath(plan.folder,f)).join(' | ');let summary=plan.summary;let storageStatus=storagePhotoMediaStatus(i);let syncStatus=driveSyncStatus(i);rows.push([gs.sheetName||'',gs.driveRootFolder||'',i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,plan.action,syncStatus.label,syncStatus.sync.folderCreated?'Yes':'No',syncStatus.sync.listingPhotosUploaded?'Yes':'No',syncStatus.sync.storagePhotoUploaded?'Yes':'No',syncStatus.sync.csvLinksPasted?'Yes':'No',plan.folder,plan.drivePath,'',summary.labels,storageStatus.label,'','','','','',filenames,paths,plan.storageFile,plan.storageFile?suggestedDrivePath(plan.folder,plan.storageFile):'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
+      getItems().forEach((i,index)=>{let photos=i.photos||[];let plan=itemDrivePlan(i,index);let filenames=plan.photoFiles.join(' | ');let paths=plan.photoFiles.map(f=>suggestedDrivePath(plan.folder,f)).join(' | ');let summary=plan.summary;let storageStatus=storagePhotoMediaStatus(i);let syncStatus=driveSyncStatus(i);rows.push([gs.sheetName||'',gs.driveRootFolder||'',i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,plan.action,syncStatus.label,syncStatus.sync.folderCreated?'Yes':'No',syncStatus.sync.listingPhotosUploaded?'Yes':'No',syncStatus.sync.storagePhotoUploaded?'Yes':'No',syncStatus.sync.csvLinksPasted?'Yes':'No',plan.folder,plan.drivePath,syncStatus.sync.driveFolderLink||'',summary.labels,storageStatus.label,'','','','','',filenames,paths,plan.storageFile,plan.storageFile?suggestedDrivePath(plan.folder,plan.storageFile):'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
       return rows
     }
     function buildRebuildHtml(){
@@ -1943,7 +1958,8 @@
       const photoList=plan.photoFiles.length?plan.photoFiles.map((f,i)=>`<li>${escapeHtml(f)}<br><span class="note">${escapeHtml(suggestedDrivePath(plan.folder,f))}</span></li>`).join(''):'<li>No listing photo filenames yet.</li>';
       const storageLine=plan.storageFile?`${escapeHtml(plan.storageFile)}<br><span class="note">${escapeHtml(suggestedDrivePath(plan.folder,plan.storageFile))}</span>`:'No storage photo filename yet.';
       const syncSteps=DRIVE_SYNC_STEPS.map(([key,label])=>`<label class="drive-sync-step"><input type="checkbox" data-drive-sync-step="${key}" ${syncStatus.sync[key]?'checked':''}><span><b>${escapeHtml(label)}</b><br>${escapeHtml(key==='folderCreated'?'The Drive folder exists.':key==='listingPhotosUploaded'?'Listing photos are uploaded with the suggested filenames.':key==='storagePhotoUploaded'?'Storage photo is uploaded, or there is no storage photo for this item.':'Drive links have been pasted into the CSV/Sheet columns.')}</span></label>`).join('');
-      el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong><code>${escapeHtml(plan.drivePath)}</code></div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
+      const folderLine=syncStatus.sync.driveFolderLink?`<a href="${escapeHtml(syncStatus.sync.driveFolderLink)}" target="_blank" rel="noopener">${escapeHtml(syncStatus.sync.driveFolderLink)}</a><br><code>${escapeHtml(syncStatus.sync.driveFolderId||'')}</code>`:`<code>${escapeHtml(plan.drivePath)}</code>`;
+      el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
     function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleApiSetup();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
