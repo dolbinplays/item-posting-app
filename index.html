@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.1124</title>
+  <title>Item Posting Assistant v0.26.05.25.1216</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -85,6 +85,22 @@
     @media(min-width:760px){.drive-plan-summary{grid-template-columns:repeat(4,1fr)}}
     .drive-plan-card{background:rgba(2,6,23,.42);border:1px solid var(--border);border-radius:14px;padding:10px;color:var(--muted)}
     .drive-plan-card strong{display:block;color:#fff;font-size:1.3rem;line-height:1.1;margin-bottom:4px}
+    .sync-dashboard{display:grid;gap:12px;margin:14px 0 16px;padding:14px;border:1px solid rgba(56,189,248,.28);border-radius:20px;background:linear-gradient(180deg,rgba(56,189,248,.13),rgba(2,6,23,.28))}
+    .sync-dashboard h3{margin:0}
+    .sync-dashboard-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    @media(min-width:760px){.sync-dashboard-summary{grid-template-columns:repeat(4,1fr)}}
+    .sync-dashboard-card{background:rgba(2,6,23,.5);border:1px solid var(--border);border-radius:16px;padding:12px;color:var(--muted)}
+    .sync-dashboard-card strong{display:block;color:#fff;font-size:1.35rem;line-height:1.1;margin-bottom:4px}
+    .sync-dashboard-card.good{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.1)}
+    .sync-dashboard-card.warn{border-color:rgba(250,204,21,.5);background:rgba(250,204,21,.1)}
+    .sync-dashboard-card.bad{border-color:rgba(251,113,133,.5);background:rgba(251,113,133,.1)}
+    .status-banner{margin:10px 0;padding:11px 12px;border-radius:15px;border:1px solid var(--border);background:rgba(2,6,23,.44);font-weight:900}
+    .status-banner.good{border-color:rgba(34,197,94,.5);color:#bbf7d0;background:rgba(34,197,94,.1)}
+    .status-banner.warn{border-color:rgba(250,204,21,.5);color:#fef3c7;background:rgba(250,204,21,.1)}
+    .status-banner.bad{border-color:rgba(251,113,133,.5);color:#fecdd3;background:rgba(251,113,133,.1)}
+    details.sync-advanced{margin-top:16px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.28);padding:12px}
+    details.sync-advanced>summary{cursor:pointer;font-weight:950;color:#bae6fd;list-style:none}
+    details.sync-advanced>summary::-webkit-details-marker{display:none}
     .drive-path-list{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:.86rem;line-height:1.45}
     .drive-checklist{display:grid;gap:10px;margin-top:10px}
     .drive-check-card{background:rgba(2,6,23,.42);border:1px solid var(--border);border-radius:14px;padding:11px}
@@ -106,7 +122,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.1124 · Sync flag repair</p>
+      <p class="eyebrow">v0.26.05.25.1216 · Sync visual polish</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -306,6 +322,18 @@
         <div class="card">
           <h2>Export / Backup</h2>
           <p class="note">Use these before installing a new patch, clearing browser data, or moving your inventory records to another device.</p>
+          <div class="sync-dashboard">
+            <h3>Google Sync</h3>
+            <p class="note">The usual path is simple: sign in, sync everything, then check health. Detailed setup and troubleshooting tools are still available below.</p>
+            <div id="googleSyncDashboardSummary" class="sync-dashboard-summary"></div>
+            <div class="actions">
+              <button id="dashboardGoogleAccessBtn" class="success" type="button">Sign In to Google</button>
+              <button id="dashboardSyncAllBtn" class="success" type="button">Sync Everything</button>
+              <button id="dashboardHealthBtn" class="secondary" type="button">Check Sync Health</button>
+            </div>
+          </div>
+          <details class="sync-advanced">
+            <summary>Advanced Google setup and troubleshooting</summary>
           <h3 style="margin-top:8px">Future Google Sync Settings</h3>
           <p class="note">These names prepare exports for a future direct Google Sheets + Drive sync. They are saved in backups and used for suggested Drive paths.</p>
           <label class="small">Target Google Sheet name</label><input id="googleSheetName" placeholder="Item Posting Inventory">
@@ -382,6 +410,7 @@
           <h3 style="margin-top:16px">Google Authorization Requirements</h3>
           <p class="note">Planned permissions for a future direct Google Sheets + Drive sync. This build does not sign in, request access, upload files, or store Google tokens.</p>
           <div id="googleAuthRequirements" class="note"></div>
+          </details>
           <div class="actions">
             <button id="exportJsonBtn" class="primary">Export Full JSON Backup</button>
             <button id="exportCsvBtn" class="secondary">Export Basic CSV</button>
@@ -456,7 +485,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.1124';
+    const VERSION='v0.26.05.25.1216';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1349,6 +1378,7 @@
       const tokenReady=!!googleAccessTokenInfo;
       el.innerHTML=`<p>Client ID: <b>${setup.oauthClientId?'Saved':'Missing'}</b> · Google Identity: <b>${gisReady?'Loaded':'Not loaded'}</b> · Access token: <b>${tokenReady?'In memory':'None'}</b>${message?`<br>${escapeHtml(message)}`:''}</p><p>Scopes: <code>${escapeHtml(googleSyncScopes())}</code></p>`;
       if($('requestGoogleAccessBtn'))$('requestGoogleAccessBtn').disabled=!setup.oauthClientId;
+      if($('dashboardGoogleAccessBtn'))$('dashboardGoogleAccessBtn').disabled=!setup.oauthClientId;
       if($('runGoogleApiProbeBtn'))$('runGoogleApiProbeBtn').disabled=!tokenReady;
       if($('connectGoogleDriveRootBtn'))$('connectGoogleDriveRootBtn').disabled=!tokenReady;
       if($('connectGoogleDriveItemFoldersBtn'))$('connectGoogleDriveItemFoldersBtn').disabled=!tokenReady;
@@ -1356,6 +1386,7 @@
       if($('uploadGoogleDrivePhotosBatchBtn'))$('uploadGoogleDrivePhotosBatchBtn').disabled=!tokenReady;
       if($('googleSyncNextBatchBtn'))$('googleSyncNextBatchBtn').disabled=!tokenReady;
       if($('googleSyncAllRemainingBtn'))$('googleSyncAllRemainingBtn').disabled=!tokenReady;
+      if($('dashboardSyncAllBtn'))$('dashboardSyncAllBtn').disabled=!tokenReady;
       if($('retryGoogleSyncErrorsBtn'))$('retryGoogleSyncErrorsBtn').disabled=!tokenReady;
       if($('connectGoogleSheetBtn'))$('connectGoogleSheetBtn').disabled=!tokenReady;
       if($('writeGoogleSheetRowsBtn'))$('writeGoogleSheetRowsBtn').disabled=!tokenReady;
@@ -1679,7 +1710,8 @@
       const el=$('googleSyncCompletionReport'); if(!el)return;
       const r=buildGoogleSyncCompletionReport();
       const needs=r.items.filter(i=>i.readyForFutureSync&&!i.complete).slice(0,8).map(i=>`<li>${escapeHtml(i.title)}: ${escapeHtml(i.missing.join(', ')||'In progress')}${i.lastSyncError?`<br><span class="note">${escapeHtml(i.lastSyncError)}</span>`:''}</li>`).join('');
-      el.innerHTML=`<p>Ready complete: <b>${r.summary.completeReadyItems}</b> of <b>${r.summary.readyItems}</b>. Needs review: <b>${r.summary.needsReview}</b>. Missing folders: <b>${r.summary.readyItemsMissingFolders}</b>. Missing photo uploads: <b>${r.summary.readyItemsMissingPhotoUploads}</b>. Missing Sheet write: <b>${r.summary.readyItemsMissingSheetWrite}</b>. Sync errors: <b>${r.summary.readyItemsWithSyncErrors}</b>.</p>${needs?`<ol class="drive-path-list">${needs}</ol>`:'<p>All ready items are marked complete.</p>'}`;
+      const level=r.summary.readyItemsWithSyncErrors?'bad':(r.summary.completeReadyItems===r.summary.readyItems?'good':'warn');
+      el.innerHTML=`<div class="status-banner ${level}">${level==='good'?'All ready items are complete.':level==='bad'?'Sync errors need review.':'Some ready items still need sync work.'}</div><p>Ready complete: <b>${r.summary.completeReadyItems}</b> of <b>${r.summary.readyItems}</b>. Needs review: <b>${r.summary.needsReview}</b>. Missing folders: <b>${r.summary.readyItemsMissingFolders}</b>. Missing photo uploads: <b>${r.summary.readyItemsMissingPhotoUploads}</b>. Missing Sheet write: <b>${r.summary.readyItemsMissingSheetWrite}</b>. Sync errors: <b>${r.summary.readyItemsWithSyncErrors}</b>.</p>${needs?`<ol class="drive-path-list">${needs}</ol>`:'<p>All ready items are marked complete.</p>'}`;
     }
     function exportGoogleSyncCompletionReport(){download(`item-posting-google-sync-completion-${VERSION}.json`,JSON.stringify(buildGoogleSyncCompletionReport(),null,2),'application/json')}
     function clearGoogleSyncErrors(opts={}){
@@ -1723,7 +1755,23 @@
       const el=$('googleSyncHealthCheck'); if(!el)return;
       const r=buildGoogleSyncHealthCheck();
       const issueRows=r.items.filter(i=>i.readyForFutureSync&&i.issueCount).slice(0,8).map(i=>`<li>${escapeHtml(i.title)}: ${escapeHtml(i.issues.join(', '))}</li>`).join('');
-      el.innerHTML=`<p>Healthy ready items: <b>${r.summary.healthyReadyItems}</b> of <b>${r.summary.readyItems}</b>. Ready items with issues: <b>${r.summary.readyItemsWithIssues}</b>. Total issues: <b>${r.summary.totalIssues}</b>.</p>${issueRows?`<ol class="drive-path-list">${issueRows}</ol>`:'<p>No local sync-record issues found for ready items.</p>'}`;
+      const level=r.summary.totalIssues?'bad':'good';
+      el.innerHTML=`<div class="status-banner ${level}">${level==='good'?'No local sync-record issues found.':'Local sync-record issues need review.'}</div><p>Healthy ready items: <b>${r.summary.healthyReadyItems}</b> of <b>${r.summary.readyItems}</b>. Ready items with issues: <b>${r.summary.readyItemsWithIssues}</b>. Total issues: <b>${r.summary.totalIssues}</b>.</p>${issueRows?`<ol class="drive-path-list">${issueRows}</ol>`:'<p>No local sync-record issues found for ready items.</p>'}`;
+    }
+    function renderGoogleSyncDashboard(){
+      const el=$('googleSyncDashboardSummary'); if(!el)return;
+      const completion=buildGoogleSyncCompletionReport().summary;
+      const health=buildGoogleSyncHealthCheck().summary;
+      const tokenReady=!!googleAccessTokenInfo;
+      const completeLevel=completion.readyItems&&completion.completeReadyItems===completion.readyItems?'good':(completion.completeReadyItems?'warn':'bad');
+      const healthLevel=health.totalIssues?'bad':'good';
+      const reviewLevel=completion.needsReview?'warn':'good';
+      el.innerHTML=[
+        `<div class="sync-dashboard-card ${tokenReady?'good':'warn'}"><strong>${tokenReady?'Signed in':'Not signed in'}</strong>Google access</div>`,
+        `<div class="sync-dashboard-card ${completeLevel}"><strong>${completion.completeReadyItems}/${completion.readyItems}</strong>Ready complete</div>`,
+        `<div class="sync-dashboard-card ${healthLevel}"><strong>${health.totalIssues}</strong>Health issues</div>`,
+        `<div class="sync-dashboard-card ${reviewLevel}"><strong>${completion.needsReview}</strong>Need review</div>`
+      ].join('');
     }
     function repairGoogleSyncFlags(){
       const items=getItems(); let changed=0;
@@ -2293,6 +2341,7 @@
     on('clearGoogleApiSetupBtn','onclick',clearGoogleApiSetup);
     on('loadGoogleIdentityBtn','onclick',()=>loadGoogleIdentity().catch(e=>alert(e.message||e)));
     on('requestGoogleAccessBtn','onclick',requestGoogleAccess);
+    on('dashboardGoogleAccessBtn','onclick',requestGoogleAccess);
     on('forgetGoogleAccessBtn','onclick',forgetGoogleAccess);
     on('runGoogleApiProbeBtn','onclick',runGoogleApiProbe);
     on('connectGoogleDriveRootBtn','onclick',connectGoogleDriveRoot);
@@ -2301,11 +2350,13 @@
     on('uploadGoogleDrivePhotosBatchBtn','onclick',uploadGoogleDrivePhotosForNextThreeItems);
     on('googleSyncNextBatchBtn','onclick',syncGoogleNextBatch);
     on('googleSyncAllRemainingBtn','onclick',syncGoogleAllRemaining);
+    on('dashboardSyncAllBtn','onclick',syncGoogleAllRemaining);
     on('refreshGoogleSyncCompletionBtn','onclick',renderGoogleSyncCompletionReport);
     on('exportGoogleSyncCompletionBtn','onclick',exportGoogleSyncCompletionReport);
     on('retryGoogleSyncErrorsBtn','onclick',retryGoogleSyncErrors);
     on('clearGoogleSyncErrorsBtn','onclick',clearGoogleSyncErrors);
     on('refreshGoogleSyncHealthBtn','onclick',renderGoogleSyncHealthCheck);
+    on('dashboardHealthBtn','onclick',()=>{renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();});
     on('repairGoogleSyncFlagsBtn','onclick',repairGoogleSyncFlags);
     on('exportGoogleSyncHealthBtn','onclick',exportGoogleSyncHealthCheck);
     on('connectGoogleSheetBtn','onclick',connectGoogleSheet);
@@ -2415,7 +2466,7 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Storage uploads are written into <b>Storage Location Photo Link</b>.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
     updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderGoogleSyncSettings(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
