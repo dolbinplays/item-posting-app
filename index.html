@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.0036</title>
+  <title>Item Posting Assistant v0.26.05.25.0043</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.0036 · Drive root connect</p>
+      <p class="eyebrow">v0.26.05.25.0043 · Drive item folders</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -329,6 +329,10 @@
           <p class="note">Find or create the configured Drive root folder. This creates only one folder if no matching folder exists.</p>
           <div id="googleDriveRootStatus" class="note"></div>
           <div class="actions"><button id="connectGoogleDriveRootBtn" class="success" type="button">Find or Create Drive Root</button></div>
+          <h3 style="margin-top:16px">Google Drive Item Folders</h3>
+          <p class="note">Create or find item folders under the Drive root for ready items. Limited to the first 3 ready items per run.</p>
+          <div id="googleDriveItemFoldersStatus" class="note"></div>
+          <div class="actions"><button id="connectGoogleDriveItemFoldersBtn" class="success" type="button">Find/Create First 3 Item Folders</button></div>
           <h3 style="margin-top:16px">Google Sync Dry Run</h3>
           <p class="note">This simulates a future Google Sheets + Drive sync without signing in or uploading anything.</p>
           <div id="googleSyncDryRun" class="note"></div>
@@ -428,7 +432,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.0036';
+    const VERSION='v0.26.05.25.0043';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1281,7 +1285,7 @@
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
     const GOOGLE_SYNC_SCHEMA_VERSION='google-sync-schema-v1';
-    function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','future-api-sync'],entities:['googleSyncSettings','googleApiSetup','googleSignInStatus','googleApiProbeStatus','googleDriveRootStatus','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun','googleSyncReadinessGate','googleSyncActionQueue','googleSyncHistory','googleSyncPreflight','googleSyncRunLog'],tokenStorage:'in-memory only for test access tokens; no Google tokens are stored in localStorage or backups'}}
+    function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','future-api-sync'],entities:['googleSyncSettings','googleApiSetup','googleSignInStatus','googleApiProbeStatus','googleDriveRootStatus','googleDriveItemFoldersStatus','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun','googleSyncReadinessGate','googleSyncActionQueue','googleSyncHistory','googleSyncPreflight','googleSyncRunLog'],tokenStorage:'in-memory only for test access tokens; no Google tokens are stored in localStorage or backups'}}
     function googleAuthorizationRequirements(){return{status:'planned-not-requested',noAuthInThisBuild:true,scopes:[{scope:'https://www.googleapis.com/auth/spreadsheets',service:'Google Sheets API',purpose:'Create or update the inventory spreadsheet rows and write Drive links/status columns.'},{scope:'https://www.googleapis.com/auth/drive.file',service:'Google Drive API',purpose:'Create app-managed folders and upload item/storage photos selected or created by this app.'}],plannedOperations:['Sign in with Google after user action','Create or select target Sheet','Create Drive root and item folders','Upload media-backed listing and storage photos','Write folder/photo links and sync status back to the Sheet','Run incremental sync using Item ID and media IDs'],notPlanned:['Read unrelated Drive files','Delete Drive files','Post listings to Facebook','Store Google password']}}
     function defaultGoogleSyncSettings(){return {sheetName:'Item Posting Inventory',driveRootFolder:'Item Posting Assistant',updatedAt:''}}
     function getGoogleSyncSettings(){let s=read(K.googleSyncSettings,defaultGoogleSyncSettings());return {...defaultGoogleSyncSettings(),...(s&&typeof s==='object'?s:{})}}
@@ -1300,6 +1304,7 @@
       if($('requestGoogleAccessBtn'))$('requestGoogleAccessBtn').disabled=!setup.oauthClientId;
       if($('runGoogleApiProbeBtn'))$('runGoogleApiProbeBtn').disabled=!tokenReady;
       if($('connectGoogleDriveRootBtn'))$('connectGoogleDriveRootBtn').disabled=!tokenReady;
+      if($('connectGoogleDriveItemFoldersBtn'))$('connectGoogleDriveItemFoldersBtn').disabled=!tokenReady;
     }
     function renderGoogleApiProbeStatus(message=''){
       const el=$('googleApiProbeStatus'); if(!el)return;
@@ -1310,6 +1315,12 @@
       const el=$('googleDriveRootStatus'); if(!el)return;
       el.innerHTML=message||`<p>Configured Drive root: <b>${escapeHtml(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant')}</b>. Not connected in this page session.</p>`;
       if($('connectGoogleDriveRootBtn'))$('connectGoogleDriveRootBtn').disabled=!googleAccessTokenInfo;
+    }
+    function renderGoogleDriveItemFoldersStatus(message=''){
+      const el=$('googleDriveItemFoldersStatus'); if(!el)return;
+      const ready=buildGoogleSyncReadinessGate().summary.readyForFutureSync;
+      el.innerHTML=message||`<p>Ready item folders available: <b>${ready}</b>. No item folder run in this page session.</p>`;
+      if($('connectGoogleDriveItemFoldersBtn'))$('connectGoogleDriveItemFoldersBtn').disabled=!googleAccessTokenInfo;
     }
     function loadGoogleIdentity(){
       return new Promise((resolve,reject)=>{
@@ -1372,6 +1383,39 @@
         renderGoogleDriveRootStatus(`<p>Drive root <b>${escapeHtml(action)}</b>: <b>${escapeHtml(folder.name)}</b><br>Folder ID: <code>${escapeHtml(folder.id)}</code>${folder.webViewLink?`<br><a href="${escapeHtml(folder.webViewLink)}" target="_blank" rel="noopener">Open folder in Drive</a>`:''}</p>`);
       }catch(e){
         renderGoogleDriveRootStatus(`<p><b>Drive root connection failed:</b> ${escapeHtml(e?.message||e)}</p>`);
+      }
+    }
+    async function findOrCreateDriveFolder(name,parentId=''){
+      const headers={Authorization:`Bearer ${googleAccessTokenInfo.accessToken}`};
+      const safe=String(name||'Untitled folder').trim()||'Untitled folder';
+      const parentClause=parentId?` and '${parentId}' in parents`:'';
+      const q=`name = '${safe.replace(/'/g,"\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false${parentClause}`;
+      const listRes=await fetch('https://www.googleapis.com/drive/v3/files?fields=files(id,name,webViewLink)&spaces=drive&q='+encodeURIComponent(q),{headers});
+      const listData=await listRes.json();
+      if(!listRes.ok)throw new Error(listData.error?.message||listRes.statusText);
+      if(listData.files&&listData.files[0])return {...listData.files[0],action:'found'};
+      const body={name:safe,mimeType:'application/vnd.google-apps.folder'};
+      if(parentId)body.parents=[parentId];
+      const createRes=await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const folder=await createRes.json();
+      if(!createRes.ok)throw new Error(folder.error?.message||createRes.statusText);
+      return {...folder,action:'created'};
+    }
+    async function connectGoogleDriveItemFolders(){
+      if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
+      renderGoogleDriveItemFoldersStatus('<p>Finding Drive root and preparing item folders...</p>');
+      try{
+        const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant');
+        const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index)})).filter(x=>x.readiness.readyForFutureSync).slice(0,3);
+        const results=[];
+        for(const row of ready){
+          const folder=await findOrCreateDriveFolder(row.plan.folder,root.id);
+          results.push({title:row.item.title||'Untitled item',folder});
+        }
+        const rows=results.map(r=>`<li>${escapeHtml(r.title)}: <b>${escapeHtml(r.folder.action)}</b> ${escapeHtml(r.folder.name)}<br><code>${escapeHtml(r.folder.id)}</code></li>`).join('');
+        renderGoogleDriveItemFoldersStatus(`<p>Drive root: <b>${escapeHtml(root.action)}</b> ${escapeHtml(root.name)}. Item folders processed: <b>${results.length}</b>.</p>${rows?`<ol class="drive-path-list">${rows}</ol>`:'<p>No ready item folders to process.</p>'}`);
+      }catch(e){
+        renderGoogleDriveItemFoldersStatus(`<p><b>Item folder connection failed:</b> ${escapeHtml(e?.message||e)}</p>`);
       }
     }
     function driveRootFolder(){return String(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant').trim().replace(/[\\/:*?"<>|]+/g,'-')||'Item Posting Assistant'}
@@ -1799,6 +1843,7 @@
     on('forgetGoogleAccessBtn','onclick',forgetGoogleAccess);
     on('runGoogleApiProbeBtn','onclick',runGoogleApiProbe);
     on('connectGoogleDriveRootBtn','onclick',connectGoogleDriveRoot);
+    on('connectGoogleDriveItemFoldersBtn','onclick',connectGoogleDriveItemFolders);
     on('refreshGoogleSyncDryRunBtn','onclick',renderGoogleSyncDryRun);
     on('exportGoogleSyncDryRunBtn','onclick',exportGoogleSyncDryRun);
     on('exportGoogleSyncQueueBtn','onclick',exportGoogleSyncQueue);
