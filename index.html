@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.24.2145</title>
+  <title>Item Posting Assistant v0.26.05.24.2215</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.24.2145 · Google sync preflight</p>
+      <p class="eyebrow">v0.26.05.24.2215 · Google sign-in scaffold</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -312,6 +312,15 @@
           <label class="small">Target Drive root folder</label><input id="googleDriveRoot" placeholder="Item Posting Assistant">
           <div class="actions"><button id="saveGoogleSyncSettingsBtn" class="success" type="button">Save Sync Settings</button></div>
           <div id="googleSyncReadiness" class="note"></div>
+          <h3 style="margin-top:16px">Future Google API Setup</h3>
+          <p class="note">Save non-secret setup details for a future Google sign-in button. Do not paste passwords or API secrets here.</p>
+          <label class="small">OAuth Client ID</label><input id="googleOAuthClientId" placeholder="1234567890-...apps.googleusercontent.com">
+          <div id="googleApiSetup" class="note"></div>
+          <div class="actions"><button id="saveGoogleApiSetupBtn" class="success" type="button">Save API Setup</button><button id="clearGoogleApiSetupBtn" class="secondary" type="button">Clear API Setup</button></div>
+          <h3 style="margin-top:16px">Google Sign-In Test</h3>
+          <p class="note">This only requests a temporary in-memory access token for the planned Sheets + Drive scopes. It does not upload, edit, or store the token.</p>
+          <div id="googleSignInStatus" class="note"></div>
+          <div class="actions"><button id="loadGoogleIdentityBtn" class="secondary" type="button">Load Google Identity</button><button id="requestGoogleAccessBtn" class="success" type="button">Request Test Access</button><button id="forgetGoogleAccessBtn" class="secondary" type="button">Forget Access Token</button></div>
           <h3 style="margin-top:16px">Google Sync Dry Run</h3>
           <p class="note">This simulates a future Google Sheets + Drive sync without signing in or uploading anything.</p>
           <div id="googleSyncDryRun" class="note"></div>
@@ -330,6 +339,10 @@
           <h3 style="margin-top:16px">Future Google Sync Preflight</h3>
           <p class="note">A final local safety check before any future live Google sync. This does not contact Google.</p>
           <div id="googleSyncPreflight" class="note"></div>
+          <h3 style="margin-top:16px">Future Google Sync Simulation</h3>
+          <p class="note">Run the current action queue locally and save a no-Google execution log. This helps test the future sync flow before live API access exists.</p>
+          <div id="googleSyncSimulation" class="note"></div>
+          <div class="actions"><button id="runGoogleSyncSimulationBtn" class="success" type="button">Run Local Sync Simulation</button><button id="clearGoogleSyncRunLogBtn" class="secondary" type="button">Clear Simulation Log</button></div>
           <h3 style="margin-top:16px">Google Authorization Requirements</h3>
           <p class="note">Planned permissions for a future direct Google Sheets + Drive sync. This build does not sign in, request access, upload files, or store Google tokens.</p>
           <div id="googleAuthRequirements" class="note"></div>
@@ -407,8 +420,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.24.2145';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleSyncHistory:'ipa_google_sync_history',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.05.24.2215';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -1260,10 +1273,49 @@
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
     const GOOGLE_SYNC_SCHEMA_VERSION='google-sync-schema-v1';
-    function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','future-api-sync'],entities:['googleSyncSettings','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun','googleSyncReadinessGate','googleSyncActionQueue','googleSyncHistory','googleSyncPreflight'],tokenStorage:'not implemented; this build stores no Google tokens'}}
+    function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','future-api-sync'],entities:['googleSyncSettings','googleApiSetup','googleSignInStatus','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun','googleSyncReadinessGate','googleSyncActionQueue','googleSyncHistory','googleSyncPreflight','googleSyncRunLog'],tokenStorage:'in-memory only for test access tokens; no Google tokens are stored in localStorage or backups'}}
     function googleAuthorizationRequirements(){return{status:'planned-not-requested',noAuthInThisBuild:true,scopes:[{scope:'https://www.googleapis.com/auth/spreadsheets',service:'Google Sheets API',purpose:'Create or update the inventory spreadsheet rows and write Drive links/status columns.'},{scope:'https://www.googleapis.com/auth/drive.file',service:'Google Drive API',purpose:'Create app-managed folders and upload item/storage photos selected or created by this app.'}],plannedOperations:['Sign in with Google after user action','Create or select target Sheet','Create Drive root and item folders','Upload media-backed listing and storage photos','Write folder/photo links and sync status back to the Sheet','Run incremental sync using Item ID and media IDs'],notPlanned:['Read unrelated Drive files','Delete Drive files','Post listings to Facebook','Store Google password']}}
     function defaultGoogleSyncSettings(){return {sheetName:'Item Posting Inventory',driveRootFolder:'Item Posting Assistant',updatedAt:''}}
     function getGoogleSyncSettings(){let s=read(K.googleSyncSettings,defaultGoogleSyncSettings());return {...defaultGoogleSyncSettings(),...(s&&typeof s==='object'?s:{})}}
+    function defaultGoogleApiSetup(){return {oauthClientId:'',authorizedOrigin:'',updatedAt:''}}
+    function getGoogleApiSetup(){let s=read(K.googleApiSetup,defaultGoogleApiSetup());return {...defaultGoogleApiSetup(),...(s&&typeof s==='object'?s:{})}}
+    function currentGoogleAuthorizedOrigin(){try{return location.origin&&location.origin!=='null'?location.origin:'file:// local file'}catch{return 'unknown'}}
+    function setGoogleApiSetup(v){let next={oauthClientId:String(v.oauthClientId||'').trim(),authorizedOrigin:currentGoogleAuthorizedOrigin(),updatedAt:new Date().toISOString()};if(safeWrite(K.googleApiSetup,next)){renderGoogleApiSetup();refreshBackupViews();return true}return false}
+    function clearGoogleApiSetup(){if(!confirm('Clear saved Google API setup details?'))return;if(safeWrite(K.googleApiSetup,defaultGoogleApiSetup())){renderGoogleApiSetup();refreshBackupViews()}}
+    let googleTokenClient=null, googleAccessTokenInfo=null;
+    function googleSyncScopes(){return googleAuthorizationRequirements().scopes.map(s=>s.scope).join(' ')}
+    function renderGoogleSignInStatus(message=''){
+      const el=$('googleSignInStatus'); if(!el)return;
+      const setup=getGoogleApiSetup(), gisReady=!!(window.google&&google.accounts&&google.accounts.oauth2);
+      const tokenReady=!!googleAccessTokenInfo;
+      el.innerHTML=`<p>Client ID: <b>${setup.oauthClientId?'Saved':'Missing'}</b> · Google Identity: <b>${gisReady?'Loaded':'Not loaded'}</b> · Access token: <b>${tokenReady?'In memory':'None'}</b>${message?`<br>${escapeHtml(message)}`:''}</p><p>Scopes: <code>${escapeHtml(googleSyncScopes())}</code></p>`;
+      if($('requestGoogleAccessBtn'))$('requestGoogleAccessBtn').disabled=!setup.oauthClientId;
+    }
+    function loadGoogleIdentity(){
+      return new Promise((resolve,reject)=>{
+        if(window.google&&google.accounts&&google.accounts.oauth2){renderGoogleSignInStatus('Google Identity already loaded.');resolve();return}
+        let existing=document.querySelector('script[data-google-identity]');
+        if(existing){existing.addEventListener('load',()=>{renderGoogleSignInStatus('Google Identity loaded.');resolve()},{once:true});existing.addEventListener('error',()=>reject(new Error('Google Identity failed to load.')),{once:true});return}
+        const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.defer=true;s.dataset.googleIdentity='true';
+        s.onload=()=>{renderGoogleSignInStatus('Google Identity loaded.');resolve()};
+        s.onerror=()=>{renderGoogleSignInStatus('Google Identity could not load.');reject(new Error('Google Identity failed to load.'))};
+        document.head.appendChild(s);
+      });
+    }
+    async function requestGoogleAccess(){
+      const setup=getGoogleApiSetup();
+      if(!setup.oauthClientId){alert('Save a Google OAuth Client ID first.');return}
+      try{
+        await loadGoogleIdentity();
+        googleTokenClient=google.accounts.oauth2.initTokenClient({client_id:setup.oauthClientId,scope:googleSyncScopes(),callback:(response)=>{
+          if(response.error){googleAccessTokenInfo=null;renderGoogleSignInStatus(`Access request failed: ${response.error}`);return}
+          googleAccessTokenInfo={grantedAt:new Date().toISOString(),expiresIn:response.expires_in||'',scope:response.scope||googleSyncScopes(),tokenType:response.token_type||'Bearer',accessToken:response.access_token};
+          renderGoogleSignInStatus('Temporary access token granted and held in memory only.');
+        },error_callback:(err)=>{googleAccessTokenInfo=null;renderGoogleSignInStatus(`Access popup failed: ${err?.type||'unknown error'}`)}});
+        googleTokenClient.requestAccessToken({prompt:'consent'});
+      }catch(e){alert('Could not start Google sign-in: '+(e?.message||e))}
+    }
+    function forgetGoogleAccess(){googleAccessTokenInfo=null;renderGoogleSignInStatus('Temporary access token forgotten.')}
     function driveRootFolder(){return String(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant').trim().replace(/[\\/:*?"<>|]+/g,'-')||'Item Posting Assistant'}
     function suggestedDrivePath(...parts){return [driveRootFolder(),...parts].filter(Boolean).join('/')}
     function setGoogleSyncSettings(v){let next={sheetName:String(v.sheetName||'').trim()||'Item Posting Inventory',driveRootFolder:String(v.driveRootFolder||'').trim()||'Item Posting Assistant',updatedAt:new Date().toISOString()};if(safeWrite(K.googleSyncSettings,next)){renderGoogleSyncSettings();refreshBackupViews();return true}return false}
@@ -1364,6 +1416,7 @@
       if(current.summary.thumbnailOnlyPhotos)blockers.push(`${current.summary.thumbnailOnlyPhotos} thumbnail-only photo(s)`);
       const warnings=[];
       if(!history.length)warnings.push('No saved planned run history yet');
+      if(!getGoogleApiSetup().oauthClientId)warnings.push('OAuth Client ID not configured for future live sign-in');
       if(comparison.hasPrevious&&comparison.changed)warnings.push(`Plan changed since latest saved run: ${comparison.message}`);
       return {version:VERSION,generatedAt:new Date().toISOString(),status:blockers.length?'blocked':warnings.length?'review':'ready',blockers,warnings,currentPlan:current.summary,comparison};
     }
@@ -1374,6 +1427,27 @@
       const warnings=p.warnings.length?`<p><b>Review notes</b></p><ol class="drive-path-list">${p.warnings.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol>`:'';
       el.innerHTML=`<p><span class="readiness-pill ${level}">${escapeHtml(p.status.toUpperCase())}</span> Current plan: <b>${p.currentPlan.readyItems}</b> ready / <b>${p.currentPlan.heldItems}</b> held · <b>${p.currentPlan.totalActions}</b> actions · <b>${p.currentPlan.mediaUploads}</b> media uploads</p>${blockers}${warnings}`;
     }
+    function getGoogleSyncRunLog(){let h=read(K.googleSyncRunLog,[]);return Array.isArray(h)?h:[]}
+    function buildGoogleSyncSimulationRun(){
+      const preflight=buildGoogleSyncPreflight(), queue=buildGoogleSyncActionQueue();
+      const actions=queue.items.flatMap(item=>item.actions.map(action=>({itemId:item.itemId,title:item.title,type:action.type,target:action.target,status:preflight.status==='blocked'?'held':'simulated-ok'})));
+      return {id:`sync-sim-${Date.now()}`,version:VERSION,ranAt:new Date().toISOString(),mode:'local-simulation-no-google-api-calls',status:preflight.status==='blocked'?'held':'simulated',preflightStatus:preflight.status,blockers:preflight.blockers,warnings:preflight.warnings,summary:{itemsScanned:queue.summary.itemsScanned,readyItems:queue.summary.readyItems,heldItems:queue.summary.heldItems,totalActions:actions.length,simulatedActions:actions.filter(a=>a.status==='simulated-ok').length,heldActions:actions.filter(a=>a.status==='held').length},actions};
+    }
+    function runGoogleSyncSimulation(){
+      const log=getGoogleSyncRunLog(), run=buildGoogleSyncSimulationRun();
+      if(safeWrite(K.googleSyncRunLog,[run,...log].slice(0,12))){renderGoogleSyncSimulation();alert(run.status==='held'?'Simulation held by preflight blockers.':'Local sync simulation saved.')}
+    }
+    function clearGoogleSyncRunLog(){
+      if(!confirm('Clear saved Google sync simulation log?'))return;
+      if(safeWrite(K.googleSyncRunLog,[]))renderGoogleSyncSimulation();
+    }
+    function renderGoogleSyncSimulation(){
+      const el=$('googleSyncSimulation'); if(!el)return;
+      const current=buildGoogleSyncSimulationRun(), log=getGoogleSyncRunLog(), latest=log[0];
+      const level=current.status==='held'?'warn':'ok';
+      const rows=log.slice(0,5).map(run=>`<tr><td>${escapeHtml(new Date(run.ranAt).toLocaleString())}</td><td>${escapeHtml(run.status)}</td><td>${run.summary.simulatedActions} simulated / ${run.summary.heldActions} held</td><td>${run.summary.readyItems} ready / ${run.summary.heldItems} held</td></tr>`).join('');
+      el.innerHTML=`<p><span class="readiness-pill ${level}">${escapeHtml(current.status.toUpperCase())}</span> Current simulation would process <b>${current.summary.simulatedActions}</b> action(s) and hold <b>${current.summary.heldActions}</b>.</p>${latest?`<p>Latest saved simulation: <b>${escapeHtml(new Date(latest.ranAt).toLocaleString())}</b> · ${escapeHtml(latest.status)}</p>`:'<div class="empty-state">No saved local sync simulations yet.</div>'}${rows?`<table class="backup-table"><thead><tr><th>Ran</th><th>Status</th><th>Actions</th><th>Items</th></tr></thead><tbody>${rows}</tbody></table>`:''}`;
+    }
     function renderGoogleAuthRequirements(){
       const el=$('googleAuthRequirements'); if(!el)return;
       const req=googleAuthorizationRequirements(), schema=googleSyncSchema();
@@ -1381,6 +1455,14 @@
       const operations=req.plannedOperations.map(x=>`<li>${escapeHtml(x)}</li>`).join('');
       const limits=req.notPlanned.map(x=>`<li>${escapeHtml(x)}</li>`).join('');
       el.innerHTML=`<p>Schema: <b>${escapeHtml(schema.schemaVersion)}</b> Â· Authorization status: <b>planned only</b></p><table class="backup-table"><thead><tr><th>Scope</th><th>Service</th><th>Purpose</th></tr></thead><tbody>${scopes}</tbody></table><p><b>Planned operations</b></p><ol class="drive-path-list">${operations}</ol><p><b>Not planned</b></p><ol class="drive-path-list">${limits}</ol>`;
+    }
+    function renderGoogleApiSetup(){
+      const setup=getGoogleApiSetup(), origin=currentGoogleAuthorizedOrigin();
+      if($('googleOAuthClientId'))$('googleOAuthClientId').value=setup.oauthClientId||'';
+      const el=$('googleApiSetup'); if(!el)return;
+      const status=setup.oauthClientId?'Saved for future sign-in':'Needs OAuth Client ID before live sign-in';
+      el.innerHTML=`<p>Status: <b>${escapeHtml(status)}</b><br>Authorized JavaScript origin to configure later: <code>${escapeHtml(origin)}</code><br>Stored client ID: <b>${setup.oauthClientId?'Yes':'No'}</b></p>`;
+      renderGoogleSignInStatus();
     }
     function renderGoogleSyncSettings(){
       const settings=getGoogleSyncSettings();
@@ -1390,7 +1472,8 @@
       if($('googleSyncReadiness'))$('googleSyncReadiness').innerHTML=`Future sync target: <b>${escapeHtml(s.settings.sheetName)}</b> sheet · <b>${escapeHtml(s.settings.driveRootFolder)}</b> Drive root<br>Ready items: <b>${s.readyItems}</b> · Need review: <b>${s.needsAttentionItems}</b> · Manual Drive complete: <b>${s.driveCompleteItems}</b> of <b>${s.itemCount}</b>`;
     }
     function saveGoogleSyncSettingsFromForm(){if(setGoogleSyncSettings({sheetName:$('googleSheetName')?.value,driveRootFolder:$('googleDriveRoot')?.value}))alert('Google sync settings saved.')}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncHistory:getGoogleSyncHistory(),googleSyncPreflight:buildGoogleSyncPreflight(),googleSyncSettings:getGoogleSyncSettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
+    function saveGoogleApiSetupFromForm(){if(setGoogleApiSetup({oauthClientId:$('googleOAuthClientId')?.value}))alert('Google API setup saved.')}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncHistory:getGoogleSyncHistory(),googleSyncPreflight:buildGoogleSyncPreflight(),googleSyncRunLog:getGoogleSyncRunLog(),googleSyncSettings:getGoogleSyncSettings(),googleApiSetup:getGoogleApiSetup(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
@@ -1566,7 +1649,7 @@
       plan.totalSuggestedFileCount=plan.listingPhotoCount+plan.storagePhotoCount;
       return plan;
     }
-    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const readiness=googleSyncReadinessSummary(items);const readinessGate=buildGoogleSyncReadinessGate(items);const actionQueue=buildGoogleSyncActionQueue(items);const syncHistory=getGoogleSyncHistory();const preflight=buildGoogleSyncPreflight();const dryRun=buildGoogleSyncDryRun();return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:readinessGate,googleSyncActionQueue:actionQueue,googleSyncHistory:syncHistory,googleSyncPreflight:preflight,googleSyncSettings,googleSyncReadiness:readiness,googleSyncDryRun:dryRun,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',futureGoogleSyncReadiness:googleSyncItemReadiness(item,index),driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:suggestedDrivePath(plan.folder,`${plan.folder}-storage-location.jpg`),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
+    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const googleApiSetup=getGoogleApiSetup();const readiness=googleSyncReadinessSummary(items);const readinessGate=buildGoogleSyncReadinessGate(items);const actionQueue=buildGoogleSyncActionQueue(items);const syncHistory=getGoogleSyncHistory();const preflight=buildGoogleSyncPreflight();const syncRunLog=getGoogleSyncRunLog();const dryRun=buildGoogleSyncDryRun();return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:readinessGate,googleSyncActionQueue:actionQueue,googleSyncHistory:syncHistory,googleSyncPreflight:preflight,googleSyncRunLog:syncRunLog,googleSyncSettings,googleApiSetup,googleSyncReadiness:readiness,googleSyncDryRun:dryRun,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',futureGoogleSyncReadiness:googleSyncItemReadiness(item,index),driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:suggestedDrivePath(plan.folder,`${plan.folder}-storage-location.jpg`),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
     function buildSheetsDriveRows(){
       let rows=[['Google Sheet Target','Drive Root Target','Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Drive Upload Action','Drive Sync Status','Drive Folder Created','Listing Photos Uploaded','Storage Photo Uploaded','CSV Links Pasted','Suggested Drive Folder Name','Suggested Drive Path','Drive Folder Link','Listing Photo Media Status','Storage Photo Media Status','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Suggested Photo Drive Paths','Storage Location Photo Suggested Filename','Storage Location Photo Suggested Path','Facebook Title','Facebook Description','Pickup Notes']];
       const gs=getGoogleSyncSettings();
@@ -1641,7 +1724,7 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-media-aware-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-aware-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=async()=>{try{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=true; if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building media-aware rebuild backup from IndexedDB/full-photo sources...'; const html=await buildRebuildHtmlMediaAware(); download(`item-posting-media-aware-rebuild-backup-${VERSION}.html`,html,'text/html'); if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media-aware rebuild backup exported.';}catch(e){alert('Could not export media-aware rebuild backup: '+(e?.message||e)); console.error(e)}finally{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=false;}};
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderGoogleSyncSettings();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderGoogleSyncSettings();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
     if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
     if($('restoreSelectedMediaBtn'))$('restoreSelectedMediaBtn').onclick=restoreSelectedItemFullPhotosFromMediaLibrary;
@@ -1651,11 +1734,18 @@
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
     if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
     on('saveGoogleSyncSettingsBtn','onclick',saveGoogleSyncSettingsFromForm);
+    on('saveGoogleApiSetupBtn','onclick',saveGoogleApiSetupFromForm);
+    on('clearGoogleApiSetupBtn','onclick',clearGoogleApiSetup);
+    on('loadGoogleIdentityBtn','onclick',()=>loadGoogleIdentity().catch(e=>alert(e.message||e)));
+    on('requestGoogleAccessBtn','onclick',requestGoogleAccess);
+    on('forgetGoogleAccessBtn','onclick',forgetGoogleAccess);
     on('refreshGoogleSyncDryRunBtn','onclick',renderGoogleSyncDryRun);
     on('exportGoogleSyncDryRunBtn','onclick',exportGoogleSyncDryRun);
     on('exportGoogleSyncQueueBtn','onclick',exportGoogleSyncQueue);
     on('saveGoogleSyncSnapshotBtn','onclick',saveGoogleSyncSnapshot);
     on('clearGoogleSyncHistoryBtn','onclick',clearGoogleSyncHistory);
+    on('runGoogleSyncSimulationBtn','onclick',runGoogleSyncSimulation);
+    on('clearGoogleSyncRunLogBtn','onclick',clearGoogleSyncRunLog);
     on('exportSelectedDriveChecklistBtn','onclick',exportSelectedDriveChecklist);
     on('clearTempCapturesBtn','onclick',clearTemporaryCaptures);
     on('clearSavedSessionsBtn','onclick',clearSavedSessions);
@@ -1751,10 +1841,10 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong><code>${escapeHtml(plan.drivePath)}</code></div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleApiSetup();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderGoogleSyncSettings(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderGoogleSyncSettings(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
