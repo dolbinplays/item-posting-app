@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.0111</title>
+  <title>Item Posting Assistant v0.26.05.25.0117</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.0111 · Sheets ready rows</p>
+      <p class="eyebrow">v0.26.05.25.0117 · Drive folder batches</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -330,9 +330,9 @@
           <div id="googleDriveRootStatus" class="note"></div>
           <div class="actions"><button id="connectGoogleDriveRootBtn" class="success" type="button">Find or Create Drive Root</button></div>
           <h3 style="margin-top:16px">Google Drive Item Folders</h3>
-          <p class="note">Create or find item folders under the Drive root for ready items. Limited to the first 3 ready items per run.</p>
+          <p class="note">Create or find item folders under the Drive root for ready items. Each run processes the next 3 ready items that do not already have folder links.</p>
           <div id="googleDriveItemFoldersStatus" class="note"></div>
-          <div class="actions"><button id="connectGoogleDriveItemFoldersBtn" class="success" type="button">Find/Create First 3 Item Folders</button></div>
+          <div class="actions"><button id="connectGoogleDriveItemFoldersBtn" class="success" type="button">Find/Create Next 3 Item Folders</button></div>
           <h3 style="margin-top:16px">Google Sheet Index</h3>
           <p class="note">Find or create the configured Google Sheet and write the CSV header row only. Inventory rows are not written in this stage.</p>
           <div id="googleSheetStatus" class="note"></div>
@@ -440,7 +440,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.0111';
+    const VERSION='v0.26.05.25.0117';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1428,7 +1428,7 @@
       renderGoogleDriveItemFoldersStatus('<p>Finding Drive root and preparing item folders...</p>');
       try{
         const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant');
-        const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index)})).filter(x=>x.readiness.readyForFutureSync).slice(0,3);
+        const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).slice(0,3);
         const results=[];
         const allItems=getItems();
         for(const row of ready){
@@ -1448,7 +1448,8 @@
         }
         if(results.length)setItems(allItems);
         const rows=results.map(r=>`<li>${escapeHtml(r.title)}: <b>${escapeHtml(r.folder.action)}</b> ${escapeHtml(r.folder.name)}<br><code>${escapeHtml(r.folder.id)}</code></li>`).join('');
-        renderGoogleDriveItemFoldersStatus(`<p>Drive root: <b>${escapeHtml(root.action)}</b> ${escapeHtml(root.name)}. Item folders processed: <b>${results.length}</b>.</p>${rows?`<ol class="drive-path-list">${rows}</ol>`:'<p>No ready item folders to process.</p>'}`);
+        const remaining=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).length;
+        renderGoogleDriveItemFoldersStatus(`<p>Drive root: <b>${escapeHtml(root.action)}</b> ${escapeHtml(root.name)}. Item folders processed: <b>${results.length}</b>. Remaining ready items without links: <b>${remaining}</b>.</p>${rows?`<ol class="drive-path-list">${rows}</ol>`:'<p>No ready item folders to process.</p>'}`);
       }catch(e){
         renderGoogleDriveItemFoldersStatus(`<p><b>Item folder connection failed:</b> ${escapeHtml(e?.message||e)}</p>`);
       }
