@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.1216</title>
+  <title>Item Posting Assistant v0.26.05.25.1256</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -101,6 +101,12 @@
     details.sync-advanced{margin-top:16px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.28);padding:12px}
     details.sync-advanced>summary{cursor:pointer;font-weight:950;color:#bae6fd;list-style:none}
     details.sync-advanced>summary::-webkit-details-marker{display:none}
+    .backup-group{margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.24)}
+    .backup-group h3{margin-bottom:8px}
+    .backup-group.emphasis{border-color:rgba(34,197,94,.34);background:rgba(34,197,94,.07)}
+    details.backup-tools{margin-top:16px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.24);padding:12px}
+    details.backup-tools>summary{cursor:pointer;font-weight:950;color:#bae6fd;list-style:none}
+    details.backup-tools>summary::-webkit-details-marker{display:none}
     .drive-path-list{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:.86rem;line-height:1.45}
     .drive-checklist{display:grid;gap:10px;margin-top:10px}
     .drive-check-card{background:rgba(2,6,23,.42);border:1px solid var(--border);border-radius:14px;padding:11px}
@@ -122,7 +128,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.1216 · Sync visual polish</p>
+      <p class="eyebrow">v0.26.05.25.1256 · Backup labels polish</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -320,15 +326,15 @@
     <section id="backup" class="screen">
       <div class="grid two">
         <div class="card">
-          <h2>Export / Backup</h2>
-          <p class="note">Use these before installing a new patch, clearing browser data, or moving your inventory records to another device.</p>
+          <h2>Sync & Backup</h2>
+          <p class="note">Keep Google Drive, Google Sheets, and local recovery files up to date from one place.</p>
           <div class="sync-dashboard">
             <h3>Google Sync</h3>
             <p class="note">The usual path is simple: sign in, sync everything, then check health. Detailed setup and troubleshooting tools are still available below.</p>
             <div id="googleSyncDashboardSummary" class="sync-dashboard-summary"></div>
             <div class="actions">
               <button id="dashboardGoogleAccessBtn" class="success" type="button">Sign In to Google</button>
-              <button id="dashboardSyncAllBtn" class="success" type="button">Sync Everything</button>
+              <button id="dashboardSyncAllBtn" class="success" type="button">Back Up to Google</button>
               <button id="dashboardHealthBtn" class="secondary" type="button">Check Sync Health</button>
             </div>
           </div>
@@ -411,15 +417,21 @@
           <p class="note">Planned permissions for a future direct Google Sheets + Drive sync. This build does not sign in, request access, upload files, or store Google tokens.</p>
           <div id="googleAuthRequirements" class="note"></div>
           </details>
+          <div class="backup-group emphasis">
+          <h3>Backup Files</h3>
+          <p class="note">Download recovery files before installing a patch, clearing browser data, or moving inventory to another device.</p>
           <div class="actions">
-            <button id="exportJsonBtn" class="primary">Export Full JSON Backup</button>
-            <button id="exportCsvBtn" class="secondary">Export Basic CSV</button>
-            <button id="exportSheetsDriveCsvBtn" class="secondary">Export Media-Aware Sheets + Drive CSV</button>
-            <button id="exportManifestBtn" class="secondary">Export Media-Aware Manifest JSON</button>
-            <button id="exportRebuildHtmlBtn" class="success">Export Media-Aware Rebuildable HTML Backup</button>
+            <button id="exportJsonBtn" class="primary">Download App Data Backup</button>
+            <button id="exportCsvBtn" class="secondary">Download Basic Spreadsheet CSV</button>
+            <button id="exportSheetsDriveCsvBtn" class="secondary">Download Sheets + Drive CSV</button>
+            <button id="exportManifestBtn" class="secondary">Download Media Manifest</button>
+            <button id="exportRebuildHtmlBtn" class="success">Download Viewable HTML Backup</button>
           </div>
           <p class="note">Google Sheets/Drive support now includes test sign-in, folder creation, Sheet row writing, and cautious one-item photo upload batches. CSV and manifest exports remain available as rebuildable backups.</p>
+          </div>
           <div id="countsBox" class="note"></div>
+          <details class="backup-tools">
+          <summary>Storage and photo library tools</summary>
           <h3 style="margin-top:16px">Storage Usage & Cleanup</h3>
           <p class="note">This prototype stores photos locally in your browser. These tools help recover space before the phone browser hits its storage limit.</p>
           <div class="storage-meter"><div id="storageMeterBar" class="storage-meter-bar"></div></div>
@@ -450,15 +462,21 @@
             </div>
             <p class="note">Copy first, then optimize. Optimize keeps smaller thumbnail previews in inventory records while full-size copies live in IndexedDB media storage.</p><div class="media-migration-note"><b>Safety note:</b> This is still a local-browser storage system. Use <b>Restore Selected Item Photos</b> or <b>Export Selected Item Full Backup</b> when possible. Restoring ALL photos can quickly fill browser storage again.</div>
           </div>
+          </details>
+          <div class="backup-group">
           <h3 style="margin-top:16px">Backup Readiness</h3>
           <p class="note">This checks whether each item has enough saved information to rebuild a listing later.</p>
           <div id="backupReadiness" class="backup-ready-grid"></div>
+          </div>
         </div>
         <div class="card">
-          <h2>Import Backup</h2>
+          <h2>Restore & Review</h2>
+          <div class="backup-group">
+          <h3>Import Backup</h3>
           <input id="importFile" type="file" accept="application/json">
           <div class="actions"><button id="importJsonBtn" class="success">Import Selected Backup</button></div>
           <p class="note">This replaces local prototype data with the JSON backup file you choose. Rebuildable HTML files are for viewing/recovery, not importing yet.</p>
+          </div>
           <h3 style="margin-top:16px">Saved Storage Presets</h3>
           <p class="note">These common storage locations are included in JSON backups and appear as quick-select options while editing items.</p>
           <div id="storagePresetList" class="preset-list"></div>
@@ -485,7 +503,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.1216';
+    const VERSION='v0.26.05.25.1256';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
