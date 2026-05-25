@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.1256</title>
+  <title>Item Posting Assistant v0.26.05.25.1307</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -104,9 +104,9 @@
     .backup-group{margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.24)}
     .backup-group h3{margin-bottom:8px}
     .backup-group.emphasis{border-color:rgba(34,197,94,.34);background:rgba(34,197,94,.07)}
-    details.backup-tools{margin-top:16px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.24);padding:12px}
-    details.backup-tools>summary{cursor:pointer;font-weight:950;color:#bae6fd;list-style:none}
-    details.backup-tools>summary::-webkit-details-marker{display:none}
+    details.backup-tools,details.backup-list{margin-top:16px;border:1px solid var(--border);border-radius:20px;background:rgba(2,6,23,.24);padding:12px}
+    details.backup-tools>summary,details.backup-list>summary{cursor:pointer;font-weight:950;color:#bae6fd;list-style:none}
+    details.backup-tools>summary::-webkit-details-marker,details.backup-list>summary::-webkit-details-marker{display:none}
     .drive-path-list{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:.86rem;line-height:1.45}
     .drive-checklist{display:grid;gap:10px;margin-top:10px}
     .drive-check-card{background:rgba(2,6,23,.42);border:1px solid var(--border);border-radius:14px;padding:11px}
@@ -128,7 +128,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.1256 · Backup labels polish</p>
+      <p class="eyebrow">v0.26.05.25.1307 · Collapsible review lists</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -463,11 +463,12 @@
             <p class="note">Copy first, then optimize. Optimize keeps smaller thumbnail previews in inventory records while full-size copies live in IndexedDB media storage.</p><div class="media-migration-note"><b>Safety note:</b> This is still a local-browser storage system. Use <b>Restore Selected Item Photos</b> or <b>Export Selected Item Full Backup</b> when possible. Restoring ALL photos can quickly fill browser storage again.</div>
           </div>
           </details>
-          <div class="backup-group">
+          <details class="backup-list">
+          <summary>Backup readiness details</summary>
           <h3 style="margin-top:16px">Backup Readiness</h3>
           <p class="note">This checks whether each item has enough saved information to rebuild a listing later.</p>
           <div id="backupReadiness" class="backup-ready-grid"></div>
-          </div>
+          </details>
         </div>
         <div class="card">
           <h2>Restore & Review</h2>
@@ -477,16 +478,25 @@
           <div class="actions"><button id="importJsonBtn" class="success">Import Selected Backup</button></div>
           <p class="note">This replaces local prototype data with the JSON backup file you choose. Rebuildable HTML files are for viewing/recovery, not importing yet.</p>
           </div>
+          <details class="backup-list">
+          <summary>Saved storage presets</summary>
           <h3 style="margin-top:16px">Saved Storage Presets</h3>
           <p class="note">These common storage locations are included in JSON backups and appear as quick-select options while editing items.</p>
           <div id="storagePresetList" class="preset-list"></div>
+          </details>
+          <details class="backup-list">
+          <summary>Sheets and Drive preview</summary>
           <h3 style="margin-top:16px">Sheets/Drive Preview</h3>
           <p class="note">This preview shows what to upload, where to put it in Drive, and which records are ready, thumbnail-only, local-only, or missing before you export.</p>
           <div id="backupPreview" class="note"></div>
+          </details>
+          <details class="backup-list">
+          <summary>Selected item Drive checklist</summary>
           <h3 style="margin-top:16px">Selected Item Drive Checklist</h3>
           <p class="note">Select an inventory item, then use this compact checklist while manually creating its Drive folder and pasting links back into the CSV.</p>
           <div id="selectedDriveChecklist" class="note"></div>
           <div class="actions"><button id="exportSelectedDriveChecklistBtn" class="secondary" type="button">Export Selected Drive Checklist</button></div>
+          </details>
           <h3 style="margin-top:16px">Recommended Recovery Workflow</h3>
           <ol class="backup-step-list">
             <li>Export Full JSON Backup for app restore.</li>
@@ -503,7 +513,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.1256';
+    const VERSION='v0.26.05.25.1307';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
