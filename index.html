@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.1002</title>
+  <title>Item Posting Assistant v0.26.05.25.1041</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.1002 · Sync completion report</p>
+      <p class="eyebrow">v0.26.05.25.1041 · Sync retry controls</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -344,7 +344,7 @@
           <h3 style="margin-top:16px">Google Sync Completion Report</h3>
           <p class="note">Summarize which ready items are complete, still need folders, still need photo uploads, or still need Sheet link writing.</p>
           <div id="googleSyncCompletionReport" class="note"></div>
-          <div class="actions"><button id="refreshGoogleSyncCompletionBtn" class="secondary" type="button">Refresh Completion Report</button><button id="exportGoogleSyncCompletionBtn" class="secondary" type="button">Export Completion JSON</button></div>
+          <div class="actions"><button id="refreshGoogleSyncCompletionBtn" class="secondary" type="button">Refresh Completion Report</button><button id="exportGoogleSyncCompletionBtn" class="secondary" type="button">Export Completion JSON</button><button id="retryGoogleSyncErrorsBtn" class="success" type="button">Retry Sync Errors</button><button id="clearGoogleSyncErrorsBtn" class="secondary" type="button">Clear Sync Errors</button></div>
           <h3 style="margin-top:16px">Google Sheet Index</h3>
           <p class="note">Find or create the configured Google Sheet and write the CSV header row only. Inventory rows are not written in this stage.</p>
           <div id="googleSheetStatus" class="note"></div>
@@ -452,7 +452,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.1002';
+    const VERSION='v0.26.05.25.1041';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -912,10 +912,26 @@
       ['storagePhotoUploaded','Storage photo uploaded'],
       ['csvLinksPasted','CSV links pasted']
     ];
-    function defaultDriveSync(){return {folderCreated:false,listingPhotosUploaded:false,storagePhotoUploaded:false,csvLinksPasted:false,driveFolderId:'',driveFolderLink:'',driveFolderName:'',listingPhotoLinks:[],storagePhotoLink:'',updatedAt:'',completedAt:''}}
+    function defaultDriveSync(){return {folderCreated:false,listingPhotosUploaded:false,storagePhotoUploaded:false,csvLinksPasted:false,driveFolderId:'',driveFolderLink:'',driveFolderName:'',listingPhotoLinks:[],storagePhotoLink:'',lastSyncError:'',syncErrors:[],updatedAt:'',completedAt:''}}
     function normalizeDriveSync(item){
       const base=defaultDriveSync(), current=item?.driveSync&&typeof item.driveSync==='object'?item.driveSync:{};
       return {...base,...current};
+    }
+    function syncErrorMessage(e){return String(e?.message||e||'Unknown sync error').slice(0,500)}
+    function recordDriveSyncError(sync,step,e){
+      const now=new Date().toISOString(), message=syncErrorMessage(e);
+      sync.lastSyncError=`${step}: ${message}`;
+      sync.syncErrors=Array.isArray(sync.syncErrors)?sync.syncErrors:[];
+      sync.syncErrors.unshift({at:now,step,message});
+      sync.syncErrors=sync.syncErrors.slice(0,10);
+      sync.updatedAt=now;
+      return sync;
+    }
+    function clearDriveSyncErrors(sync){
+      sync.lastSyncError='';
+      sync.syncErrors=[];
+      sync.updatedAt=new Date().toISOString();
+      return sync;
     }
     function driveSyncStatus(item){
       const sync=normalizeDriveSync(item);
@@ -1329,6 +1345,7 @@
       if($('uploadGoogleDrivePhotosBatchBtn'))$('uploadGoogleDrivePhotosBatchBtn').disabled=!tokenReady;
       if($('googleSyncNextBatchBtn'))$('googleSyncNextBatchBtn').disabled=!tokenReady;
       if($('googleSyncAllRemainingBtn'))$('googleSyncAllRemainingBtn').disabled=!tokenReady;
+      if($('retryGoogleSyncErrorsBtn'))$('retryGoogleSyncErrorsBtn').disabled=!tokenReady;
       if($('connectGoogleSheetBtn'))$('connectGoogleSheetBtn').disabled=!tokenReady;
       if($('writeGoogleSheetRowsBtn'))$('writeGoogleSheetRowsBtn').disabled=!tokenReady;
       if($('writeAllGoogleSheetRowsBtn'))$('writeAllGoogleSheetRowsBtn').disabled=!tokenReady;
@@ -1364,6 +1381,7 @@
       el.innerHTML=message||`<p>Next batch ready. Missing folders: <b>${folders}</b>. Folder-backed items needing photo upload: <b>${uploads}</b>.</p>`;
       if($('googleSyncNextBatchBtn'))$('googleSyncNextBatchBtn').disabled=!googleAccessTokenInfo;
       if($('googleSyncAllRemainingBtn'))$('googleSyncAllRemainingBtn').disabled=!googleAccessTokenInfo;
+      if($('retryGoogleSyncErrorsBtn'))$('retryGoogleSyncErrorsBtn').disabled=!googleAccessTokenInfo;
     }
     function renderGoogleSheetStatus(message=''){
       const el=$('googleSheetStatus'); if(!el)return;
@@ -1458,34 +1476,44 @@
     async function processGoogleDriveItemFolders(limit=3){
       const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant');
       const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).slice(0,limit);
-      const results=[];
+      const results=[], failures=[];
       const allItems=getItems();
       for(const row of ready){
-        const folder=await findOrCreateDriveFolder(row.plan.folder,root.id);
-        results.push({title:row.item.title||'Untitled item',folder});
         const target=allItems.find(i=>i.id===row.item.id);
-        if(target){
-          const sync=normalizeDriveSync(target);
-          sync.folderCreated=true;
-          sync.driveFolderId=folder.id||sync.driveFolderId||'';
-          sync.driveFolderLink=folder.webViewLink||sync.driveFolderLink||'';
-          sync.driveFolderName=folder.name||sync.driveFolderName||row.plan.folder;
-          sync.updatedAt=new Date().toISOString();
-          target.driveSync=sync;
-          target.updatedAt=sync.updatedAt;
+        try{
+          const folder=await findOrCreateDriveFolder(row.plan.folder,root.id);
+          results.push({title:row.item.title||'Untitled item',folder});
+          if(target){
+            const sync=clearDriveSyncErrors(normalizeDriveSync(target));
+            sync.folderCreated=true;
+            sync.driveFolderId=folder.id||sync.driveFolderId||'';
+            sync.driveFolderLink=folder.webViewLink||sync.driveFolderLink||'';
+            sync.driveFolderName=folder.name||sync.driveFolderName||row.plan.folder;
+            sync.updatedAt=new Date().toISOString();
+            target.driveSync=sync;
+            target.updatedAt=sync.updatedAt;
+          }
+        }catch(e){
+          failures.push({title:row.item.title||'Untitled item',step:'folder',message:syncErrorMessage(e)});
+          if(target){
+            const sync=recordDriveSyncError(normalizeDriveSync(target),'folder',e);
+            target.driveSync=sync;
+            target.updatedAt=sync.updatedAt;
+          }
         }
       }
-      if(results.length)setItems(allItems);
+      if(results.length||failures.length)setItems(allItems);
       const remaining=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).length;
-      return {root,results,remaining};
+      return {root,results,failures,remaining};
     }
     async function connectGoogleDriveItemFolders(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
       renderGoogleDriveItemFoldersStatus('<p>Finding Drive root and preparing item folders...</p>');
       try{
-        const {root,results,remaining}=await processGoogleDriveItemFolders(3);
+        const {root,results,failures,remaining}=await processGoogleDriveItemFolders(3);
         const rows=results.map(r=>`<li>${escapeHtml(r.title)}: <b>${escapeHtml(r.folder.action)}</b> ${escapeHtml(r.folder.name)}<br><code>${escapeHtml(r.folder.id)}</code></li>`).join('');
-        renderGoogleDriveItemFoldersStatus(`<p>Drive root: <b>${escapeHtml(root.action)}</b> ${escapeHtml(root.name)}. Item folders processed: <b>${results.length}</b>. Remaining ready items without links: <b>${remaining}</b>.</p>${rows?`<ol class="drive-path-list">${rows}</ol>`:'<p>No ready item folders to process.</p>'}`);
+        const failureRows=failures.map(f=>`<li>${escapeHtml(f.title)}: ${escapeHtml(f.message)}</li>`).join('');
+        renderGoogleDriveItemFoldersStatus(`<p>Drive root: <b>${escapeHtml(root.action)}</b> ${escapeHtml(root.name)}. Item folders processed: <b>${results.length}</b>. Failures: <b>${failures.length}</b>. Remaining ready items without links: <b>${remaining}</b>.</p>${rows?`<ol class="drive-path-list">${rows}</ol>`:'<p>No ready item folders to process.</p>'}${failureRows?`<p><b>Folder failures</b></p><ol class="drive-path-list">${failureRows}</ol>`:''}`);
         refreshBackupViews();
       }catch(e){
         renderGoogleDriveItemFoldersStatus(`<p><b>Item folder connection failed:</b> ${escapeHtml(e?.message||e)}</p>`);
@@ -1520,48 +1548,55 @@
     async function uploadGoogleDrivePhotosBatch(limit=1){
       const allItems=getItems();
       const rows=allItems.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).slice(0,limit);
-      const itemResults=[];
+      const itemResults=[], failures=[];
       let filesHandled=0, filesUploaded=0, filesFound=0;
       for(const row of rows){
         const target=allItems.find(i=>i.id===row.item.id);
         const sync=normalizeDriveSync(target);
         const uploaded=[];
         sync.listingPhotoLinks=Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks:[];
-        for(let i=0;i<(target.photos||[]).length;i++){
-          if(sync.listingPhotoLinks[i])continue;
-          const blob=await photoBlobForDriveUpload(target.photos[i]);
-          const file=await findOrUploadDriveFile(row.plan.photoFiles[i]||`photo-${i+1}.jpg`,sync.driveFolderId,blob);
-          sync.listingPhotoLinks[i]=file.webViewLink||'';
-          uploaded.push({name:file.name,action:file.action,link:file.webViewLink});
-          filesHandled++;
-          if(file.action==='uploaded')filesUploaded++;
-          if(file.action==='found')filesFound++;
+        try{
+          for(let i=0;i<(target.photos||[]).length;i++){
+            if(sync.listingPhotoLinks[i])continue;
+            const blob=await photoBlobForDriveUpload(target.photos[i]);
+            const file=await findOrUploadDriveFile(row.plan.photoFiles[i]||`photo-${i+1}.jpg`,sync.driveFolderId,blob);
+            sync.listingPhotoLinks[i]=file.webViewLink||'';
+            uploaded.push({name:file.name,action:file.action,link:file.webViewLink});
+            filesHandled++;
+            if(file.action==='uploaded')filesUploaded++;
+            if(file.action==='found')filesFound++;
+          }
+          const storagePhoto=getEffectiveStoragePhoto(target);
+          if(row.plan.storageFile&&storagePhoto&&!sync.storagePhotoLink){
+            const blob=await photoBlobForDriveUpload(storagePhoto);
+            const file=await findOrUploadDriveFile(row.plan.storageFile,sync.driveFolderId,blob);
+            sync.storagePhotoLink=file.webViewLink||'';
+            uploaded.push({name:file.name,action:file.action,link:file.webViewLink});
+            filesHandled++;
+            if(file.action==='uploaded')filesUploaded++;
+            if(file.action==='found')filesFound++;
+          }
+          clearDriveSyncErrors(sync);
+          sync.listingPhotosUploaded=(target.photos||[]).length>0 && (target.photos||[]).every((_,i)=>!!sync.listingPhotoLinks[i]);
+          sync.storagePhotoUploaded=!row.plan.storageFile||!!sync.storagePhotoLink;
+          sync.updatedAt=new Date().toISOString();
+          sync.completedAt=DRIVE_SYNC_STEPS.every(([key])=>!!sync[key])?sync.updatedAt:'';
+          itemResults.push({title:target.title||'Untitled item',files:uploaded});
+        }catch(e){
+          recordDriveSyncError(sync,'photo-upload',e);
+          failures.push({title:target.title||'Untitled item',step:'photo-upload',message:syncErrorMessage(e)});
         }
-        const storagePhoto=getEffectiveStoragePhoto(target);
-        if(row.plan.storageFile&&storagePhoto&&!sync.storagePhotoLink){
-          const blob=await photoBlobForDriveUpload(storagePhoto);
-          const file=await findOrUploadDriveFile(row.plan.storageFile,sync.driveFolderId,blob);
-          sync.storagePhotoLink=file.webViewLink||'';
-          uploaded.push({name:file.name,action:file.action,link:file.webViewLink});
-          filesHandled++;
-          if(file.action==='uploaded')filesUploaded++;
-          if(file.action==='found')filesFound++;
-        }
-        sync.listingPhotosUploaded=(target.photos||[]).length>0 && (target.photos||[]).every((_,i)=>!!sync.listingPhotoLinks[i]);
-        sync.storagePhotoUploaded=!row.plan.storageFile||!!sync.storagePhotoLink;
-        sync.updatedAt=new Date().toISOString();
-        sync.completedAt=DRIVE_SYNC_STEPS.every(([key])=>!!sync[key])?sync.updatedAt:'';
         target.driveSync=sync;
         target.updatedAt=sync.updatedAt;
-        itemResults.push({title:target.title||'Untitled item',files:uploaded});
       }
-      if(itemResults.length)setItems(allItems);
+      if(itemResults.length||failures.length)setItems(allItems);
       const remaining=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).length;
-      return {itemsProcessed:itemResults.length,filesHandled,filesUploaded,filesFound,remaining,itemResults};
+      return {itemsProcessed:itemResults.length,filesHandled,filesUploaded,filesFound,failures,remaining,itemResults};
     }
     function renderPhotoUploadBatchResult(result,label){
       const itemRows=result.itemResults.map(r=>`<li><b>${escapeHtml(r.title)}</b>: ${r.files.length} file${r.files.length===1?'':'s'}${r.files.length?`<ol class="drive-path-list">${r.files.map(f=>`<li><b>${escapeHtml(f.action)}</b> ${escapeHtml(f.name)}${f.link?`<br><a href="${escapeHtml(f.link)}" target="_blank" rel="noopener">Open file</a>`:''}</li>`).join('')}</ol>`:''}</li>`).join('');
-      renderGoogleDrivePhotoUploadStatus(`<p>${escapeHtml(label)} complete. Items processed: <b>${result.itemsProcessed}</b>. Files handled: <b>${result.filesHandled}</b> (${result.filesUploaded} uploaded, ${result.filesFound} found). Remaining ready folder-backed items needing photo upload: <b>${result.remaining}</b>.</p>${itemRows?`<ol class="drive-path-list">${itemRows}</ol>`:'<p>No ready item photos to upload.</p>'}<p class="note">Run <b>Write All Ready Rows</b> afterward to push these Drive photo links into the Sheet.</p>`);
+      const failureRows=(result.failures||[]).map(f=>`<li>${escapeHtml(f.title)}: ${escapeHtml(f.message)}</li>`).join('');
+      renderGoogleDrivePhotoUploadStatus(`<p>${escapeHtml(label)} complete. Items processed: <b>${result.itemsProcessed}</b>. Files handled: <b>${result.filesHandled}</b> (${result.filesUploaded} uploaded, ${result.filesFound} found). Failures: <b>${(result.failures||[]).length}</b>. Remaining ready folder-backed items needing photo upload: <b>${result.remaining}</b>.</p>${itemRows?`<ol class="drive-path-list">${itemRows}</ol>`:'<p>No ready item photos to upload.</p>'}${failureRows?`<p><b>Photo upload failures</b></p><ol class="drive-path-list">${failureRows}</ol>`:''}<p class="note">Run <b>Write All Ready Rows</b> afterward to push these Drive photo links into the Sheet.</p>`);
     }
     async function uploadGoogleDrivePhotosForNextItem(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
@@ -1598,7 +1633,9 @@
         const sheetResult=await writeGoogleSheetRows(Infinity,'all ready rows from sync batch',{throwOnError:true});
         const folderRows=folderResult.results.map(r=>`<li>${escapeHtml(r.title)}: <b>${escapeHtml(r.folder.action)}</b> ${escapeHtml(r.folder.name)}</li>`).join('');
         const photoRows=photoResult.itemResults.map(r=>`<li>${escapeHtml(r.title)}: ${r.files.length} file${r.files.length===1?'':'s'}</li>`).join('');
-        renderGoogleSyncNextBatchStatus(`<p><b>Sync batch complete.</b> Folders processed: <b>${folderResult.results.length}</b>. Photos handled: <b>${photoResult.filesHandled}</b> (${photoResult.filesUploaded} uploaded, ${photoResult.filesFound} found). Sheet rows written: <b>${sheetResult?.rowsWritten||0}</b>.</p>${folderRows?`<p><b>Folders</b></p><ol class="drive-path-list">${folderRows}</ol>`:''}${photoRows?`<p><b>Photos</b></p><ol class="drive-path-list">${photoRows}</ol>`:''}<p class="note">Open Drive and the Sheet to spot-check the uploaded files and link columns.</p>`);
+        const folderFailures=(folderResult.failures||[]).map(f=>`<li>${escapeHtml(f.title)}: ${escapeHtml(f.message)}</li>`).join('');
+        const photoFailures=(photoResult.failures||[]).map(f=>`<li>${escapeHtml(f.title)}: ${escapeHtml(f.message)}</li>`).join('');
+        renderGoogleSyncNextBatchStatus(`<p><b>Sync batch complete.</b> Folders processed: <b>${folderResult.results.length}</b>. Photos handled: <b>${photoResult.filesHandled}</b> (${photoResult.filesUploaded} uploaded, ${photoResult.filesFound} found). Failures: <b>${(folderResult.failures||[]).length+(photoResult.failures||[]).length}</b>. Sheet rows written: <b>${sheetResult?.rowsWritten||0}</b>.</p>${folderRows?`<p><b>Folders</b></p><ol class="drive-path-list">${folderRows}</ol>`:''}${photoRows?`<p><b>Photos</b></p><ol class="drive-path-list">${photoRows}</ol>`:''}${folderFailures||photoFailures?`<p><b>Failures</b></p><ol class="drive-path-list">${folderFailures}${photoFailures}</ol>`:''}<p class="note">Open Drive and the Sheet to spot-check the uploaded files and link columns.</p>`);
         refreshBackupViews();
       }catch(e){
         renderGoogleSyncNextBatchStatus(`<p><b>Sync batch failed:</b> ${escapeHtml(e?.message||e)}</p>`);
@@ -1615,28 +1652,43 @@
     function buildGoogleSyncCompletionReport(){
       const rows=getItems().map((item,index)=>{
         const readiness=googleSyncItemReadiness(item,index), sync=normalizeDriveSync(item), status=driveSyncStatus(item);
-        const missing=[];
+        const missing=[], errors=Array.isArray(sync.syncErrors)?sync.syncErrors:[];
         if(readiness.readyForFutureSync){
           if(!sync.driveFolderLink)missing.push('Drive folder link');
           if(!sync.listingPhotosUploaded)missing.push('Listing photo uploads');
           if(!sync.storagePhotoUploaded)missing.push('Storage photo upload/status');
           if(!sync.csvLinksPasted)missing.push('Sheet link write');
+          if(sync.lastSyncError)missing.push('Sync error');
         }
-        return {itemId:item.id||'',title:item.title||'Untitled item',readyForFutureSync:readiness.readyForFutureSync,readinessStatus:readiness.status,driveSyncStatus:status.label,driveStepsDone:status.done,driveStepsTotal:status.total,complete:readiness.readyForFutureSync&&status.done===status.total,missing,driveFolderLink:sync.driveFolderLink||'',listingPhotoLinks:Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks.filter(Boolean):[],storagePhotoLink:sync.storagePhotoLink||''};
+        return {itemId:item.id||'',title:item.title||'Untitled item',readyForFutureSync:readiness.readyForFutureSync,readinessStatus:readiness.status,driveSyncStatus:status.label,driveStepsDone:status.done,driveStepsTotal:status.total,complete:readiness.readyForFutureSync&&status.done===status.total&&!sync.lastSyncError,missing,lastSyncError:sync.lastSyncError||'',syncErrors:errors,driveFolderLink:sync.driveFolderLink||'',listingPhotoLinks:Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks.filter(Boolean):[],storagePhotoLink:sync.storagePhotoLink||''};
       });
-      return {version:VERSION,generatedAt:new Date().toISOString(),summary:{itemsScanned:rows.length,readyItems:rows.filter(r=>r.readyForFutureSync).length,completeReadyItems:rows.filter(r=>r.complete).length,needsReview:rows.filter(r=>!r.readyForFutureSync).length,readyItemsMissingFolders:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Drive folder link')).length,readyItemsMissingPhotoUploads:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Listing photo uploads')).length,readyItemsMissingSheetWrite:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Sheet link write')).length},items:rows};
+      return {version:VERSION,generatedAt:new Date().toISOString(),summary:{itemsScanned:rows.length,readyItems:rows.filter(r=>r.readyForFutureSync).length,completeReadyItems:rows.filter(r=>r.complete).length,needsReview:rows.filter(r=>!r.readyForFutureSync).length,readyItemsMissingFolders:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Drive folder link')).length,readyItemsMissingPhotoUploads:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Listing photo uploads')).length,readyItemsMissingSheetWrite:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Sheet link write')).length,readyItemsWithSyncErrors:rows.filter(r=>r.readyForFutureSync&&r.lastSyncError).length},items:rows};
     }
     function renderGoogleSyncCompletionReport(){
       const el=$('googleSyncCompletionReport'); if(!el)return;
       const r=buildGoogleSyncCompletionReport();
-      const needs=r.items.filter(i=>i.readyForFutureSync&&!i.complete).slice(0,8).map(i=>`<li>${escapeHtml(i.title)}: ${escapeHtml(i.missing.join(', ')||'In progress')}</li>`).join('');
-      el.innerHTML=`<p>Ready complete: <b>${r.summary.completeReadyItems}</b> of <b>${r.summary.readyItems}</b>. Needs review: <b>${r.summary.needsReview}</b>. Missing folders: <b>${r.summary.readyItemsMissingFolders}</b>. Missing photo uploads: <b>${r.summary.readyItemsMissingPhotoUploads}</b>. Missing Sheet write: <b>${r.summary.readyItemsMissingSheetWrite}</b>.</p>${needs?`<ol class="drive-path-list">${needs}</ol>`:'<p>All ready items are marked complete.</p>'}`;
+      const needs=r.items.filter(i=>i.readyForFutureSync&&!i.complete).slice(0,8).map(i=>`<li>${escapeHtml(i.title)}: ${escapeHtml(i.missing.join(', ')||'In progress')}${i.lastSyncError?`<br><span class="note">${escapeHtml(i.lastSyncError)}</span>`:''}</li>`).join('');
+      el.innerHTML=`<p>Ready complete: <b>${r.summary.completeReadyItems}</b> of <b>${r.summary.readyItems}</b>. Needs review: <b>${r.summary.needsReview}</b>. Missing folders: <b>${r.summary.readyItemsMissingFolders}</b>. Missing photo uploads: <b>${r.summary.readyItemsMissingPhotoUploads}</b>. Missing Sheet write: <b>${r.summary.readyItemsMissingSheetWrite}</b>. Sync errors: <b>${r.summary.readyItemsWithSyncErrors}</b>.</p>${needs?`<ol class="drive-path-list">${needs}</ol>`:'<p>All ready items are marked complete.</p>'}`;
     }
     function exportGoogleSyncCompletionReport(){download(`item-posting-google-sync-completion-${VERSION}.json`,JSON.stringify(buildGoogleSyncCompletionReport(),null,2),'application/json')}
+    function clearGoogleSyncErrors(opts={}){
+      const items=getItems(); let changed=0;
+      items.forEach(item=>{const sync=normalizeDriveSync(item); if(sync.lastSyncError||(Array.isArray(sync.syncErrors)&&sync.syncErrors.length)){clearDriveSyncErrors(sync); item.driveSync=sync; item.updatedAt=sync.updatedAt; changed++;}});
+      if(changed)setItems(items);
+      renderGoogleSyncCompletionReport();
+      if(!opts.silent)alert(`Cleared sync errors for ${changed} item${changed===1?'':'s'}.`);
+      return changed;
+    }
+    async function retryGoogleSyncErrors(){
+      if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
+      const cleared=clearGoogleSyncErrors({silent:true});
+      renderGoogleSyncNextBatchStatus(`<p>Retrying sync errors. Cleared recorded errors for <b>${cleared}</b> item${cleared===1?'':'s'} and starting all-remaining sync...</p>`);
+      await syncGoogleAllRemaining();
+    }
     async function syncGoogleAllRemaining(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
       renderGoogleSyncNextBatchStatus('<p>Starting all-remaining sync...</p>');
-      const totals={batches:0,foldersProcessed:0,filesHandled:0,filesUploaded:0,filesFound:0};
+      const totals={batches:0,foldersProcessed:0,filesHandled:0,filesUploaded:0,filesFound:0,failures:0};
       try{
         for(let pass=1;pass<=25;pass++){
           const before=remainingGoogleSyncWorkCounts();
@@ -1645,18 +1697,20 @@
           renderGoogleSyncNextBatchStatus(`<p>Batch ${pass}: missing folders <b>${before.missingFolders}</b>, photo-upload items <b>${before.photoUploads}</b>. Running folder step...</p>`);
           const folderResult=await processGoogleDriveItemFolders(3);
           totals.foldersProcessed+=folderResult.results.length;
+          totals.failures+=(folderResult.failures||[]).length;
           renderGoogleSyncNextBatchStatus(`<p>Batch ${pass}: folders processed <b>${folderResult.results.length}</b>. Running photo upload step...</p>`);
           const photoResult=await uploadGoogleDrivePhotosBatch(3);
           totals.filesHandled+=photoResult.filesHandled;
           totals.filesUploaded+=photoResult.filesUploaded;
           totals.filesFound+=photoResult.filesFound;
+          totals.failures+=(photoResult.failures||[]).length;
           const after=remainingGoogleSyncWorkCounts();
           if(folderResult.results.length===0&&photoResult.itemsProcessed===0&&after.missingFolders===before.missingFolders&&after.photoUploads===before.photoUploads)break;
         }
-        renderGoogleSyncNextBatchStatus(`<p>Writing final Sheet rows after all-remaining sync. Folders processed: <b>${totals.foldersProcessed}</b>. Files handled: <b>${totals.filesHandled}</b>.</p>`);
+        renderGoogleSyncNextBatchStatus(`<p>Writing final Sheet rows after all-remaining sync. Folders processed: <b>${totals.foldersProcessed}</b>. Files handled: <b>${totals.filesHandled}</b>. Failures: <b>${totals.failures}</b>.</p>`);
         const sheetResult=await writeGoogleSheetRows(Infinity,'all ready rows from all-remaining sync',{throwOnError:true});
         const remaining=remainingGoogleSyncWorkCounts();
-        renderGoogleSyncNextBatchStatus(`<p><b>All-remaining sync complete.</b> Batches run: <b>${totals.batches}</b>. Folders processed: <b>${totals.foldersProcessed}</b>. Files handled: <b>${totals.filesHandled}</b> (${totals.filesUploaded} uploaded, ${totals.filesFound} found). Sheet rows written: <b>${sheetResult?.rowsWritten||0}</b>.</p><p>Remaining missing folders: <b>${remaining.missingFolders}</b>. Remaining folder-backed photo-upload items: <b>${remaining.photoUploads}</b>. Ready rows: <b>${remaining.readyRows}</b>.</p><p class="note">If remaining counts are not zero, one or more items may need review or a repeated sync after Google finishes processing.</p>`);
+        renderGoogleSyncNextBatchStatus(`<p><b>All-remaining sync complete.</b> Batches run: <b>${totals.batches}</b>. Folders processed: <b>${totals.foldersProcessed}</b>. Files handled: <b>${totals.filesHandled}</b> (${totals.filesUploaded} uploaded, ${totals.filesFound} found). Failures: <b>${totals.failures}</b>. Sheet rows written: <b>${sheetResult?.rowsWritten||0}</b>.</p><p>Remaining missing folders: <b>${remaining.missingFolders}</b>. Remaining folder-backed photo-upload items: <b>${remaining.photoUploads}</b>. Ready rows: <b>${remaining.readyRows}</b>.</p><p class="note">If failures or remaining counts are not zero, check the Completion Report and retry after reviewing the listed item.</p>`);
         refreshBackupViews();
       }catch(e){
         renderGoogleSyncNextBatchStatus(`<p><b>All-remaining sync failed:</b> ${escapeHtml(e?.message||e)}</p>`);
@@ -2190,6 +2244,8 @@
     on('googleSyncAllRemainingBtn','onclick',syncGoogleAllRemaining);
     on('refreshGoogleSyncCompletionBtn','onclick',renderGoogleSyncCompletionReport);
     on('exportGoogleSyncCompletionBtn','onclick',exportGoogleSyncCompletionReport);
+    on('retryGoogleSyncErrorsBtn','onclick',retryGoogleSyncErrors);
+    on('clearGoogleSyncErrorsBtn','onclick',clearGoogleSyncErrors);
     on('connectGoogleSheetBtn','onclick',connectGoogleSheet);
     on('writeGoogleSheetRowsBtn','onclick',writeGoogleSheetFirstRows);
     on('writeAllGoogleSheetRowsBtn','onclick',writeAllGoogleSheetReadyRows);
