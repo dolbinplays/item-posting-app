@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.24.1808</title>
+  <title>Item Posting Assistant v0.26.05.24.1817</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.24.1808 · Drive progress tracker</p>
+      <p class="eyebrow">v0.26.05.24.1817 · Google sync readiness</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -306,6 +306,12 @@
         <div class="card">
           <h2>Export / Backup</h2>
           <p class="note">Use these before installing a new patch, clearing browser data, or moving your inventory records to another device.</p>
+          <h3 style="margin-top:8px">Future Google Sync Settings</h3>
+          <p class="note">These names prepare exports for a future direct Google Sheets + Drive sync. They are saved in backups and used for suggested Drive paths.</p>
+          <label class="small">Target Google Sheet name</label><input id="googleSheetName" placeholder="Item Posting Inventory">
+          <label class="small">Target Drive root folder</label><input id="googleDriveRoot" placeholder="Item Posting Assistant">
+          <div class="actions"><button id="saveGoogleSyncSettingsBtn" class="success" type="button">Save Sync Settings</button></div>
+          <div id="googleSyncReadiness" class="note"></div>
           <div class="actions">
             <button id="exportJsonBtn" class="primary">Export Full JSON Backup</button>
             <button id="exportCsvBtn" class="secondary">Export Basic CSV</button>
@@ -380,8 +386,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.24.1808';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.05.24.1817';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -1232,7 +1238,25 @@
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
+    function defaultGoogleSyncSettings(){return {sheetName:'Item Posting Inventory',driveRootFolder:'Item Posting Assistant',updatedAt:''}}
+    function getGoogleSyncSettings(){let s=read(K.googleSyncSettings,defaultGoogleSyncSettings());return {...defaultGoogleSyncSettings(),...(s&&typeof s==='object'?s:{})}}
+    function driveRootFolder(){return String(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant').trim().replace(/[\\/:*?"<>|]+/g,'-')||'Item Posting Assistant'}
+    function suggestedDrivePath(...parts){return [driveRootFolder(),...parts].filter(Boolean).join('/')}
+    function setGoogleSyncSettings(v){let next={sheetName:String(v.sheetName||'').trim()||'Item Posting Inventory',driveRootFolder:String(v.driveRootFolder||'').trim()||'Item Posting Assistant',updatedAt:new Date().toISOString()};if(safeWrite(K.googleSyncSettings,next)){renderGoogleSyncSettings();refreshBackupViews();return true}return false}
+    function googleSyncReadinessSummary(items=getItems()){
+      const settings=getGoogleSyncSettings(), plan=driveUploadPlanSummary(items);
+      const completed=items.filter(i=>driveSyncStatus(i).done===driveSyncStatus(i).total).length;
+      return {settings,itemCount:items.length,readyItems:plan.readyItemCount,needsAttentionItems:plan.needsAttentionItemCount,driveCompleteItems:completed,sheetNameSet:!!String(settings.sheetName||'').trim(),driveRootSet:!!String(settings.driveRootFolder||'').trim()};
+    }
+    function renderGoogleSyncSettings(){
+      const settings=getGoogleSyncSettings();
+      if($('googleSheetName'))$('googleSheetName').value=settings.sheetName||'';
+      if($('googleDriveRoot'))$('googleDriveRoot').value=settings.driveRootFolder||'';
+      const s=googleSyncReadinessSummary();
+      if($('googleSyncReadiness'))$('googleSyncReadiness').innerHTML=`Future sync target: <b>${escapeHtml(s.settings.sheetName)}</b> sheet · <b>${escapeHtml(s.settings.driveRootFolder)}</b> Drive root<br>Ready items: <b>${s.readyItems}</b> · Need review: <b>${s.needsAttentionItems}</b> · Manual Drive complete: <b>${s.driveCompleteItems}</b> of <b>${s.itemCount}</b>`;
+    }
+    function saveGoogleSyncSettingsFromForm(){if(setGoogleSyncSettings({sheetName:$('googleSheetName')?.value,driveRootFolder:$('googleDriveRoot')?.value}))alert('Google sync settings saved.')}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSettings:getGoogleSyncSettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
@@ -1279,7 +1303,7 @@
       const folder=itemFolderName(item,index);
       const photoFiles=(item.photos||[]).map((shot,shotIndex)=>shotFileName(item,index,shot,shotIndex));
       const storageFile=hasPhotoRef(getEffectiveStoragePhoto(item))?`${folder}-storage-location.jpg`:'';
-      return {folder,photoFiles,storageFile,action:driveUploadAction(summary),summary};
+      return {folder,photoFiles,storageFile,drivePath:suggestedDrivePath(folder),action:driveUploadAction(summary),summary};
     }
     function selectedDriveChecklistData(){
       const items=getItems();
@@ -1313,7 +1337,7 @@
       if(!data)return '';
       const {item,plan}=data;
       const lines=[
-        `Item Posting Assistant - Selected Item Drive Checklist`,
+        `${getGoogleSyncSettings().sheetName} - Selected Item Drive Checklist`,
         `Version: ${VERSION}`,
         `Generated: ${new Date().toISOString()}`,
         ``,
@@ -1324,7 +1348,7 @@
         `Drive progress: ${driveSyncStatus(item).label} (${driveSyncStatus(item).done}/${driveSyncStatus(item).total})`,
         ``,
         `1. Create this Google Drive folder:`,
-        `Item Posting Assistant/${plan.folder}`,
+        plan.drivePath,
         ``,
         `2. Upload listing photos with these filenames:`,
         ...(plan.photoFiles.length?plan.photoFiles.map((f,i)=>`${i+1}. ${f}`):['No listing photo filenames yet.']),
@@ -1367,17 +1391,18 @@
       plan.totalSuggestedFileCount=plan.listingPhotoCount+plan.storagePhotoCount;
       return plan;
     }
-    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);return{version:VERSION,exportedAt:new Date().toISOString(),purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',driveUploadPlan:{action:plan.action,suggestedDrivePath:`Item Posting Assistant/${plan.folder}`,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);return {label:shot.label||`Photo ${shotIndex+1}`,fileName:shotFileName(item,index,shot,shotIndex),drivePath:`Item Posting Assistant/${plan.folder}/${shotFileName(item,index,shot,shotIndex)}`,takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:`Item Posting Assistant/${plan.folder}/${plan.folder}-storage-location.jpg`,takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
+    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const readiness=googleSyncReadinessSummary(items);return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSettings,googleSyncReadiness:readiness,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:suggestedDrivePath(plan.folder,`${plan.folder}-storage-location.jpg`),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
     function buildSheetsDriveRows(){
-      let rows=[['Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Drive Upload Action','Drive Sync Status','Drive Folder Created','Listing Photos Uploaded','Storage Photo Uploaded','CSV Links Pasted','Suggested Drive Folder Name','Suggested Drive Path','Drive Folder Link','Listing Photo Media Status','Storage Photo Media Status','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Suggested Photo Drive Paths','Storage Location Photo Suggested Filename','Storage Location Photo Suggested Path','Facebook Title','Facebook Description','Pickup Notes']];
-      getItems().forEach((i,index)=>{let photos=i.photos||[];let plan=itemDrivePlan(i,index);let filenames=plan.photoFiles.join(' | ');let paths=plan.photoFiles.map(f=>`Item Posting Assistant/${plan.folder}/${f}`).join(' | ');let summary=plan.summary;let storageStatus=storagePhotoMediaStatus(i);let syncStatus=driveSyncStatus(i);rows.push([i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,plan.action,syncStatus.label,syncStatus.sync.folderCreated?'Yes':'No',syncStatus.sync.listingPhotosUploaded?'Yes':'No',syncStatus.sync.storagePhotoUploaded?'Yes':'No',syncStatus.sync.csvLinksPasted?'Yes':'No',plan.folder,`Item Posting Assistant/${plan.folder}`,'',summary.labels,storageStatus.label,'','','','','',filenames,paths,plan.storageFile,plan.storageFile?`Item Posting Assistant/${plan.folder}/${plan.storageFile}`:'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
+      let rows=[['Google Sheet Target','Drive Root Target','Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Drive Upload Action','Drive Sync Status','Drive Folder Created','Listing Photos Uploaded','Storage Photo Uploaded','CSV Links Pasted','Suggested Drive Folder Name','Suggested Drive Path','Drive Folder Link','Listing Photo Media Status','Storage Photo Media Status','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Suggested Photo Drive Paths','Storage Location Photo Suggested Filename','Storage Location Photo Suggested Path','Facebook Title','Facebook Description','Pickup Notes']];
+      const gs=getGoogleSyncSettings();
+      getItems().forEach((i,index)=>{let photos=i.photos||[];let plan=itemDrivePlan(i,index);let filenames=plan.photoFiles.join(' | ');let paths=plan.photoFiles.map(f=>suggestedDrivePath(plan.folder,f)).join(' | ');let summary=plan.summary;let storageStatus=storagePhotoMediaStatus(i);let syncStatus=driveSyncStatus(i);rows.push([gs.sheetName||'',gs.driveRootFolder||'',i.createdAt||'',i.id||'',i.title||'',i.brand||'',i.model||'',i.itemType||'',i.color||'',i.dimensions||'',i.material||'',i.testedStatus||'',i.missingParts||'',i.keywords||'',i.condition||'',i.price||'',i.status||'','Facebook Marketplace',i.storage||'',i.category||'',i.accessories||'',i.flaws||'',i.notes||'',String(photos.length),String(summary.mediaBacked),String(summary.thumbnailOnly),String(summary.localOnly),String(summary.missing),summary.readiness,plan.action,syncStatus.label,syncStatus.sync.folderCreated?'Yes':'No',syncStatus.sync.listingPhotosUploaded?'Yes':'No',syncStatus.sync.storagePhotoUploaded?'Yes':'No',syncStatus.sync.csvLinksPasted?'Yes':'No',plan.folder,plan.drivePath,'',summary.labels,storageStatus.label,'','','','','',filenames,paths,plan.storageFile,plan.storageFile?suggestedDrivePath(plan.folder,plan.storageFile):'',i.fbTitle||'',i.fbDescription||'',i.fbPickup||''])});
       return rows
     }
     function buildRebuildHtml(){
       let b=backupObj();
       let esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
       let rows=buildSheetsDriveRows();
-      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[33]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
+      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[4]||'Untitled')}</td><td>${esc(r[35]||'')}</td><td>${esc(r[23]||'0')}</td><td>${esc(r[16]||'')}</td><td>${esc(r[18]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let items=b.items.map((item,index)=>{
         let effectiveStoragePhoto=getEffectiveStoragePhoto(item);
         let storageImg=effectiveStoragePhoto?.dataUrl?`<figure><img src="${effectiveStoragePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
@@ -1402,7 +1427,7 @@
       const itemsData=getItems();
       const esc=s=>String(s??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
       let rows=buildSheetsDriveRows();
-      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[2]||'Untitled')}</td><td>${esc(r[33]||'')}</td><td>${esc(r[21]||'0')}</td><td>${esc(r[14]||'')}</td><td>${esc(r[16]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
+      let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[4]||'Untitled')}</td><td>${esc(r[35]||'')}</td><td>${esc(r[23]||'0')}</td><td>${esc(r[16]||'')}</td><td>${esc(r[18]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let mediaHits=0, fallbackHits=0, missingHits=0;
       let itemSections=[];
       for(let index=0; index<itemsData.length; index++){
@@ -1441,7 +1466,7 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-media-aware-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-aware-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=async()=>{try{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=true; if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building media-aware rebuild backup from IndexedDB/full-photo sources...'; const html=await buildRebuildHtmlMediaAware(); download(`item-posting-media-aware-rebuild-backup-${VERSION}.html`,html,'text/html'); if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media-aware rebuild backup exported.';}catch(e){alert('Could not export media-aware rebuild backup: '+(e?.message||e)); console.error(e)}finally{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=false;}};
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderGoogleSyncSettings();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
     if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
     if($('restoreSelectedMediaBtn'))$('restoreSelectedMediaBtn').onclick=restoreSelectedItemFullPhotosFromMediaLibrary;
@@ -1450,6 +1475,7 @@
     if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
     if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
+    on('saveGoogleSyncSettingsBtn','onclick',saveGoogleSyncSettingsFromForm);
     on('exportSelectedDriveChecklistBtn','onclick',exportSelectedDriveChecklist);
     on('clearTempCapturesBtn','onclick',clearTemporaryCaptures);
     on('clearSavedSessionsBtn','onclick',clearSavedSessions);
@@ -1490,7 +1516,7 @@
       }
     }
 
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p>`}
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Future sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p>`}
     function itemBackupReadiness(item){
       let missing=[];
       if(!(item.photos||[]).length) missing.push('listing photos');
@@ -1520,14 +1546,14 @@
       if(!items.length){el.innerHTML='<div class="empty-state">No inventory items yet. Create an item to preview suggested Drive folder names, photo filenames, and media backup status.</div>';return}
       const planSummary=driveUploadPlanSummary(items);
       const summaryHtml=`<div class="drive-plan-summary"><div class="drive-plan-card"><strong>${planSummary.folderCount}</strong>Drive folders</div><div class="drive-plan-card"><strong>${planSummary.totalSuggestedFileCount}</strong>Suggested files</div><div class="drive-plan-card"><strong>${planSummary.readyItemCount}</strong>Ready items</div><div class="drive-plan-card"><strong>${planSummary.needsAttentionItemCount}</strong>Need review</div></div>`;
-      const pathList=items.slice(-3).reverse().map(item=>{let index=items.indexOf(item), plan=itemDrivePlan(item,index);return `<li><b>${escapeHtml(plan.folder)}</b><br><span class="note">${escapeHtml(plan.action)} · ${plan.photoFiles.length} listing file${plan.photoFiles.length===1?'':'s'}${plan.storageFile?' + storage photo':''}</span></li>`}).join('');
+      const pathList=items.slice(-3).reverse().map(item=>{let index=items.indexOf(item), plan=itemDrivePlan(item,index);return `<li><b>${escapeHtml(plan.folder)}</b><br><span class="note">${escapeHtml(plan.drivePath)}<br>${escapeHtml(plan.action)} · ${plan.photoFiles.length} listing file${plan.photoFiles.length===1?'':'s'}${plan.storageFile?' + storage photo':''}</span></li>`}).join('');
       let rows=items.slice(-5).reverse().map(item=>{
         let index=items.indexOf(item);
         let plan=itemDrivePlan(item,index);
         let summary=plan.summary;
         let files=plan.photoFiles.join('<br>')||'No listing photo filenames yet';
         let storageFile=plan.storageFile||'No storage photo filename yet';
-        return `<tr><td>${escapeHtml(item.title||'Untitled item')}</td><td>${escapeHtml(plan.folder)}<br><span class="note">${escapeHtml('Item Posting Assistant/'+plan.folder)}</span></td><td>${escapeHtml(plan.action)}<br><span class="note">Media: ${summary.mediaBacked} - Thumbnail-only: ${summary.thumbnailOnly} - Local-only: ${summary.localOnly} - Missing: ${summary.missing}</span></td><td>${files}</td><td>${storageFile}<br><span class="note">${escapeHtml(storagePhotoMediaStatus(item).label)}</span></td></tr>`;
+        return `<tr><td>${escapeHtml(item.title||'Untitled item')}</td><td>${escapeHtml(plan.folder)}<br><span class="note">${escapeHtml(plan.drivePath)}</span></td><td>${escapeHtml(plan.action)}<br><span class="note">Media: ${summary.mediaBacked} - Thumbnail-only: ${summary.thumbnailOnly} - Local-only: ${summary.localOnly} - Missing: ${summary.missing}</span></td><td>${files}</td><td>${storageFile}<br><span class="note">${escapeHtml(storagePhotoMediaStatus(item).label)}</span></td></tr>`;
       }).join('');
       el.innerHTML=`${summaryHtml}<ol class="drive-path-list">${pathList}</ol><table class="backup-table"><thead><tr><th>Item</th><th>Suggested Drive Folder</th><th>Upload Action</th><th>Suggested Listing Photo Files</th><th>Storage Photo File</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
@@ -1539,16 +1565,16 @@
       if(!data){el.innerHTML='<div class="empty-state">No inventory item selected. Open Inventory, select an item, then return here.</div>';return}
       const {item,plan}=data;
       const syncStatus=driveSyncStatus(item);
-      const photoList=plan.photoFiles.length?plan.photoFiles.map((f,i)=>`<li>${escapeHtml(f)}<br><span class="note">${escapeHtml('Item Posting Assistant/'+plan.folder+'/'+f)}</span></li>`).join(''):'<li>No listing photo filenames yet.</li>';
-      const storageLine=plan.storageFile?`${escapeHtml(plan.storageFile)}<br><span class="note">${escapeHtml('Item Posting Assistant/'+plan.folder+'/'+plan.storageFile)}</span>`:'No storage photo filename yet.';
+      const photoList=plan.photoFiles.length?plan.photoFiles.map((f,i)=>`<li>${escapeHtml(f)}<br><span class="note">${escapeHtml(suggestedDrivePath(plan.folder,f))}</span></li>`).join(''):'<li>No listing photo filenames yet.</li>';
+      const storageLine=plan.storageFile?`${escapeHtml(plan.storageFile)}<br><span class="note">${escapeHtml(suggestedDrivePath(plan.folder,plan.storageFile))}</span>`:'No storage photo filename yet.';
       const syncSteps=DRIVE_SYNC_STEPS.map(([key,label])=>`<label class="drive-sync-step"><input type="checkbox" data-drive-sync-step="${key}" ${syncStatus.sync[key]?'checked':''}><span><b>${escapeHtml(label)}</b><br>${escapeHtml(key==='folderCreated'?'The Drive folder exists.':key==='listingPhotosUploaded'?'Listing photos are uploaded with the suggested filenames.':key==='storagePhotoUploaded'?'Storage photo is uploaded, or there is no storage photo for this item.':'Drive links have been pasted into the CSV/Sheet columns.')}</span></label>`).join('');
-      el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong><code>${escapeHtml('Item Posting Assistant/'+plan.folder)}</code></div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
+      el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong><code>${escapeHtml(plan.drivePath)}</code></div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Use <b>Storage Location Photo Suggested Path</b> as the storage-photo filename reference.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderGoogleSyncSettings(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
