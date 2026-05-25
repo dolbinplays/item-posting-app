@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.1108</title>
+  <title>Item Posting Assistant v0.26.05.25.1124</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -106,7 +106,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.1108 · Sync health check</p>
+      <p class="eyebrow">v0.26.05.25.1124 · Sync flag repair</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -348,7 +348,7 @@
           <h3 style="margin-top:16px">Google Sync Health Check</h3>
           <p class="note">Verify the local sync record before relying on the Sheet: folder links, photo links, storage links, and any marked-complete inconsistencies.</p>
           <div id="googleSyncHealthCheck" class="note"></div>
-          <div class="actions"><button id="refreshGoogleSyncHealthBtn" class="secondary" type="button">Refresh Health Check</button><button id="exportGoogleSyncHealthBtn" class="secondary" type="button">Export Health JSON</button></div>
+          <div class="actions"><button id="refreshGoogleSyncHealthBtn" class="secondary" type="button">Refresh Health Check</button><button id="repairGoogleSyncFlagsBtn" class="success" type="button">Repair Local Sync Flags</button><button id="exportGoogleSyncHealthBtn" class="secondary" type="button">Export Health JSON</button></div>
           <h3 style="margin-top:16px">Google Sheet Index</h3>
           <p class="note">Find or create the configured Google Sheet and write the CSV header row only. Inventory rows are not written in this stage.</p>
           <div id="googleSheetStatus" class="note"></div>
@@ -456,7 +456,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.1108';
+    const VERSION='v0.26.05.25.1124';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -936,6 +936,13 @@
       sync.syncErrors=[];
       sync.updatedAt=new Date().toISOString();
       return sync;
+    }
+    function driveSyncLinksComplete(item){
+      const sync=normalizeDriveSync(item), plan=itemDrivePlan(item,getItems().findIndex(i=>i.id===item.id));
+      const links=Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks:[];
+      const listingComplete=(item.photos||[]).length>0 && (item.photos||[]).every((_,i)=>!!links[i]);
+      const storageComplete=!plan.storageFile||!!sync.storagePhotoLink;
+      return !!sync.driveFolderLink&&listingComplete&&storageComplete;
     }
     function driveSyncStatus(item){
       const sync=normalizeDriveSync(item);
@@ -1718,6 +1725,24 @@
       const issueRows=r.items.filter(i=>i.readyForFutureSync&&i.issueCount).slice(0,8).map(i=>`<li>${escapeHtml(i.title)}: ${escapeHtml(i.issues.join(', '))}</li>`).join('');
       el.innerHTML=`<p>Healthy ready items: <b>${r.summary.healthyReadyItems}</b> of <b>${r.summary.readyItems}</b>. Ready items with issues: <b>${r.summary.readyItemsWithIssues}</b>. Total issues: <b>${r.summary.totalIssues}</b>.</p>${issueRows?`<ol class="drive-path-list">${issueRows}</ol>`:'<p>No local sync-record issues found for ready items.</p>'}`;
     }
+    function repairGoogleSyncFlags(){
+      const items=getItems(); let changed=0;
+      items.forEach(item=>{
+        const sync=normalizeDriveSync(item), before=JSON.stringify(sync);
+        const links=Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks:[];
+        sync.folderCreated=!!sync.driveFolderLink||!!sync.driveFolderId||!!sync.folderCreated;
+        sync.listingPhotosUploaded=(item.photos||[]).length>0 && (item.photos||[]).every((_,i)=>!!links[i]);
+        const plan=itemDrivePlan(item,items.findIndex(i=>i.id===item.id));
+        sync.storagePhotoUploaded=!plan.storageFile||!!sync.storagePhotoLink;
+        sync.csvLinksPasted=driveSyncLinksComplete(item)&&!!sync.csvLinksPasted;
+        sync.completedAt=DRIVE_SYNC_STEPS.every(([key])=>!!sync[key])?(sync.completedAt||new Date().toISOString()):'';
+        if(JSON.stringify(sync)!==before){sync.updatedAt=new Date().toISOString(); item.driveSync=sync; item.updatedAt=sync.updatedAt; changed++;}
+      });
+      if(changed)setItems(items);
+      renderGoogleSyncCompletionReport();
+      renderGoogleSyncHealthCheck();
+      alert(`Repaired local sync flags for ${changed} item${changed===1?'':'s'}.`);
+    }
     function exportGoogleSyncHealthCheck(){download(`item-posting-google-sync-health-${VERSION}.json`,JSON.stringify(buildGoogleSyncHealthCheck(),null,2),'application/json')}
     async function syncGoogleAllRemaining(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
@@ -1824,7 +1849,7 @@
           items.forEach(item=>{
             if(!writtenIds.has(item.id))return;
             const sync=normalizeDriveSync(item);
-            sync.csvLinksPasted=true;
+            sync.csvLinksPasted=driveSyncLinksComplete(item);
             sync.updatedAt=now;
             sync.completedAt=DRIVE_SYNC_STEPS.every(([key])=>!!sync[key])?now:'';
             item.driveSync=sync;
@@ -2281,6 +2306,7 @@
     on('retryGoogleSyncErrorsBtn','onclick',retryGoogleSyncErrors);
     on('clearGoogleSyncErrorsBtn','onclick',clearGoogleSyncErrors);
     on('refreshGoogleSyncHealthBtn','onclick',renderGoogleSyncHealthCheck);
+    on('repairGoogleSyncFlagsBtn','onclick',repairGoogleSyncFlags);
     on('exportGoogleSyncHealthBtn','onclick',exportGoogleSyncHealthCheck);
     on('connectGoogleSheetBtn','onclick',connectGoogleSheet);
     on('writeGoogleSheetRowsBtn','onclick',writeGoogleSheetFirstRows);
