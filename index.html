@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.26.0915</title>
+  <title>Item Posting Assistant v0.26.05.26.0930</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -313,9 +313,11 @@
       background:linear-gradient(135deg,#020617,#0f172a);
       box-shadow:0 18px 42px rgba(0,0,0,.38),0 0 34px rgba(56,189,248,.14),inset 0 0 0 1px rgba(255,255,255,.05);
     }
+    .camera-preview-wrap{position:relative;border-radius:20px}
+    .camera-preview-wrap video{position:relative;z-index:1}
     .progress,.storage-meter{background:rgba(2,6,23,.72);box-shadow:inset 0 1px 5px rgba(0,0,0,.44),0 0 0 1px rgba(255,255,255,.07)}
     .bar,.storage-meter-bar{box-shadow:0 0 18px rgba(56,189,248,.48)}
-    .countdown{z-index:9999;color:#fff;line-height:1;pointer-events:none;background:radial-gradient(circle,rgba(15,23,42,.88),rgba(2,6,23,.94));text-shadow:0 0 36px rgba(56,189,248,.7),0 4px 20px rgba(0,0,0,.55)}
+    .countdown{position:absolute;inset:0;z-index:4;color:#fff;line-height:1;pointer-events:none;border-radius:20px;background:radial-gradient(circle,rgba(15,23,42,.88),rgba(2,6,23,.94));text-shadow:0 0 36px rgba(56,189,248,.7),0 4px 20px rgba(0,0,0,.55)}
     .shot-card img,.item-card img,.photo-manage-card img,.detail-images img{border-bottom:1px solid rgba(255,255,255,.11);background:#020617}
     .item-card.active{
       outline:0;
@@ -394,7 +396,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.26.0915 · Mobile capture polish</p>
+      <p class="eyebrow">v0.26.05.26.0930 · Preview countdown polish</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -457,7 +459,10 @@
           <h2>Capture Workflow</h2>
           <p class="note" id="capturePresetInfo">Select or save a calibration preset first.</p>
           <label class="small">Session / item name</label><input id="sessionName" placeholder="Example: Blue ceramic vase">
-          <video id="video" playsinline autoplay muted></video>
+          <div class="camera-preview-wrap">
+            <video id="video" playsinline autoplay muted></video>
+            <div id="countdown" class="countdown">3</div>
+          </div>
           <div class="progress" style="margin-top:10px"><div class="bar" id="captureBar"></div></div>
           <p class="note" id="captureStatus">Camera not started.</p>
           <div class="actions camera-primary-row"><button id="startRearBtn" class="primary">Start Camera</button></div>
@@ -478,7 +483,6 @@
         </div>
         <div class="card">
           <h2>Captured Photos</h2>
-          <div id="countdown" class="countdown">3</div>
           <div id="shotsGrid" class="shots"></div>
           <h3 style="margin-top:16px">Saved Sessions</h3><div id="sessionsList"></div>
         </div>
@@ -779,7 +783,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.26.0915';
+    const VERSION='v0.26.05.26.0930';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
