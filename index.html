@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.26.0900</title>
+  <title>Item Posting Assistant v0.26.05.26.0915</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -201,9 +201,15 @@
       backdrop-filter:blur(14px) saturate(1.18);
       -webkit-backdrop-filter:blur(14px) saturate(1.18);
       border-bottom:1px solid rgba(255,255,255,.07);
+      scrollbar-width:none;
     }
+    .tabs::-webkit-scrollbar{display:none}
     .tab{
       position:relative;
+      flex:0 0 auto;
+      min-width:max-content;
+      overflow:visible;
+      padding-inline:16px;
       border-color:rgba(255,255,255,.16);
       background:
         linear-gradient(180deg,rgba(255,255,255,.11),rgba(15,23,42,.62)),
@@ -309,7 +315,7 @@
     }
     .progress,.storage-meter{background:rgba(2,6,23,.72);box-shadow:inset 0 1px 5px rgba(0,0,0,.44),0 0 0 1px rgba(255,255,255,.07)}
     .bar,.storage-meter-bar{box-shadow:0 0 18px rgba(56,189,248,.48)}
-    .countdown{background:radial-gradient(circle,rgba(15,23,42,.86),rgba(2,6,23,.92));text-shadow:0 0 36px rgba(56,189,248,.54)}
+    .countdown{z-index:9999;color:#fff;line-height:1;pointer-events:none;background:radial-gradient(circle,rgba(15,23,42,.88),rgba(2,6,23,.94));text-shadow:0 0 36px rgba(56,189,248,.7),0 4px 20px rgba(0,0,0,.55)}
     .shot-card img,.item-card img,.photo-manage-card img,.detail-images img{border-bottom:1px solid rgba(255,255,255,.11);background:#020617}
     .item-card.active{
       outline:0;
@@ -370,6 +376,7 @@
       h1{font-size:1.86rem;line-height:1.08}
       .subtitle{font-size:.9rem}
       .note{font-size:.86rem}
+      .tab{flex:0 0 auto;min-width:max-content;padding:10px 16px}
       .check-item{grid-template-columns:28px minmax(0,1fr);gap:8px;padding:10px}
       .sync-dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
       .sync-dashboard-card strong{font-size:1.18rem}
@@ -387,7 +394,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.26.0900 · Textured UI polish</p>
+      <p class="eyebrow">v0.26.05.26.0915 · Mobile capture polish</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -772,7 +779,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.26.0900';
+    const VERSION='v0.26.05.26.0915';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1172,7 +1179,7 @@
     }
     function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}} function beep(){try{let C=window.AudioContext||window.webkitAudioContext;if(!C)return;let ac=new C(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
     function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=canvasShot(a[i].label);setShots(a)})}
-    async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';for(let i=3;i>0;i--){cd.textContent=i;await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(canvasShot(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. Review photos or create an inventory item.'}
+    async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';cd.style.opacity='1';cd.style.visibility='visible';for(let i=3;i>0;i--){cd.textContent=String(i);await new Promise(requestAnimationFrame);await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(canvasShot(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. Review photos or create an inventory item.'}
     $('manualShotBtn').onclick=()=>{let s=getShots();s.push(canvasShot('Manual shot '+(s.length+1)));setShots(s);$('captureStatus').textContent='Manual test shot saved to current captures.'}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
     function cloneShots(shots){return (shots||[]).map(s=>({...s}))}
     function compressDataUrl(dataUrl,maxW=640,maxH=480,quality=.58){
