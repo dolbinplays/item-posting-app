@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.25.1307</title>
+  <title>Item Posting Assistant v0.26.05.26.0900</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -123,12 +123,265 @@
     .cleanup-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
     @media(min-width:760px){.cleanup-grid{grid-template-columns:repeat(2,1fr)}}
     .cleanup-grid button{font-size:.88rem;padding:10px}
+
+    /* =========================================================
+       Professional Textured UI Layer
+       ========================================================= */
+    :root{
+      --bg-deep:#020617;
+      --bg-navy:#0f172a;
+      --panel-glass:rgba(15,23,42,.72);
+      --panel-glass-strong:rgba(15,23,42,.88);
+      --edge-light:rgba(255,255,255,.18);
+      --edge-cyan:rgba(56,189,248,.38);
+      --glow-cyan:rgba(56,189,248,.26);
+      --shadow-deep:0 22px 60px rgba(0,0,0,.38);
+      --shadow-card:0 18px 44px rgba(0,0,0,.28);
+      --texture-line:rgba(255,255,255,.035);
+    }
+    html{background:var(--bg-deep);scroll-behavior:smooth}
+    body{
+      position:relative;
+      isolation:isolate;
+      background:
+        radial-gradient(circle at 50% -12rem,rgba(56,189,248,.24),transparent 34rem),
+        radial-gradient(circle at 88% 9rem,rgba(34,197,94,.08),transparent 22rem),
+        radial-gradient(circle at 12% 18rem,rgba(2,132,199,.12),transparent 26rem),
+        linear-gradient(180deg,#101a2d 0%,#07111f 48%,#020617 100%);
+    }
+    body::before,body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1}
+    body::before{
+      opacity:.58;
+      background:
+        linear-gradient(115deg,transparent 0 47%,rgba(56,189,248,.055) 48%,transparent 51%),
+        repeating-linear-gradient(135deg,rgba(255,255,255,.032) 0 1px,transparent 1px 9px),
+        repeating-linear-gradient(90deg,rgba(255,255,255,.018) 0 1px,transparent 1px 28px);
+      mix-blend-mode:screen;
+    }
+    body::after{
+      background:
+        radial-gradient(circle at center,transparent 0 50%,rgba(0,0,0,.34) 100%),
+        radial-gradient(circle at 30% 20%,rgba(255,255,255,.025),transparent 18rem);
+    }
+    .app{position:relative;z-index:1;padding:18px 14px 28px;filter:drop-shadow(0 30px 70px rgba(0,0,0,.16))}
+    header{position:relative;padding:10px 2px 16px}
+    header::after{
+      content:"";
+      display:block;
+      width:min(360px,72vw);
+      height:1px;
+      margin-top:14px;
+      background:linear-gradient(90deg,rgba(56,189,248,.78),rgba(56,189,248,.12),transparent);
+      box-shadow:0 0 18px rgba(56,189,248,.36);
+    }
+    .eyebrow{
+      display:inline-flex;
+      align-items:center;
+      width:auto;
+      padding:6px 10px;
+      border:1px solid rgba(56,189,248,.34);
+      border-radius:999px;
+      background:linear-gradient(180deg,rgba(56,189,248,.15),rgba(2,6,23,.28));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 0 24px rgba(56,189,248,.12);
+      text-shadow:0 0 16px rgba(56,189,248,.5);
+    }
+    h1{
+      max-width:760px;
+      font-size:2.75rem;
+      letter-spacing:0;
+      text-shadow:0 2px 0 rgba(2,6,23,.42),0 0 34px rgba(56,189,248,.18);
+    }
+    .subtitle{max-width:880px;color:#d7e3f4}
+    .tabs{
+      top:0;
+      margin:0 -4px 10px;
+      padding:10px 4px 14px;
+      background:linear-gradient(180deg,rgba(2,6,23,.92),rgba(15,23,42,.72) 74%,transparent);
+      backdrop-filter:blur(14px) saturate(1.18);
+      -webkit-backdrop-filter:blur(14px) saturate(1.18);
+      border-bottom:1px solid rgba(255,255,255,.07);
+    }
+    .tab{
+      position:relative;
+      border-color:rgba(255,255,255,.16);
+      background:
+        linear-gradient(180deg,rgba(255,255,255,.11),rgba(15,23,42,.62)),
+        repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 1px,transparent 1px 8px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 10px 24px rgba(0,0,0,.18);
+      transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease,background .18s ease,color .18s ease;
+    }
+    .tab:hover{transform:translateY(-1px);color:#fff;border-color:rgba(56,189,248,.34);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 14px 30px rgba(0,0,0,.24)}
+    .tab.active{
+      background:linear-gradient(180deg,#67e8f9,#38bdf8 42%,#0369a1);
+      border-color:rgba(186,230,253,.8);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -14px 24px rgba(2,132,199,.26),0 0 28px rgba(56,189,248,.38);
+      color:#fff;
+    }
+    button:focus-visible,.tab:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,.check-item:focus-within{
+      outline:3px solid rgba(125,211,252,.88);
+      outline-offset:3px;
+      box-shadow:0 0 0 6px rgba(56,189,248,.18),0 0 26px rgba(56,189,248,.28);
+    }
+    .card,.sync-dashboard,.backup-group,details.troubleshoot,details.sync-advanced,details.backup-tools,details.backup-list,.storage-photo-panel,.backup-ready-card,.draft-history-card,.photo-manage-card,.item-card,.shot-card,.drive-check-card,.preset-row{
+      position:relative;
+      border-color:rgba(255,255,255,.16);
+      background:
+        linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.03)),
+        linear-gradient(135deg,rgba(56,189,248,.055),transparent 42%),
+        rgba(15,23,42,.68);
+      box-shadow:var(--shadow-card),inset 0 1px 0 rgba(255,255,255,.12);
+    }
+    .card{border-radius:24px;overflow:hidden}
+    .card::before,.sync-dashboard::before,.backup-group::before,.photo-manage-card::before,.item-card::before,.shot-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(180deg,rgba(255,255,255,.07),transparent 28%),
+        repeating-linear-gradient(135deg,var(--texture-line) 0 1px,transparent 1px 11px);
+      opacity:.72;
+    }
+    .card:hover{border-color:rgba(255,255,255,.22)}
+    .item-card,.shot-card,.photo-manage-card{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+    .item-card:hover{transform:translateY(-2px);border-color:rgba(56,189,248,.34);box-shadow:0 22px 50px rgba(0,0,0,.34),0 0 30px rgba(56,189,248,.13)}
+    input,select,textarea{
+      border-color:rgba(255,255,255,.16);
+      background:linear-gradient(180deg,rgba(2,6,23,.82),rgba(15,23,42,.68));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 12px 22px rgba(0,0,0,.14);
+      transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+    }
+    input:hover,select:hover,textarea:hover{border-color:rgba(56,189,248,.3)}
+    input::placeholder,textarea::placeholder{color:rgba(203,213,225,.72)}
+    button{
+      position:relative;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 26px rgba(0,0,0,.24);
+      transition:transform .16s ease,box-shadow .16s ease,filter .16s ease,border-color .16s ease;
+    }
+    button::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 44%);
+      opacity:.65;
+    }
+    button:hover:not(:disabled){transform:translateY(-1px);filter:saturate(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 16px 34px rgba(0,0,0,.28)}
+    button:active:not(:disabled){transform:translateY(1px);box-shadow:inset 0 2px 8px rgba(0,0,0,.25),0 8px 18px rgba(0,0,0,.2)}
+    .primary{background:linear-gradient(180deg,#67e8f9,#38bdf8 45%,#0369a1);border-color:rgba(186,230,253,.62);text-shadow:0 1px 0 rgba(2,6,23,.3)}
+    .secondary{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(15,23,42,.72));border-color:rgba(255,255,255,.18)}
+    .success{background:linear-gradient(180deg,#86efac,#22c55e 48%,#15803d);border-color:rgba(187,247,208,.55);color:#032713}
+    .danger{background:linear-gradient(180deg,#fda4af,#fb7185 46%,#be123c);border-color:rgba(254,205,211,.5);color:#3f0714}
+    button:disabled{filter:grayscale(.25);box-shadow:none}
+    .setup-visual{
+      min-height:270px;
+      background:
+        radial-gradient(circle at 50% 64%,rgba(56,189,248,.2),transparent 15rem),
+        radial-gradient(ellipse at center bottom,rgba(0,0,0,.42),transparent 58%),
+        linear-gradient(180deg,rgba(15,23,42,.72),rgba(2,6,23,.48));
+    }
+    .setup-visual::after{
+      content:"";
+      position:absolute;
+      inset:18px;
+      pointer-events:none;
+      border-radius:24px;
+      border:1px solid rgba(56,189,248,.16);
+      background:linear-gradient(90deg,transparent,rgba(56,189,248,.08),transparent);
+      animation:scanWash 5.8s ease-in-out infinite;
+    }
+    .phone{border-color:rgba(226,232,240,.86);background:linear-gradient(160deg,#06111f,#020617 55%,#0f172a);box-shadow:0 22px 44px rgba(0,0,0,.48),0 0 30px rgba(56,189,248,.16),inset 0 1px 0 rgba(255,255,255,.18)}
+    .lens{background:radial-gradient(circle,#67e8f9 0 18%,#0369a1 32%,#020617 62%);box-shadow:0 0 34px rgba(56,189,248,.78),inset 0 0 18px rgba(255,255,255,.22)}
+    .turntable{background:radial-gradient(ellipse at top,#64748b,#1e293b 42%,#020617 72%);box-shadow:0 20px 34px rgba(0,0,0,.45),0 0 34px rgba(56,189,248,.12)}
+    .turntable::after{content:"";position:absolute;inset:6px 24px;border-radius:50%;border:1px solid rgba(255,255,255,.16)}
+    .item-box{background:linear-gradient(135deg,#f8fafc,#cbd5e1 42%,#64748b);box-shadow:0 24px 34px rgba(0,0,0,.34),0 0 28px rgba(255,255,255,.12)}
+    .scan-line{border-color:rgba(125,211,252,.56);box-shadow:0 0 42px rgba(56,189,248,.3) inset,0 0 34px rgba(56,189,248,.22)}
+    .scan-line::before{content:"";position:absolute;left:12px;right:12px;top:16px;height:2px;background:linear-gradient(90deg,transparent,#67e8f9,transparent);box-shadow:0 0 18px #38bdf8;animation:scanLine 3.8s ease-in-out infinite}
+    .tripod,.tripod::before,.tripod::after{background:linear-gradient(180deg,#cbd5e1,#64748b)}
+    .camera-panel video{
+      border-color:rgba(56,189,248,.32);
+      background:linear-gradient(135deg,#020617,#0f172a);
+      box-shadow:0 18px 42px rgba(0,0,0,.38),0 0 34px rgba(56,189,248,.14),inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    .progress,.storage-meter{background:rgba(2,6,23,.72);box-shadow:inset 0 1px 5px rgba(0,0,0,.44),0 0 0 1px rgba(255,255,255,.07)}
+    .bar,.storage-meter-bar{box-shadow:0 0 18px rgba(56,189,248,.48)}
+    .countdown{background:radial-gradient(circle,rgba(15,23,42,.86),rgba(2,6,23,.92));text-shadow:0 0 36px rgba(56,189,248,.54)}
+    .shot-card img,.item-card img,.photo-manage-card img,.detail-images img{border-bottom:1px solid rgba(255,255,255,.11);background:#020617}
+    .item-card.active{
+      outline:0;
+      border-color:rgba(125,211,252,.78);
+      box-shadow:0 0 0 2px rgba(56,189,248,.42),0 24px 55px rgba(0,0,0,.36),0 0 36px rgba(56,189,248,.26);
+    }
+    .item-card.active::after{content:"";position:absolute;top:0;right:0;border-top:34px solid #38bdf8;border-left:34px solid transparent;filter:drop-shadow(0 0 12px rgba(56,189,248,.5))}
+    .item-card-title{color:#fff;text-shadow:0 0 18px rgba(56,189,248,.12)}
+    .item-meta,.note{color:#d5e1f0}
+    .needs-listing-badge{background:linear-gradient(180deg,rgba(250,204,21,.22),rgba(113,63,18,.18));border-color:rgba(250,204,21,.48);box-shadow:0 0 18px rgba(250,204,21,.1)}
+    .photo-manage-card.primary-photo{outline:0;border-color:rgba(34,197,94,.72);box-shadow:0 0 0 2px rgba(34,197,94,.32),0 20px 44px rgba(0,0,0,.3),0 0 28px rgba(34,197,94,.16)}
+    .storage-photo-preview{
+      border-color:rgba(56,189,248,.28);
+      background:
+        radial-gradient(circle at center,rgba(56,189,248,.08),transparent 12rem),
+        repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 1px,transparent 1px 10px),
+        rgba(15,23,42,.58);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .sync-dashboard{
+      background:
+        linear-gradient(180deg,rgba(56,189,248,.14),rgba(2,6,23,.36)),
+        repeating-linear-gradient(90deg,rgba(56,189,248,.055) 0 1px,transparent 1px 34px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 34px);
+      border-color:rgba(56,189,248,.36);
+    }
+    .sync-dashboard-card,.drive-plan-card,.result-box,.status-line{
+      background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(2,6,23,.42));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.11),0 12px 28px rgba(0,0,0,.2);
+    }
+    .sync-dashboard-card.good,.backup-ready-card.ok,.readiness-pill.ok{box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 0 24px rgba(34,197,94,.14)}
+    .sync-dashboard-card.warn,.backup-ready-card.warn,.readiness-pill.warn{box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 0 24px rgba(250,204,21,.12)}
+    .sync-dashboard-card.bad,.backup-ready-card.bad,.readiness-pill.bad{box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 0 24px rgba(251,113,133,.13)}
+    .status-banner{box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 12px 30px rgba(0,0,0,.2)}
+    .backup-table{border-collapse:separate;border-spacing:0;box-shadow:0 16px 36px rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12)}
+    .backup-table th{background:linear-gradient(180deg,rgba(56,189,248,.22),rgba(2,132,199,.12));color:#dff7ff}
+    .backup-table td{background:rgba(2,6,23,.48)}
+    .pill,.mini-pill,.readiness-pill,.storage-chip{
+      background:linear-gradient(180deg,rgba(56,189,248,.18),rgba(15,23,42,.62));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 18px rgba(0,0,0,.16);
+    }
+    .dot{box-shadow:0 0 0 4px rgba(250,204,21,.1),0 0 18px rgba(250,204,21,.72)}
+    .dot.ready{box-shadow:0 0 0 4px rgba(34,197,94,.12),0 0 18px rgba(34,197,94,.72)}
+    .empty-state{
+      border-color:rgba(56,189,248,.28);
+      background:
+        radial-gradient(circle at center,rgba(56,189,248,.08),transparent 13rem),
+        linear-gradient(180deg,rgba(255,255,255,.045),rgba(2,6,23,.28));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 24px rgba(56,189,248,.08);
+    }
+    details>summary{border-radius:13px;padding:4px 2px}
+    details[open]>summary{color:#e0f2fe;text-shadow:0 0 14px rgba(56,189,248,.3)}
+    @keyframes scanLine{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(92px);opacity:1}}
+    @keyframes scanWash{0%,100%{opacity:.35}50%{opacity:.75}}
+    @media(max-width:520px){
+      .app{padding:12px 10px 24px}
+      h1{font-size:2.08rem}
+      .sync-dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .sync-dashboard-card strong{font-size:1.18rem}
+    }
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{
+        animation-duration:.01ms !important;
+        animation-iteration-count:1 !important;
+        scroll-behavior:auto !important;
+        transition-duration:.01ms !important;
+      }
+    }
 </style>
 </head>
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.25.1307 · Collapsible review lists</p>
+      <p class="eyebrow">v0.26.05.26.0900 · Textured UI polish</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds media-aware Sheets/Drive export status so optimized thumbnails can stay lightweight while full photos remain in IndexedDB media storage.</p>
     </header>
@@ -513,7 +766,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.25.1307';
+    const VERSION='v0.26.05.26.0900';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
