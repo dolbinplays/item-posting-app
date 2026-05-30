@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.1430</title>
+  <title>Item Posting Assistant v0.26.05.30.1630</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -405,7 +405,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.30.1430 · Secure photo recognition relay</p>
+      <p class="eyebrow">v0.26.05.30.1630 · Live sync setup polish</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -649,23 +649,23 @@
           </div>
           <details class="sync-advanced">
             <summary>Advanced Google setup and troubleshooting</summary>
-          <h3 style="margin-top:8px">Future Google Sync Settings</h3>
-          <p class="note">These names prepare exports for a future direct Google Sheets + Drive sync. They are saved in backups and used for suggested Drive paths.</p>
+          <h3 style="margin-top:8px">Google Sync Settings</h3>
+          <p class="note">These names control direct Google Sheets + Drive sync, exports, and suggested Drive paths. They are saved in backups.</p>
           <label class="small">Target Google Sheet name</label><input id="googleSheetName" placeholder="Item Posting Inventory">
           <label class="small">Target Drive root folder</label><input id="googleDriveRoot" placeholder="Item Posting Assistant">
           <div class="actions"><button id="saveGoogleSyncSettingsBtn" class="success" type="button">Save Sync Settings</button></div>
           <div id="googleSyncReadiness" class="note"></div>
-          <h3 style="margin-top:16px">Future Google API Setup</h3>
-          <p class="note">Save non-secret setup details for a future Google sign-in button. Do not paste passwords or API secrets here.</p>
+          <h3 style="margin-top:16px">Google API Setup</h3>
+          <p class="note">Save the non-secret OAuth Client ID used by the Google sign-in button. Do not paste passwords or API secrets here.</p>
           <label class="small">OAuth Client ID</label><input id="googleOAuthClientId" placeholder="1234567890-...apps.googleusercontent.com">
           <div id="googleApiSetup" class="note"></div>
           <div class="actions"><button id="saveGoogleApiSetupBtn" class="success" type="button">Save API Setup</button><button id="clearGoogleApiSetupBtn" class="secondary" type="button">Clear API Setup</button></div>
           <h3 style="margin-top:16px">Google Sign-In Test</h3>
-          <p class="note">This only requests a temporary in-memory access token for the planned Sheets + Drive scopes. It does not upload, edit, or store the token.</p>
+          <p class="note">This requests a temporary in-memory access token for the Sheets + Drive scopes. Signing in alone does not upload, edit, or store the token.</p>
           <div id="googleSignInStatus" class="note"></div>
-          <div class="actions"><button id="loadGoogleIdentityBtn" class="secondary" type="button">Load Google Identity</button><button id="requestGoogleAccessBtn" class="success" type="button">Request Test Access</button><button id="forgetGoogleAccessBtn" class="secondary" type="button">Forget Access Token</button></div>
+          <div class="actions"><button id="loadGoogleIdentityBtn" class="secondary" type="button">Load Google Identity</button><button id="requestGoogleAccessBtn" class="success" type="button">Sign In to Google</button><button id="forgetGoogleAccessBtn" class="secondary" type="button">Forget Access Token</button></div>
           <h3 style="margin-top:16px">Google API Probe</h3>
-          <p class="note">After test access is granted, this makes one read-only Drive API call to verify the token and API access. It does not create, upload, edit, or delete anything.</p>
+          <p class="note">After access is granted, this makes one read-only Drive API call to verify the token and API access. It does not create, upload, edit, or delete anything.</p>
           <div id="googleApiProbeStatus" class="note"></div>
           <div class="actions"><button id="runGoogleApiProbeBtn" class="secondary" type="button">Run Read-Only API Probe</button></div>
           <h3 style="margin-top:16px">Google Drive Root Folder</h3>
@@ -704,26 +704,26 @@
           <p class="note">This simulates a future Google Sheets + Drive sync without signing in or uploading anything.</p>
           <div id="googleSyncDryRun" class="note"></div>
           <div class="actions"><button id="refreshGoogleSyncDryRunBtn" class="secondary" type="button">Refresh Dry Run</button><button id="exportGoogleSyncDryRunBtn" class="secondary" type="button">Export Dry Run JSON</button></div>
-          <h3 style="margin-top:16px">Future Google Sync Readiness Gate</h3>
-          <p class="note">Checks each inventory item for the minimum data needed before a future direct Google Sheets + Drive sync should be allowed.</p>
+          <h3 style="margin-top:16px">Google Sync Readiness Gate</h3>
+          <p class="note">Checks each inventory item for the minimum data needed before direct Google Sheets + Drive sync is allowed.</p>
           <div id="googleSyncGate" class="note"></div>
-          <h3 style="margin-top:16px">Future Google Sync Action Queue</h3>
-          <p class="note">Preview the exact Sheets + Drive operations a future sync button would run. This is still a local plan only.</p>
+          <h3 style="margin-top:16px">Google Sync Action Queue</h3>
+          <p class="note">Preview the exact Sheets + Drive operations a sync run would perform.</p>
           <div id="googleSyncActionQueue" class="note"></div>
           <div class="actions"><button id="exportGoogleSyncQueueBtn" class="secondary" type="button">Export Sync Queue JSON</button></div>
-          <h3 style="margin-top:16px">Future Google Sync History</h3>
-          <p class="note">Save a local snapshot of the current dry run, readiness gate, and action queue so you can compare what changed before any future live sync.</p>
+          <h3 style="margin-top:16px">Google Sync History</h3>
+          <p class="note">Save a local snapshot of the current dry run, readiness gate, and action queue so you can compare what changed before a live sync.</p>
           <div id="googleSyncHistory" class="note"></div>
           <div class="actions"><button id="saveGoogleSyncSnapshotBtn" class="success" type="button">Save Planned Run</button><button id="clearGoogleSyncHistoryBtn" class="secondary" type="button">Clear Sync History</button></div>
-          <h3 style="margin-top:16px">Future Google Sync Preflight</h3>
-          <p class="note">A final local safety check before any future live Google sync. This does not contact Google.</p>
+          <h3 style="margin-top:16px">Google Sync Preflight</h3>
+          <p class="note">A final local safety check before live Google sync. This does not contact Google.</p>
           <div id="googleSyncPreflight" class="note"></div>
-          <h3 style="margin-top:16px">Future Google Sync Simulation</h3>
+          <h3 style="margin-top:16px">Google Sync Simulation</h3>
           <p class="note">Run the current action queue locally and save a no-Google execution log. This helps test the future sync flow before live API access exists.</p>
           <div id="googleSyncSimulation" class="note"></div>
           <div class="actions"><button id="runGoogleSyncSimulationBtn" class="success" type="button">Run Local Sync Simulation</button><button id="clearGoogleSyncRunLogBtn" class="secondary" type="button">Clear Simulation Log</button></div>
           <h3 style="margin-top:16px">Google Authorization Requirements</h3>
-          <p class="note">Planned permissions for a future direct Google Sheets + Drive sync. This build does not sign in, request access, upload files, or store Google tokens.</p>
+          <p class="note">Permissions used by direct Google Sheets + Drive sync. Google access tokens stay in memory only and are not written to browser storage or backups.</p>
           <div id="googleAuthRequirements" class="note"></div>
           </details>
           <div class="backup-group emphasis">
@@ -822,7 +822,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.1430';
+    const VERSION='v0.26.05.30.1630';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1728,8 +1728,9 @@
         if(!photos.length){alert('Add at least one listing photo before using photo recognition.');renderAssistantSuggestions(saved);return}
         if($('assistantStatus'))$('assistantStatus').textContent=`Sending ${photos.length} listing photo${photos.length===1?'':'s'} to the configured secure relay...`;
         const response=await fetch(settings.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contractVersion:'item-recognition-v1',requestedAt:new Date().toISOString(),item:{title:saved.title||'',brand:saved.brand||'',model:saved.model||'',itemType:saved.itemType||'',color:saved.color||'',dimensions:saved.dimensions||'',material:saved.material||'',condition:saved.condition||'',testedStatus:saved.testedStatus||'',missingParts:saved.missingParts||'',category:saved.category||'',accessories:saved.accessories||'',flaws:saved.flaws||'',keywords:saved.keywords||'',assistantNotes:saved.assistantNotes||''},photos})});
-        if(!response.ok)throw new Error(`Relay returned HTTP ${response.status}`);
-        const data=await response.json(), recognized=normalizeRelaySuggestions(data?.suggestions);
+        let data={};try{data=await response.json()}catch{}
+        if(!response.ok)throw new Error(data?.upstreamError||data?.error||`Relay returned HTTP ${response.status}`);
+        const recognized=normalizeRelaySuggestions(data?.suggestions);
         if(!recognized.length)throw new Error('Relay returned no usable suggestions');
         const local=buildAssistantSuggestions(assistantFormItem()), suggestions=mergeAssistantSuggestions(recognized,local);
         let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;
@@ -2620,7 +2621,7 @@
       if(current.summary.thumbnailOnlyPhotos)blockers.push(`${current.summary.thumbnailOnlyPhotos} thumbnail-only photo(s)`);
       const warnings=[];
       if(!history.length)warnings.push('No saved planned run history yet');
-      if(!getGoogleApiSetup().oauthClientId)warnings.push('OAuth Client ID not configured for future live sign-in');
+      if(!getGoogleApiSetup().oauthClientId)warnings.push('OAuth Client ID not configured for live sign-in');
       if(comparison.hasPrevious&&comparison.changed)warnings.push(`Plan changed since latest saved run: ${comparison.message}`);
       return {version:VERSION,generatedAt:new Date().toISOString(),status:blockers.length?'blocked':warnings.length?'review':'ready',blockers,warnings,currentPlan:current.summary,comparison};
     }
@@ -2664,7 +2665,7 @@
       const setup=getGoogleApiSetup(), origin=currentGoogleAuthorizedOrigin();
       if($('googleOAuthClientId'))$('googleOAuthClientId').value=setup.oauthClientId||'';
       const el=$('googleApiSetup'); if(!el)return;
-      const status=setup.oauthClientId?'Saved for future sign-in':'Needs OAuth Client ID before live sign-in';
+      const status=setup.oauthClientId?'Saved for live sign-in':'Needs OAuth Client ID before live sign-in';
       el.innerHTML=`<p>Status: <b>${escapeHtml(status)}</b><br>Authorized JavaScript origin to configure later: <code>${escapeHtml(origin)}</code><br>Stored client ID: <b>${setup.oauthClientId?'Yes':'No'}</b></p>`;
       renderGoogleSignInStatus();
     }

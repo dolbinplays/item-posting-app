@@ -21,9 +21,17 @@ This Cloudflare Worker keeps the OpenAI API key off the phone and out of the Git
 
 6. In the app, open an inventory item, expand **Secure photo recognition relay**, and save the deployed Worker URL.
 
+The deployed URL normally has this shape:
+
+```text
+https://item-posting-recognition-relay.YOUR-WORKERS-SUBDOMAIN.workers.dev
+```
+
 Do not place the OpenAI API key in `index.html`, `wrangler.toml`, browser storage, or this repository.
 
 Before regular use, configure a Cloudflare rate-limiting rule for the Worker route and monitor OpenAI project spend limits. `ALLOWED_ORIGIN` restricts normal browser access, but it is not a substitute for rate limiting.
+
+OpenAI API billing is separate from ChatGPT subscriptions. If recognition returns an exceeded-quota message, add API credits or review the OpenAI project budget before redeploying; no Worker code change is required.
 
 ## Contract
 
