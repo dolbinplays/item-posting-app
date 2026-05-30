@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.26.1030</title>
+  <title>Item Posting Assistant v0.26.05.30.1430</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -405,7 +405,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.26.1030 · Listing assistant foundation</p>
+      <p class="eyebrow">v0.26.05.30.1430 · Secure photo recognition relay</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -584,10 +584,17 @@
             <label class="small">Flaws / damage</label><input id="itemFlaws" placeholder="Small scratch on back...">
             <div class="assistant-panel">
               <h3 style="margin:0">Listing Assistant</h3>
-              <p class="photo-manage-note">Stage 8 foundation: review local suggestions, fill listing gaps, and prepare the item for future photo-based AI recognition and pricing research. Suggestions never overwrite fields until you accept them.</p>
+              <p class="photo-manage-note">Review local suggestions or ask a configured secure relay to inspect up to four listing photos. Suggestions never overwrite fields until you accept them. OpenAI API keys belong on the relay server, never in this browser app.</p>
               <div id="assistantStatus" class="watermark-preview-note">Run the assistant after adding the details you already know.</div>
               <div id="assistantSuggestions" class="assistant-suggestions"></div>
-              <div class="actions"><button id="runListingAssistantBtn" class="primary" type="button">Analyze Listing</button><button id="applyAllAssistantSuggestionsBtn" class="success" type="button">Accept All Suggestions</button></div>
+              <div class="actions"><button id="runListingAssistantBtn" class="primary" type="button">Analyze Listing Locally</button><button id="recognizeListingPhotosBtn" class="primary" type="button">Recognize Photos</button><button id="applyAllAssistantSuggestionsBtn" class="success" type="button">Accept All Suggestions</button></div>
+              <details class="troubleshoot">
+                <summary>Secure photo recognition relay</summary>
+                <p class="fallback-note">Use an HTTPS endpoint that keeps the AI provider key on its server. Local development endpoints on localhost are also allowed. This app sends the current item fields and up to four listing photos only when you tap Recognize Photos.</p>
+                <label class="small">Recognition relay URL</label><input id="assistantRelayUrl" placeholder="https://your-secure-relay.example.com/recognize-item">
+                <div id="assistantRelayStatus" class="watermark-preview-note"></div>
+                <div class="actions"><button id="saveAssistantRelayBtn" class="success" type="button">Save Relay URL</button><button id="clearAssistantRelayBtn" class="secondary" type="button">Clear Relay URL</button></div>
+              </details>
               <label class="small">Assistant / research notes</label><textarea id="itemAssistantNotes" rows="3" placeholder="Save identification clues, model numbers to verify, and future price research notes..."></textarea>
             </div>
             <label class="small">Storage location</label><input id="itemStorage" placeholder="Garage shelf B, blue tote...">
@@ -815,8 +822,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.26.1030';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.05.30.1430';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -1607,7 +1614,7 @@
     }
     function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
     function escapeAttr(v){return escapeHtml(v)}
-    const ASSISTANT_FIELDS={brand:'Brand',model:'Model / series',itemType:'Item type',category:'Category hint',testedStatus:'Tested / working status',keywords:'Keywords / tags',fbTitle:'Facebook title',condition:'Condition'};
+    const ASSISTANT_FIELDS={brand:'Brand',model:'Model / series',itemType:'Item type',category:'Category hint',color:'Color',dimensions:'Size / dimensions',material:'Material',condition:'Condition',testedStatus:'Tested / working status',accessories:'Accessories / included items',missingParts:'Missing parts',flaws:'Flaws / damage',keywords:'Keywords / tags',fbTitle:'Facebook title'};
     function assistantFormItem(){
       return {title:getField('itemTitle'),price:getField('itemPrice'),condition:$('itemCondition').value,brand:getField('itemBrand'),model:getField('itemModel'),itemType:getField('itemType'),color:getField('itemColor'),dimensions:getField('itemDimensions'),material:getField('itemMaterial'),testedStatus:$('itemTestedStatus').value,missingParts:getField('itemMissingParts'),keywords:getField('itemKeywords'),category:getField('itemCategory'),accessories:getField('itemAccessories'),flaws:getField('itemFlaws'),assistantNotes:getField('itemAssistantNotes'),draftTone:$('draftTone').value,pickupMode:$('pickupMode').value,fbTitle:getField('fbTitle'),photos:getItems().find(i=>i.id===selectedItemId)?.photos||[]}
     }
@@ -1644,7 +1651,8 @@
       const suggestions=Array.isArray(item?.assistantSuggestions)?item.assistantSuggestions:[];
       const gaps=['brand','model','itemType','category','testedStatus','keywords'].filter(k=>!String(item?.[k]||'').trim());
       const photos=item?.photos?.length||0;
-      status.textContent=`${suggestions.length} suggestion${suggestions.length===1?'':'s'} ready. ${photos} listing photo${photos===1?'':'s'} available for future visual recognition. ${gaps.length?`Still worth checking: ${gaps.map(k=>ASSISTANT_FIELDS[k]||k).join(', ')}.`:'Core listing details are filled in.'}`;
+      const recognition=item?.aiRecognition, recognitionText=recognition?.recognizedAt?` Last secure photo recognition: ${new Date(recognition.recognizedAt).toLocaleString()} · ${recognition.suggestionCount||0} AI suggestion${recognition.suggestionCount===1?'':'s'} from ${recognition.provider||'relay'}${recognition.model?` (${recognition.model})`:''}.`:'';
+      status.textContent=`${suggestions.length} suggestion${suggestions.length===1?'':'s'} ready. ${photos} listing photo${photos===1?'':'s'} available for secure visual recognition. ${gaps.length?`Still worth checking: ${gaps.map(k=>ASSISTANT_FIELDS[k]||k).join(', ')}.`:'Core listing details are filled in.'}${recognitionText}`;
       list.innerHTML=suggestions.length?'':'<div class="empty-state">No pending suggestions. Run Analyze Listing after changing item details.</div>';
       suggestions.forEach((s,index)=>{let row=document.createElement('div');row.className='assistant-suggestion';row.innerHTML=`<div><span class="note">${escapeHtml(ASSISTANT_FIELDS[s.field]||s.field)} · ${escapeHtml(s.reason||'Suggested listing improvement.')}</span><span class="assistant-value">${escapeHtml(s.value)}</span></div><button class="success" data-assistant-apply="${index}" type="button">Accept</button>`;list.appendChild(row)});
       list.querySelectorAll('[data-assistant-apply]').forEach(b=>b.onclick=()=>applyAssistantSuggestion(Number(b.dataset.assistantApply)))
@@ -1658,10 +1666,10 @@
     function runListingAssistant(){
       if(!selectedItemId){alert('Select an inventory item first.');return}
       const suggestions=buildAssistantSuggestions(assistantFormItem()),item=saveAssistantSuggestions(suggestions);
-      if(item)renderAssistantSuggestions({...assistantFormItem(),photos:item.photos,assistantSuggestions:suggestions})
+      if(item)renderAssistantSuggestions({...assistantFormItem(),photos:item.photos,assistantSuggestions:suggestions,aiRecognition:item.aiRecognition})
     }
     function setAssistantField(field,value){
-      const fieldIds={itemType:'itemType',category:'itemCategory',keywords:'itemKeywords',fbTitle:'fbTitle',condition:'itemCondition'};
+      const fieldIds={brand:'itemBrand',model:'itemModel',itemType:'itemType',category:'itemCategory',color:'itemColor',dimensions:'itemDimensions',material:'itemMaterial',condition:'itemCondition',testedStatus:'itemTestedStatus',accessories:'itemAccessories',missingParts:'itemMissingParts',flaws:'itemFlaws',keywords:'itemKeywords',fbTitle:'fbTitle'};
       const el=$(fieldIds[field]);if(el)el.value=value
     }
     function applyAssistantSuggestion(index){
@@ -1672,7 +1680,69 @@
     function applyAllAssistantSuggestions(){
       let item=getItems().find(i=>i.id===selectedItemId),suggestions=item?.assistantSuggestions||[];if(!suggestions.length){alert('Run Analyze Listing first, or there are no pending suggestions.');return}
       suggestions.forEach(s=>setAssistantField(s.field,s.value));item=saveAssistantSuggestions([],suggestions);
-      if(item)renderAssistantSuggestions({...assistantFormItem(),photos:item.photos,assistantSuggestions:[]})
+      if(item)renderAssistantSuggestions({...assistantFormItem(),photos:item.photos,assistantSuggestions:[],aiRecognition:item.aiRecognition})
+    }
+    function defaultAssistantRelaySettings(){return {url:'',updatedAt:''}}
+    function getAssistantRelaySettings(){return {...defaultAssistantRelaySettings(),...read(K.assistantRelaySettings,{})}}
+    function isAllowedAssistantRelayUrl(value){
+      try{const url=new URL(String(value||'').trim(),location.href);return url.protocol==='https:'||['localhost','127.0.0.1','::1'].includes(url.hostname)}catch{return false}
+    }
+    function renderAssistantRelaySettings(){
+      const settings=getAssistantRelaySettings(),input=$('assistantRelayUrl'),status=$('assistantRelayStatus');
+      if(input)input.value=settings.url||'';
+      if(status)status.textContent=settings.url?`Configured relay: ${settings.url}`:'No secure relay configured yet. Local Analyze Listing still works without one.'
+    }
+    function saveAssistantRelaySettings(){
+      const url=getField('assistantRelayUrl');
+      if(url&&!isAllowedAssistantRelayUrl(url)){alert('Use an HTTPS relay URL. Localhost URLs are allowed for development only.');return}
+      if(safeWrite(K.assistantRelaySettings,{url,updatedAt:new Date().toISOString()})){renderAssistantRelaySettings();alert(url?'Secure recognition relay saved.':'Recognition relay cleared.')}
+    }
+    function clearAssistantRelaySettings(){if(safeWrite(K.assistantRelaySettings,defaultAssistantRelaySettings()))renderAssistantRelaySettings()}
+    function normalizeRelaySuggestions(value){
+      const allowed=new Set(Object.keys(ASSISTANT_FIELDS));
+      return (Array.isArray(value)?value:[]).map(s=>({field:String(s?.field||'').trim(),value:String(s?.value||'').trim(),reason:String(s?.reason||'Photo recognition suggestion.').trim(),source:'secure-relay'})).filter(s=>allowed.has(s.field)&&s.value).slice(0,14)
+    }
+    function mergeAssistantSuggestions(primary,secondary){
+      const out=[];
+      [...primary,...secondary].forEach(s=>{if(s?.field&&s?.value&&!out.some(x=>x.field===s.field))out.push(s)});
+      return out
+    }
+    async function recognitionPhotoPayload(item){
+      const photos=[];
+      for(const p of (item.photos||[]).slice(0,4)){
+        let dataUrl=await bestPhotoDataUrlFromMedia({...p,watermarkedDataUrl:''});
+        if(dataUrl)photos.push({label:p.label||`Photo ${photos.length+1}`,dataUrl:await compressDataUrl(dataUrl,1024,1024,.72)})
+      }
+      return photos
+    }
+    async function recognizeListingPhotos(){
+      if(!selectedItemId){alert('Select an inventory item first.');return}
+      const settings=getAssistantRelaySettings();
+      if(!settings.url){alert('Configure a secure photo recognition relay first. Local Analyze Listing is still available without one.');return}
+      if(!isAllowedAssistantRelayUrl(settings.url)){alert('The configured recognition relay must use HTTPS, except for localhost development.');return}
+      const saved=collectItem();if(!saved)return;
+      const btn=$('recognizeListingPhotosBtn');if(btn)btn.disabled=true;
+      if($('assistantStatus'))$('assistantStatus').textContent='Preparing listing photos for secure recognition...';
+      try{
+        const photos=await recognitionPhotoPayload(saved);
+        if(!photos.length){alert('Add at least one listing photo before using photo recognition.');renderAssistantSuggestions(saved);return}
+        if($('assistantStatus'))$('assistantStatus').textContent=`Sending ${photos.length} listing photo${photos.length===1?'':'s'} to the configured secure relay...`;
+        const response=await fetch(settings.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contractVersion:'item-recognition-v1',requestedAt:new Date().toISOString(),item:{title:saved.title||'',brand:saved.brand||'',model:saved.model||'',itemType:saved.itemType||'',color:saved.color||'',dimensions:saved.dimensions||'',material:saved.material||'',condition:saved.condition||'',testedStatus:saved.testedStatus||'',missingParts:saved.missingParts||'',category:saved.category||'',accessories:saved.accessories||'',flaws:saved.flaws||'',keywords:saved.keywords||'',assistantNotes:saved.assistantNotes||''},photos})});
+        if(!response.ok)throw new Error(`Relay returned HTTP ${response.status}`);
+        const data=await response.json(), recognized=normalizeRelaySuggestions(data?.suggestions);
+        if(!recognized.length)throw new Error('Relay returned no usable suggestions');
+        const local=buildAssistantSuggestions(assistantFormItem()), suggestions=mergeAssistantSuggestions(recognized,local);
+        let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;
+        item.assistantSuggestions=suggestions;
+        item.aiRecognition={contractVersion:'item-recognition-v1',recognizedAt:new Date().toISOString(),relayUrl:settings.url,provider:String(data?.provider||'secure-relay'),model:String(data?.model||''),photoCount:photos.length,suggestionCount:recognized.length,notes:String(data?.notes||'')};
+        if(data?.notes)item.assistantNotes=joinParts([item.assistantNotes,data.notes],'\n');
+        item.updatedAt=new Date().toISOString();
+        if(!setItems(items))return;
+        $('itemAssistantNotes').value=item.assistantNotes||'';
+        renderAssistantSuggestions({...assistantFormItem(),photos:item.photos,assistantSuggestions:suggestions,aiRecognition:item.aiRecognition});
+        alert(`Photo recognition returned ${recognized.length} reviewable suggestion${recognized.length===1?'':'s'}.`);
+      }catch(e){alert('Photo recognition could not finish: '+(e?.message||e));renderAssistantSuggestions(getItems().find(i=>i.id===selectedItemId));console.error(e)}
+      finally{if(btn)btn.disabled=false}
     }
     function updateSelectedPhotos(mutator){let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;item.photos=item.photos||[];mutator(item.photos,item);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
     function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=async()=>{let idx=Number(b.dataset.photoRotate);let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item||!item.photos?.[idx])return;b.disabled=true;try{item.photos[idx].dataUrl=await rotateDataUrlRight(item.photos[idx].dataUrl);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}catch(e){alert('Could not rotate photo: '+e.message)}finally{b.disabled=false}})}
@@ -1889,7 +1959,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
@@ -2607,7 +2677,7 @@
     }
     function saveGoogleSyncSettingsFromForm(){if(setGoogleSyncSettings({sheetName:$('googleSheetName')?.value,driveRootFolder:$('googleDriveRoot')?.value}))alert('Google sync settings saved.')}
     function saveGoogleApiSetupFromForm(){if(setGoogleApiSetup({oauthClientId:$('googleOAuthClientId')?.value}))alert('Google API setup saved.')}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncHistory:getGoogleSyncHistory(),googleSyncPreflight:buildGoogleSyncPreflight(),googleSyncRunLog:getGoogleSyncRunLog(),googleSyncSettings:getGoogleSyncSettings(),googleApiSetup:getGoogleApiSetup(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncHistory:getGoogleSyncHistory(),googleSyncPreflight:buildGoogleSyncPreflight(),googleSyncRunLog:getGoogleSyncRunLog(),googleSyncSettings:getGoogleSyncSettings(),googleApiSetup:getGoogleApiSetup(),assistantRelaySettings:getAssistantRelaySettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
@@ -2860,7 +2930,7 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-media-aware-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-aware-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=async()=>{try{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=true; if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building media-aware rebuild backup from IndexedDB/full-photo sources...'; const html=await buildRebuildHtmlMediaAware(); download(`item-posting-media-aware-rebuild-backup-${VERSION}.html`,html,'text/html'); if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media-aware rebuild backup exported.';}catch(e){alert('Could not export media-aware rebuild backup: '+(e?.message||e)); console.error(e)}finally{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=false;}};
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderGoogleSyncSettings();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.assistantRelaySettings,b.assistantRelaySettings||defaultAssistantRelaySettings()))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderAssistantRelaySettings();renderGoogleSyncSettings();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
     if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
     if($('restoreSelectedMediaBtn'))$('restoreSelectedMediaBtn').onclick=restoreSelectedItemFullPhotosFromMediaLibrary;
@@ -3002,7 +3072,7 @@
     function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderGoogleSyncSettings(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderGoogleSyncSettings(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>

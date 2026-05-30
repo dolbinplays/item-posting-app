@@ -1,0 +1,7 @@
+name = "item-posting-recognition-relay"
+main = "cloudflare-worker.mjs"
+compatibility_date = "2026-05-30"
+
+[vars]
+ALLOWED_ORIGIN = "https://YOUR-GITHUB-PAGES-ORIGIN"
+OPENAI_MODEL = "gpt-5.4-mini"
