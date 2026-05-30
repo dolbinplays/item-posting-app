@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.2030</title>
+  <title>Item Posting Assistant v0.26.05.30.2130</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -405,7 +405,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.30.2030 · Media-backed watermark previews</p>
+      <p class="eyebrow">v0.26.05.30.2130 · Bounds-safe diagonal watermarks</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -822,7 +822,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.2030';
+    const VERSION='v0.26.05.30.2130';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1832,13 +1832,20 @@
               ctx.strokeStyle='rgba(2,6,23,.9)';ctx.lineWidth=Math.max(3,Math.round(fontSize*.08));ctx.strokeText(text,c.width/2,c.height/2);
               ctx.fillStyle='rgba(255,255,255,.96)';ctx.fillText(text,c.width/2,c.height/2);
             }else if(settings.placement==='corner-diagonal'){
-              const maxTextWidth=Math.max(80,Math.min(c.width*.72,c.height*.84));
-              fontSize=Math.max(12,Math.min(fontSize,Math.floor(fontSize*maxTextWidth/Math.max(1,ctx.measureText(text).width))));setFont();
-              const textWidth=ctx.measureText(text).width, diagonalPad=Math.max(10,Math.round(fontSize*.48));
-              const boxW=textWidth+diagonalPad*2, boxH=fontSize*1.72;
-              const insetX=Math.max(diagonalPad*1.2,boxH*.78), insetY=Math.max(diagonalPad*1.2,boxW*.72);
+              const margin=Math.max(12,Math.round(base*.025)), availableSpan=Math.max(60,Math.min(c.width,c.height)-margin*2);
+              let diagonalPad,boxW,boxH,halfRotatedSpan;
+              do{
+                setFont();
+                diagonalPad=Math.max(10,Math.round(fontSize*.48));
+                boxW=ctx.measureText(text).width+diagonalPad*2;
+                boxH=fontSize*1.72;
+                halfRotatedSpan=(boxW+boxH)/(2*Math.SQRT2);
+                if(halfRotatedSpan*2<=availableSpan||fontSize<=6)break;
+                fontSize=Math.max(6,fontSize-1);
+              }while(true);
+              const anchorX=c.width-margin-halfRotatedSpan, anchorY=c.height-margin-halfRotatedSpan;
               ctx.save();
-              ctx.translate(c.width-insetX,c.height-insetY);
+              ctx.translate(anchorX,anchorY);
               ctx.rotate(-Math.PI/4);
               ctx.textAlign='center';
               ctx.globalAlpha=Math.max(.58,opacity);
