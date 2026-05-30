@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.1630</title>
+  <title>Item Posting Assistant v0.26.05.30.1730</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -405,7 +405,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.30.1630 · Live sync setup polish</p>
+      <p class="eyebrow">v0.26.05.30.1730 · Dynamic Sheets ranges</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -822,7 +822,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.1630';
+    const VERSION='v0.26.05.30.1730';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -2428,6 +2428,12 @@
       }
     }
     function sheetsHeaderRow(){return buildSheetsDriveRows()[0]}
+    function sheetsColumnLabel(count){
+      let n=Math.max(1,Number(count)||1),label='';
+      while(n>0){n--;label=String.fromCharCode(65+(n%26))+label;n=Math.floor(n/26)}
+      return label
+    }
+    function inventorySheetRange(startRow,endRow,columnCount=sheetsHeaderRow().length){return `Inventory!A${startRow}:${sheetsColumnLabel(columnCount)}${endRow}`}
     async function connectGoogleSheet(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
       const title=String(getGoogleSyncSettings().sheetName||'Item Posting Inventory').trim()||'Item Posting Inventory';
@@ -2446,7 +2452,8 @@
           sheet={id:createData.spreadsheetId,name:title,webViewLink:createData.spreadsheetUrl};
           action='created';
         }
-        const updateRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A1:AZ1?valueInputOption=RAW`,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({range:'Inventory!A1:AZ1',majorDimension:'ROWS',values:[sheetsHeaderRow()]})});
+        const header=sheetsHeaderRow(),headerRange=inventorySheetRange(1,1,header.length);
+        const updateRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/${encodeURIComponent(headerRange)}?valueInputOption=RAW`,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({range:headerRange,majorDimension:'ROWS',values:[header]})});
         const updateData=await updateRes.json();
         if(!updateRes.ok)throw new Error(updateData.error?.message||updateRes.statusText);
         renderGoogleSheetStatus(`<p>Sheet <b>${escapeHtml(action)}</b>: <b>${escapeHtml(sheet.name)}</b><br>Header columns written: <b>${sheetsHeaderRow().length}</b><br>Sheet ID: <code>${escapeHtml(sheet.id)}</code>${sheet.webViewLink?`<br><a href="${escapeHtml(sheet.webViewLink)}" target="_blank" rel="noopener">Open sheet</a>`:''}</p>`);
@@ -2484,13 +2491,18 @@
         const sheet=await findOrCreateGoogleSheet();
         const headers={Authorization:`Bearer ${googleAccessTokenInfo.accessToken}`,'Content-Type':'application/json'};
         const header=sheetsHeaderRow(), rows=readySheetRows(limit);
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A1:AZ1?valueInputOption=RAW`,{method:'PUT',headers,body:JSON.stringify({range:'Inventory!A1:AZ1',majorDimension:'ROWS',values:[header]})});
+        const headerRange=inventorySheetRange(1,1,header.length);
+        const headerRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/${encodeURIComponent(headerRange)}?valueInputOption=RAW`,{method:'PUT',headers,body:JSON.stringify({range:headerRange,majorDimension:'ROWS',values:[header]})});
+        const headerData=await headerRes.json();
+        if(!headerRes.ok)throw new Error(headerData.error?.message||headerRes.statusText);
         const clearEnd=Math.max(rows.length+1,200);
-        const clearRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A2:AZ${clearEnd}:clear`,{method:'POST',headers,body:'{}'});
+        const clearRange=inventorySheetRange(2,clearEnd,header.length);
+        const clearRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/${encodeURIComponent(clearRange)}:clear`,{method:'POST',headers,body:'{}'});
         const clearData=await clearRes.json();
         if(!clearRes.ok)throw new Error(clearData.error?.message||clearRes.statusText);
         if(rows.length){
-          const writeRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/Inventory!A2:AZ${rows.length+1}?valueInputOption=RAW`,{method:'PUT',headers,body:JSON.stringify({range:`Inventory!A2:AZ${rows.length+1}`,majorDimension:'ROWS',values:rows})});
+          const writeRange=inventorySheetRange(2,rows.length+1,header.length);
+          const writeRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheet.id)}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,{method:'PUT',headers,body:JSON.stringify({range:writeRange,majorDimension:'ROWS',values:rows})});
           const writeData=await writeRes.json();
           if(!writeRes.ok)throw new Error(writeData.error?.message||writeRes.statusText);
         }
