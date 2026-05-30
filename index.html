@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.1730</title>
+  <title>Item Posting Assistant v0.26.05.30.1830</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -26,7 +26,7 @@
     @media(min-width:760px){.photo-manage-grid{grid-template-columns:repeat(2,1fr)}}
     .photo-manage-card{background:rgba(2,6,23,.5);border:1px solid var(--border);border-radius:16px;overflow:hidden}
     .photo-manage-card.primary-photo{outline:2px solid var(--success)}
-    .photo-manage-card img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#020617}
+    .photo-manage-card img{width:100%;aspect-ratio:4/3;object-fit:contain;display:block;background:#020617}
     .photo-manage-body{padding:10px;display:grid;gap:8px}
     .photo-label-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
     .photo-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
@@ -405,7 +405,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.30.1730 · Dynamic Sheets ranges</p>
+      <p class="eyebrow">v0.26.05.30.1830 · Original-quality Drive media</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -552,7 +552,7 @@
               <label class="check-item"><input id="watermarkEnabled" type="checkbox"><span class="box">✓</span><span>Enable watermark for this item</span></label>
               <div class="grid two">
                 <div><label class="small">Seller / store name</label><input id="watermarkText" placeholder="Your store name"></div>
-                <div><label class="small">Placement</label><select id="watermarkPlacement"><option value="corner">Bottom-right corner</option><option value="center">Transparent center</option></select></div>
+                <div><label class="small">Placement</label><select id="watermarkPlacement"><option value="corner">Bottom-right corner</option><option value="corner-diagonal">Bottom-right diagonal (45 degrees)</option><option value="center">Transparent center</option></select></div>
               </div>
               <div class="grid two">
                 <div><label class="small">Opacity</label><input id="watermarkOpacity" type="range" min="10" max="70" value="32"></div>
@@ -677,7 +677,7 @@
           <div id="googleDriveItemFoldersStatus" class="note"></div>
           <div class="actions"><button id="connectGoogleDriveItemFoldersBtn" class="success" type="button">Find/Create Next 3 Item Folders</button></div>
           <h3 style="margin-top:16px">Google Drive Photo Upload</h3>
-          <p class="note">Upload listing and storage photos for ready items that already have Drive folder links. Use one item for debugging or three items for the normal batch path.</p>
+          <p class="note">Upload best-available listing and storage photos for ready items that already have Drive folder links. New camera captures keep high-quality originals in the browser media library while the app uses smaller previews. Use one item for debugging or three items for the normal batch path.</p>
           <div id="googleDrivePhotoUploadStatus" class="note"></div>
           <div class="actions"><button id="uploadGoogleDrivePhotosBtn" class="success" type="button">Upload Next Item Photos</button><button id="uploadGoogleDrivePhotosBatchBtn" class="success" type="button">Upload Next 3 Items Photos</button></div>
           <h3 style="margin-top:16px">Google Sync Next Batch</h3>
@@ -822,7 +822,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.1730';
+    const VERSION='v0.26.05.30.1830';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1095,14 +1095,17 @@
         alert(`Selected item restore complete. ${restored} full photo${restored===1?'':'s'} restored.${missing?` ${missing} media record${missing===1?' was':'s were'} missing.`:''}`);
       }catch(e){alert('Could not restore selected item photos: '+(e?.message||e));console.error(e)}finally{const btn=$('restoreSelectedMediaBtn'); if(btn)btn.disabled=false;}
     }
-    async function bestPhotoDataUrlFromMedia(p){
+    async function originalPhotoDataUrlFromMedia(p){
       if(!p) return '';
-      if(p.watermarkedDataUrl) return p.watermarkedDataUrl;
       const mediaId=p.fullPhotoMediaId||p.mediaId;
       if(mediaId){
         try{const rec=await mediaGet(mediaId); if(rec?.blob) return await blobToDataUrl(rec.blob);}catch(e){console.warn('Could not read media for export',e)}
       }
-      return p.dataUrl||p.thumbnailDataUrl||'';
+      return p.originalDataUrl||p.dataUrl||p.thumbnailDataUrl||'';
+    }
+    async function bestPhotoDataUrlFromMedia(p){
+      if(!p) return '';
+      return p.watermarkedDataUrl||await originalPhotoDataUrlFromMedia(p);
     }
     async function exportSelectedItemFullBackup(){
       if(!selectedItemId){alert('Open/select an inventory item first, then export its full backup.');return;}
@@ -1122,7 +1125,7 @@
         let storagePhoto=getEffectiveStoragePhoto(item);
         let storageData=await bestPhotoDataUrlFromMedia(storagePhoto);
         const photoHtml=photos.map(p=>`<figure><img src="${p.data}" alt="${esc(p.label)}"><figcaption>${esc(p.label)} · ${esc(p.file)}</figcaption></figure>`).join('')||'<p>No listing photos available.</p>';
-        const storageHtml=storageData?`<figure><img src="${storageData}" alt="Storage location"><figcaption>Storage location · ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'<p>No storage photo available.</p>';
+        const storageHtml=storageData?`<figure><img src="${storageData}" alt="Storage location"><figcaption>Storage location · ${esc(storagePhotoFileName(item,index))}</figcaption></figure>`:'<p>No storage photo available.</p>';
         const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(item.title||'Selected Item')} Full Backup</title><style>body{font-family:system-ui,sans-serif;margin:22px;background:#f8fafc;color:#0f172a}.card{background:white;border:1px solid #cbd5e1;border-radius:16px;padding:18px;margin-bottom:18px}.photos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}figure{margin:0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#f1f5f9}img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}figcaption{font-size:12px;padding:8px;color:#475569}pre{white-space:pre-wrap;background:#f1f5f9;border-radius:12px;padding:12px}</style></head><body><h1>${esc(item.title||'Selected Item')}</h1><section class="card"><p><b>Exported:</b> ${esc(new Date().toISOString())}</p><p><b>Version:</b> ${esc(VERSION)}</p><p><b>Suggested Drive Folder:</b> ${esc(itemFolderName(item,index))}</p><p><b>Status:</b> ${esc(item.status||'Draft')} · <b>Condition:</b> ${esc(item.condition||'')} · <b>Price:</b> ${esc(item.fbPrice||moneyText(item.price)||'')}</p><p><b>Storage:</b> ${esc(item.storage||'')}</p><p><b>Details:</b> ${esc(joinParts([item.brand,item.model,item.itemType,item.color,item.dimensions,item.material], ' · ')||'')}</p></section><section class="card"><h2>Facebook Marketplace Draft</h2><p><b>Title:</b> ${esc(item.fbTitle||item.title||'')}</p><pre>${esc(item.fbDescription||'')}</pre><p><b>Pickup Notes:</b> ${esc(item.fbPickup||'')}</p></section><section class="card"><h2>Storage Location Photo</h2><div class="photos">${storageHtml}</div></section><section class="card"><h2>Listing Photos</h2><div class="photos">${photoHtml}</div></section></body></html>`;
         download(`item-posting-selected-item-full-backup-${safeName(item.title||'item')}-${VERSION}.html`,html,'text/html');
         await renderMediaDbStats();
@@ -1214,17 +1217,36 @@
     $('startRearBtn').onclick=()=>{showScreen('capture');startRear()}; $('startDefaultBtn').onclick=()=>startWithConstraints('Default camera',{video:{width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('startFrontBtn').onclick=()=>startWithConstraints('Front camera',{video:{facingMode:{ideal:'user'},width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('stopCameraBtn').onclick=stopCamera;
     function getShots(){return read(K.shots,[])} function setShots(s){if(safeWrite(K.shots,s)){renderShots();refreshBackupViews();return true}return false}
     function updateCapturePresetInfo(){let p=getSelectedPreset();$('capturePresetInfo').textContent=p?`Using ${p.name}: ${fmt(p.rotation)} per rotation. Capture points: 0s, ${fmt(p.rotation*.25)}, ${fmt(p.rotation*.5)}, ${fmt(p.rotation*.75)}.`:'Save or select a calibration preset first.';$('startAutoCaptureBtn').disabled=!p||!stream}
-    function canvasShot(label){
+    function cameraPhotoSources(label){
       if(!stream||!video.videoWidth){alert('Camera is not running yet.');throw new Error('Camera not running')}
-      let maxW=720,maxH=540,ratio=Math.min(maxW/video.videoWidth,maxH/video.videoHeight,1);
-      let c=document.createElement('canvas');c.width=Math.round(video.videoWidth*ratio);c.height=Math.round(video.videoHeight*ratio);
-      c.getContext('2d').drawImage(video,0,0,c.width,c.height);
-      return{label,dataUrl:c.toDataURL('image/jpeg',.62),takenAt:new Date().toISOString(),width:c.width,height:c.height,optimized:true}
+      const takenAt=new Date().toISOString(),captureId=id('capture');
+      let full=document.createElement('canvas');full.width=video.videoWidth;full.height=video.videoHeight;
+      full.getContext('2d').drawImage(video,0,0,full.width,full.height);
+      let maxW=720,maxH=540,ratio=Math.min(maxW/full.width,maxH/full.height,1);
+      let preview=document.createElement('canvas');preview.width=Math.max(1,Math.round(full.width*ratio));preview.height=Math.max(1,Math.round(full.height*ratio));
+      preview.getContext('2d').drawImage(full,0,0,preview.width,preview.height);
+      const previewDataUrl=preview.toDataURL('image/jpeg',.62);
+      return{fullDataUrl:full.toDataURL('image/jpeg',.94),photo:{captureId,label,dataUrl:previewDataUrl,thumbnailDataUrl:previewDataUrl,takenAt,width:full.width,height:full.height,previewWidth:preview.width,previewHeight:preview.height,optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true}}
+    }
+    async function attachOriginalPhotoMedia(photo,fullDataUrl,meta={}){
+      if(!photo||!fullDataUrl)return photo;
+      try{
+        const mediaId=await storePhotoInMediaLibrary({...photo,dataUrl:fullDataUrl},{sourceKey:meta.sourceKey||`original:${photo.captureId||id('photo')}:${fullDataUrl.length}`,kind:meta.kind||'high-quality-original',label:photo.label,itemId:meta.itemId||'',itemTitle:meta.itemTitle||'',storageLocation:meta.storageLocation||''});
+        photo.mediaId=mediaId;photo.fullPhotoMediaId=mediaId;photo.mediaBackedUpAt=new Date().toISOString();photo.originalBytesApprox=bytesOfString(fullDataUrl);photo.highQualityOriginalAvailable=true;
+      }catch(e){
+        console.warn('Could not store high-quality original in media library',e);
+        photo.originalDataUrl=fullDataUrl;photo.highQualityOriginalAvailable=true;
+      }
+      return photo
+    }
+    async function captureCameraPhoto(label){
+      const captured=cameraPhotoSources(label);
+      return attachOriginalPhotoMedia(captured.photo,captured.fullDataUrl,{sourceKey:`camera:${captured.photo.captureId}`,kind:'camera-high-quality-original',label})
     }
     function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}} function beep(){try{let C=window.AudioContext||window.webkitAudioContext;if(!C)return;let ac=new C(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
-    function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=canvasShot(a[i].label);setShots(a)})}
-    async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';cd.style.opacity='1';cd.style.visibility='visible';for(let i=3;i>0;i--){cd.textContent=String(i);await new Promise(requestAnimationFrame);await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(canvasShot(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. Review photos or create an inventory item.'}
-    $('manualShotBtn').onclick=()=>{let s=getShots();s.push(canvasShot('Manual shot '+(s.length+1)));setShots(s);$('captureStatus').textContent='Manual test shot saved to current captures.'}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
+    function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=async()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=await captureCameraPhoto(a[i].label);setShots(a)})}
+    async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';cd.style.opacity='1';cd.style.visibility='visible';for(let i=3;i>0;i--){cd.textContent=String(i);await new Promise(requestAnimationFrame);await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(await captureCameraPhoto(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]} with high-quality original`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. High-quality originals saved; previews are ready for review.'}
+    $('manualShotBtn').onclick=async()=>{let s=getShots();s.push(await captureCameraPhoto('Manual shot '+(s.length+1)));setShots(s);$('captureStatus').textContent='Manual shot saved with a high-quality original and a lighter preview.'}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
     function cloneShots(shots){return (shots||[]).map(s=>({...s}))}
     function compressDataUrl(dataUrl,maxW=640,maxH=480,quality=.58){
       return new Promise(resolve=>{
@@ -1277,13 +1299,15 @@
 
     // Inventory
     let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
+    const DRIVE_MEDIA_QUALITY_VERSION='best-available-original-v1';
     const DRIVE_SYNC_STEPS=[
       ['folderCreated','Drive folder created'],
       ['listingPhotosUploaded','Listing photos uploaded'],
       ['storagePhotoUploaded','Storage photo uploaded'],
       ['csvLinksPasted','CSV links pasted']
     ];
-    function defaultDriveSync(){return {folderCreated:false,listingPhotosUploaded:false,storagePhotoUploaded:false,csvLinksPasted:false,driveFolderId:'',driveFolderLink:'',driveFolderName:'',listingPhotoLinks:[],storagePhotoLink:'',lastSyncError:'',syncErrors:[],updatedAt:'',completedAt:''}}
+    function defaultDriveSync(){return {folderCreated:false,listingPhotosUploaded:false,storagePhotoUploaded:false,csvLinksPasted:false,driveFolderId:'',driveFolderLink:'',driveFolderName:'',listingPhotoLinks:[],storagePhotoLink:'',mediaUploadQuality:'',lastSyncError:'',syncErrors:[],updatedAt:'',completedAt:''}}
+    function drivePhotoUploadNeeded(sync){return !sync?.listingPhotosUploaded||sync.mediaUploadQuality!==DRIVE_MEDIA_QUALITY_VERSION}
     function normalizeDriveSync(item){
       const base=defaultDriveSync(), current=item?.driveSync&&typeof item.driveSync==='object'?item.driveSync:{};
       return {...base,...current};
@@ -1746,8 +1770,25 @@
       finally{if(btn)btn.disabled=false}
     }
     function updateSelectedPhotos(mutator){let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item)return;item.photos=item.photos||[];mutator(item.photos,item);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
-    function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=async()=>{let idx=Number(b.dataset.photoRotate);let items=getItems(),item=items.find(i=>i.id===selectedItemId);if(!item||!item.photos?.[idx])return;b.disabled=true;try{item.photos[idx].dataUrl=await rotateDataUrlRight(item.photos[idx].dataUrl);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}catch(e){alert('Could not rotate photo: '+e.message)}finally{b.disabled=false}})}
+    function wirePhotoButtons(){document.querySelectorAll('[data-photo-primary]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoPrimary);updateSelectedPhotos(photos=>{if(idx>0){let [p]=photos.splice(idx,1);photos.unshift(p)}})});document.querySelectorAll('[data-photo-up]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoUp);updateSelectedPhotos(photos=>{if(idx>0)[photos[idx-1],photos[idx]]=[photos[idx],photos[idx-1]]})});document.querySelectorAll('[data-photo-down]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDown);updateSelectedPhotos(photos=>{if(idx<photos.length-1)[photos[idx+1],photos[idx]]=[photos[idx],photos[idx+1]]})});document.querySelectorAll('[data-photo-delete]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoDelete);if(confirm('Delete this photo from the item?'))updateSelectedPhotos(photos=>photos.splice(idx,1))});document.querySelectorAll('[data-photo-save-label]').forEach(b=>b.onclick=()=>{let idx=Number(b.dataset.photoSaveLabel),input=document.querySelector(`[data-photo-label="${idx}"]`);updateSelectedPhotos(photos=>{if(photos[idx])photos[idx].label=(input?.value||`Photo ${idx+1}`).trim()||`Photo ${idx+1}`})});document.querySelectorAll('[data-photo-rotate]').forEach(b=>b.onclick=()=>rotateSelectedPhotoRight(Number(b.dataset.photoRotate),b))}
     function rotateDataUrlRight(dataUrl){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>{try{let c=document.createElement('canvas');c.width=img.height;c.height=img.width;let ctx=c.getContext('2d');ctx.translate(c.width/2,c.height/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-img.width/2,-img.height/2);resolve(c.toDataURL('image/jpeg',0.84))}catch(e){reject(e)}};img.onerror=()=>reject(new Error('Image load failed'));img.src=dataUrl})}
+    async function rotateSelectedPhotoRight(idx,button){
+      let items=getItems(),item=items.find(i=>i.id===selectedItemId),photo=item?.photos?.[idx];if(!photo)return;
+      if(button)button.disabled=true;
+      try{
+        const original=await originalPhotoDataUrlFromMedia(photo), rotatedOriginal=await rotateDataUrlRight(original||photo.dataUrl), preview=await compressDataUrl(rotatedOriginal,720,540,.62);
+        photo.dataUrl=preview;photo.thumbnailDataUrl=preview;photo.optimizedToThumbnail=true;photo.highQualityOriginalAvailable=true;
+        const mediaId=photo.fullPhotoMediaId||photo.mediaId;
+        if(mediaId){
+          const rec=await mediaGet(mediaId);
+          if(rec){rec.blob=dataUrlToBlob(rotatedOriginal);rec.bytes=rec.blob.size;rec.type=rec.blob.type;rec.updatedAt=new Date().toISOString();await mediaPut(rec)}
+        }else photo.originalDataUrl=rotatedOriginal;
+        delete photo.watermarkedDataUrl;delete photo.watermark;delete photo.watermarkedAt;
+        item.driveSync={...normalizeDriveSync(item),mediaUploadQuality:''};item.updatedAt=new Date().toISOString();
+        if(saveItemObject(item))loadItem(item.id)
+      }catch(e){alert('Could not rotate photo: '+e.message)}
+      finally{if(button)button.disabled=false}
+    }
     function watermarkDataUrl(dataUrl,settings){
       return new Promise((resolve,reject)=>{
         let img=new Image();
@@ -1760,7 +1801,8 @@
             let opacity=Math.max(.1,Math.min(.7,(Number(settings.opacity)||32)/100));
             let base=Math.min(c.width,c.height);
             let fontSize=Math.max(18,Math.round(base*((Number(settings.size)||30)/100)*(settings.placement==='center' ? .55 : .38)));
-            ctx.font=`900 ${fontSize}px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+            const setFont=()=>ctx.font=`900 ${fontSize}px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+            setFont();
             ctx.textBaseline='middle';
             ctx.lineJoin='round';
             let pad=Math.round(fontSize*.42), metrics=ctx.measureText(text), textW=Math.min(metrics.width,c.width-pad*4);
@@ -1772,6 +1814,22 @@
               ctx.globalAlpha=opacity;
               ctx.strokeStyle='rgba(2,6,23,.9)';ctx.lineWidth=Math.max(3,Math.round(fontSize*.08));ctx.strokeText(text,c.width/2,c.height/2);
               ctx.fillStyle='rgba(255,255,255,.96)';ctx.fillText(text,c.width/2,c.height/2);
+            }else if(settings.placement==='corner-diagonal'){
+              const maxTextWidth=Math.max(80,Math.min(c.width*.78,c.height*.92));
+              fontSize=Math.max(5,Math.min(fontSize,Math.floor(fontSize*maxTextWidth/Math.max(1,ctx.measureText(text).width))));setFont();
+              const textWidth=ctx.measureText(text).width, diagonalPad=Math.max(8,Math.round(fontSize*.42));
+              ctx.save();
+              ctx.translate(c.width-diagonalPad,c.height-diagonalPad);
+              ctx.rotate(-Math.PI/4);
+              ctx.textAlign='right';
+              ctx.globalAlpha=opacity*.92;
+              ctx.fillStyle='rgba(2,6,23,.72)';
+              const boxX=-textWidth-diagonalPad*1.5, boxY=-fontSize*.82, boxW=textWidth+diagonalPad*2, boxH=fontSize*1.58;
+              if(ctx.roundRect){ctx.beginPath();ctx.roundRect(boxX,boxY,boxW,boxH,Math.round(diagonalPad*.55));ctx.fill();}else ctx.fillRect(boxX,boxY,boxW,boxH);
+              ctx.globalAlpha=opacity;
+              ctx.strokeStyle='rgba(2,6,23,.9)';ctx.lineWidth=Math.max(2,Math.round(fontSize*.07));ctx.strokeText(text,0,0);
+              ctx.fillStyle='rgba(255,255,255,.96)';ctx.fillText(text,0,0);
+              ctx.restore();
             }else{
               let boxW=Math.min(c.width-pad*2,Math.ceil(textW+pad*2)), boxH=Math.ceil(fontSize+pad*1.4), x=c.width-boxW-pad, y=c.height-boxH-pad;
               ctx.globalAlpha=opacity*.92;
@@ -1874,18 +1932,12 @@
       return new Promise((resolve,reject)=>{
         if(!file){reject(new Error('No file selected'));return}
         let reader=new FileReader();
-        reader.onload=()=>{
-          let img=new Image();
-          img.onload=()=>{
-            try{
-              let maxW=900,maxH=675,ratio=Math.min(maxW/img.width,maxH/img.height,1);
-              let c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*ratio));c.height=Math.max(1,Math.round(img.height*ratio));
-              c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-              resolve({label:'Storage location photo',dataUrl:c.toDataURL('image/jpeg',.74),takenAt:new Date().toISOString(),source:'device camera/gallery',width:c.width,height:c.height});
-            }catch(e){reject(e)}
-          };
-          img.onerror=()=>reject(new Error('Could not load selected image'));
-          img.src=reader.result;
+        reader.onload=async()=>{
+          try{
+            const fullDataUrl=String(reader.result||''),previewDataUrl=await compressDataUrl(fullDataUrl,900,675,.74);
+            const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,thumbnailDataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
+            resolve(await attachOriginalPhotoMedia(photo,fullDataUrl,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||fullDataUrl.length}`,kind:'storage-high-quality-original',label:photo.label}))
+          }catch(e){reject(e)}
         };
         reader.onerror=()=>reject(new Error('Could not read selected image'));
         reader.readAsDataURL(file);
@@ -1925,10 +1977,10 @@
       }catch(e){alert('Could not save storage location photo: '+(e.message||e))}
       $('storagePhotoFile').value='';
     }
-    function captureStoragePhotoFromActiveCamera(){
+    async function captureStoragePhotoFromActiveCamera(){
       if(!stream||!video.videoWidth){alert('Start the camera first, then try Use Active Camera again. You can also use Take / Choose Photo.');return}
       try{
-        let shot=canvasShot('Storage location photo');
+        let shot=await captureCameraPhoto('Storage location photo');
         let photo={...shot,label:'Storage location photo',source:'active camera preview'};
         if(saveStoragePhotoToSelected(photo))alert('Storage location photo captured from active camera.');
       }catch(e){alert('Could not capture storage photo: '+(e.message||e))}
@@ -2014,7 +2066,7 @@
     }
     function renderGoogleDrivePhotoUploadStatus(message=''){
       const el=$('googleDrivePhotoUploadStatus'); if(!el)return;
-      const ready=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).length;
+      const ready=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&drivePhotoUploadNeeded(x.sync)).length;
       el.innerHTML=message||`<p>Ready items with folders still needing photo upload: <b>${ready}</b>. No photo upload run in this page session.</p>`;
       if($('uploadGoogleDrivePhotosBtn'))$('uploadGoogleDrivePhotosBtn').disabled=!googleAccessTokenInfo;
       if($('uploadGoogleDrivePhotosBatchBtn'))$('uploadGoogleDrivePhotosBatchBtn').disabled=!googleAccessTokenInfo;
@@ -2023,7 +2075,7 @@
       const el=$('googleSyncNextBatchStatus'); if(!el)return;
       const items=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)}));
       const folders=items.filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).length;
-      const uploads=items.filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).length;
+      const uploads=items.filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&drivePhotoUploadNeeded(x.sync)).length;
       el.innerHTML=message||`<p>Next batch ready. Missing folders: <b>${folders}</b>. Folder-backed items needing photo upload: <b>${uploads}</b>.</p>`;
       if($('googleSyncNextBatchBtn'))$('googleSyncNextBatchBtn').disabled=!googleAccessTokenInfo;
       if($('googleSyncAllRemainingBtn'))$('googleSyncAllRemainingBtn').disabled=!googleAccessTokenInfo;
@@ -2187,19 +2239,22 @@
       return {...uploaded,action:'uploaded'};
     }
     async function photoBlobForDriveUpload(photo){
-      const dataUrl=await bestPhotoDataUrlFromMedia(photo);
+      const dataUrl=await originalPhotoDataUrlFromMedia(photo);
       if(!dataUrl)throw new Error('Photo data was not available from media library or local data.');
       return dataUrlToBlob(dataUrl);
     }
     async function uploadGoogleDrivePhotosBatch(limit=1){
       const allItems=getItems();
-      const rows=allItems.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).slice(0,limit);
+      const rows=allItems.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&drivePhotoUploadNeeded(x.sync)).slice(0,limit);
       const itemResults=[], failures=[];
       let filesHandled=0, filesUploaded=0, filesFound=0;
       for(const row of rows){
         const target=allItems.find(i=>i.id===row.item.id);
         const sync=normalizeDriveSync(target);
         const uploaded=[];
+        if(sync.mediaUploadQuality!==DRIVE_MEDIA_QUALITY_VERSION){
+          sync.listingPhotoLinks=[];sync.storagePhotoLink='';sync.listingPhotosUploaded=false;sync.storagePhotoUploaded=false;
+        }
         sync.listingPhotoLinks=Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks:[];
         try{
           for(let i=0;i<(target.photos||[]).length;i++){
@@ -2225,6 +2280,7 @@
           clearDriveSyncErrors(sync);
           sync.listingPhotosUploaded=(target.photos||[]).length>0 && (target.photos||[]).every((_,i)=>!!sync.listingPhotoLinks[i]);
           sync.storagePhotoUploaded=!row.plan.storageFile||!!sync.storagePhotoLink;
+          if(sync.listingPhotosUploaded&&sync.storagePhotoUploaded)sync.mediaUploadQuality=DRIVE_MEDIA_QUALITY_VERSION;
           sync.updatedAt=new Date().toISOString();
           sync.completedAt=DRIVE_SYNC_STEPS.every(([key])=>!!sync[key])?sync.updatedAt:'';
           itemResults.push({title:target.title||'Untitled item',files:uploaded});
@@ -2236,7 +2292,7 @@
         target.updatedAt=sync.updatedAt;
       }
       if(itemResults.length||failures.length)setItems(allItems);
-      const remaining=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).length;
+      const remaining=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&drivePhotoUploadNeeded(x.sync)).length;
       return {itemsProcessed:itemResults.length,filesHandled,filesUploaded,filesFound,failures,remaining,itemResults};
     }
     function renderPhotoUploadBatchResult(result,label){
@@ -2291,7 +2347,7 @@
       const rows=getItems().map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),sync:normalizeDriveSync(item)}));
       return {
         missingFolders:rows.filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).length,
-        photoUploads:rows.filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&!x.sync.listingPhotosUploaded).length,
+        photoUploads:rows.filter(x=>x.readiness.readyForFutureSync&&x.sync.driveFolderId&&drivePhotoUploadNeeded(x.sync)).length,
         readyRows:rows.filter(x=>x.readiness.readyForFutureSync).length
       };
     }
@@ -2301,14 +2357,14 @@
         const missing=[], errors=Array.isArray(sync.syncErrors)?sync.syncErrors:[];
         if(readiness.readyForFutureSync){
           if(!sync.driveFolderLink)missing.push('Drive folder link');
-          if(!sync.listingPhotosUploaded)missing.push('Listing photo uploads');
+          if(drivePhotoUploadNeeded(sync))missing.push(sync.listingPhotosUploaded?'Best-available photo quality upgrade':'Listing photo uploads');
           if(!sync.storagePhotoUploaded)missing.push('Storage photo upload/status');
           if(!sync.csvLinksPasted)missing.push('Sheet link write');
           if(sync.lastSyncError)missing.push('Sync error');
         }
-        return {itemId:item.id||'',title:item.title||'Untitled item',readyForFutureSync:readiness.readyForFutureSync,readinessStatus:readiness.status,driveSyncStatus:status.label,driveStepsDone:status.done,driveStepsTotal:status.total,complete:readiness.readyForFutureSync&&status.done===status.total&&!sync.lastSyncError,missing,lastSyncError:sync.lastSyncError||'',syncErrors:errors,driveFolderLink:sync.driveFolderLink||'',listingPhotoLinks:Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks.filter(Boolean):[],storagePhotoLink:sync.storagePhotoLink||''};
+        return {itemId:item.id||'',title:item.title||'Untitled item',readyForFutureSync:readiness.readyForFutureSync,readinessStatus:readiness.status,driveSyncStatus:status.label,driveStepsDone:status.done,driveStepsTotal:status.total,complete:readiness.readyForFutureSync&&status.done===status.total&&!missing.length&&!sync.lastSyncError,missing,lastSyncError:sync.lastSyncError||'',syncErrors:errors,driveFolderLink:sync.driveFolderLink||'',listingPhotoLinks:Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks.filter(Boolean):[],storagePhotoLink:sync.storagePhotoLink||''};
       });
-      return {version:VERSION,generatedAt:new Date().toISOString(),summary:{itemsScanned:rows.length,readyItems:rows.filter(r=>r.readyForFutureSync).length,completeReadyItems:rows.filter(r=>r.complete).length,needsReview:rows.filter(r=>!r.readyForFutureSync).length,readyItemsMissingFolders:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Drive folder link')).length,readyItemsMissingPhotoUploads:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Listing photo uploads')).length,readyItemsMissingSheetWrite:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Sheet link write')).length,readyItemsWithSyncErrors:rows.filter(r=>r.readyForFutureSync&&r.lastSyncError).length},items:rows};
+      return {version:VERSION,generatedAt:new Date().toISOString(),summary:{itemsScanned:rows.length,readyItems:rows.filter(r=>r.readyForFutureSync).length,completeReadyItems:rows.filter(r=>r.complete).length,needsReview:rows.filter(r=>!r.readyForFutureSync).length,readyItemsMissingFolders:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Drive folder link')).length,readyItemsMissingPhotoUploads:rows.filter(r=>r.readyForFutureSync&&r.missing.some(x=>x==='Listing photo uploads'||x==='Best-available photo quality upgrade')).length,readyItemsMissingSheetWrite:rows.filter(r=>r.readyForFutureSync&&r.missing.includes('Sheet link write')).length,readyItemsWithSyncErrors:rows.filter(r=>r.readyForFutureSync&&r.lastSyncError).length},items:rows};
     }
     function renderGoogleSyncCompletionReport(){
       const el=$('googleSyncCompletionReport'); if(!el)return;
@@ -2345,6 +2401,7 @@
             const missing=(item.photos||[]).map((_,i)=>photoLinks[i]).filter(link=>!link).length;
             if(missing)issues.push(`${missing} listing photo link${missing===1?' is':'s are'} missing`);
           }
+          if(sync.listingPhotosUploaded&&sync.mediaUploadQuality!==DRIVE_MEDIA_QUALITY_VERSION)issues.push('Best-available photo quality upgrade is pending');
           if(photoLinks.some(link=>link&&!/^https:\/\/drive\.google\.com\//.test(link)))issues.push('One or more listing photo links do not look like Google Drive links');
           if(sync.storagePhotoUploaded&&plan.storageFile&&!sync.storagePhotoLink)issues.push('Storage photo marked uploaded but link is missing');
           if(sync.storagePhotoLink&&!/^https:\/\/drive\.google\.com\//.test(sync.storagePhotoLink))issues.push('Storage photo link does not look like a Google Drive link');
@@ -2553,11 +2610,12 @@
         if(media.thumbnailOnly)blockers.push('Thumbnail-only photos need full backup/media recovery');
         const alreadyComplete=sync.done===sync.total;
         const folderAction=sync.sync.folderCreated?'reuse_existing_or_recorded_folder':'create_folder';
-        const listingPhotosAction=sync.sync.listingPhotosUploaded?'skip_marked_uploaded':'upload_listing_photos';
-        const storagePhotoAction=!plan.storageFile?'none_no_storage_photo':(sync.sync.storagePhotoUploaded?'skip_marked_uploaded':'upload_storage_photo');
+        const qualityUpgrade=drivePhotoUploadNeeded(sync.sync);
+        const listingPhotosAction=qualityUpgrade?(sync.sync.listingPhotosUploaded?'upgrade_to_best_available_quality':'upload_listing_photos'):'skip_marked_uploaded';
+        const storagePhotoAction=!plan.storageFile?'none_no_storage_photo':(qualityUpgrade?'upload_best_available_storage_photo':(sync.sync.storagePhotoUploaded?'skip_marked_uploaded':'upload_storage_photo'));
         if(!sync.sync.folderCreated)report.summary.foldersToCreate++;
-        if(!sync.sync.listingPhotosUploaded)report.summary.listingPhotosToUpload+=plan.photoFiles.length;
-        if(plan.storageFile&&!sync.sync.storagePhotoUploaded)report.summary.storagePhotosToUpload++;
+        if(qualityUpgrade)report.summary.listingPhotosToUpload+=plan.photoFiles.length;
+        if(plan.storageFile&&(qualityUpgrade||!sync.sync.storagePhotoUploaded))report.summary.storagePhotosToUpload++;
         if(blockers.length)report.summary.blockedItems++;
         if(alreadyComplete)report.summary.alreadyMarkedComplete++;
         report.items.push({itemId:item.id,title:item.title||'Untitled item',rowAction:'create_or_update_sheet_row',futureSyncReady:googleSyncItemReadiness(item,index).readyForFutureSync,rowReadiness:googleSyncItemReadiness(item,index).status,folderAction,listingPhotosAction,storagePhotoAction,csvLinksAction:sync.sync.csvLinksPasted?'skip_marked_pasted':'write_links_after_upload',suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,mediaStatus:{mediaBacked:media.mediaBacked,thumbnailOnly:media.thumbnailOnly,localOnly:media.localOnly,missing:media.missing},driveProgress:{status:sync.label,doneSteps:sync.done,totalSteps:sync.total,...sync.sync},blocked:!!blockers.length,blockers});
@@ -2686,7 +2744,7 @@
       if($('googleSheetName'))$('googleSheetName').value=settings.sheetName||'';
       if($('googleDriveRoot'))$('googleDriveRoot').value=settings.driveRootFolder||'';
       const s=googleSyncReadinessSummary();
-      if($('googleSyncReadiness'))$('googleSyncReadiness').innerHTML=`Future sync target: <b>${escapeHtml(s.settings.sheetName)}</b> sheet · <b>${escapeHtml(s.settings.driveRootFolder)}</b> Drive root<br>Ready items: <b>${s.readyItems}</b> · Need review: <b>${s.needsAttentionItems}</b> · Manual Drive complete: <b>${s.driveCompleteItems}</b> of <b>${s.itemCount}</b>`;
+      if($('googleSyncReadiness'))$('googleSyncReadiness').innerHTML=`Sync target: <b>${escapeHtml(s.settings.sheetName)}</b> sheet · <b>${escapeHtml(s.settings.driveRootFolder)}</b> Drive root<br>Ready items: <b>${s.readyItems}</b> · Need review: <b>${s.needsAttentionItems}</b> · Manual Drive complete: <b>${s.driveCompleteItems}</b> of <b>${s.itemCount}</b>`;
     }
     function saveGoogleSyncSettingsFromForm(){if(setGoogleSyncSettings({sheetName:$('googleSheetName')?.value,driveRootFolder:$('googleDriveRoot')?.value}))alert('Google sync settings saved.')}
     function saveGoogleApiSetupFromForm(){if(setGoogleApiSetup({oauthClientId:$('googleOAuthClientId')?.value}))alert('Google API setup saved.')}
@@ -2695,7 +2753,8 @@
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
     function itemFolderName(item,index){let date=(item.createdAt||new Date().toISOString()).slice(0,10);return `${String(index+1).padStart(3,'0')}-${date}-${safeName(item.title)}`}
-    function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}.jpg`}
+    function shotFileName(item,index,shot,shotIndex){let label=safeName(shot?.label||`photo-${shotIndex+1}`);return `${itemFolderName(item,index)}-${String(shotIndex+1).padStart(2,'0')}-${label}-best-available.jpg`}
+    function storagePhotoFileName(item,index){return `${itemFolderName(item,index)}-storage-location-best-available.jpg`}
     function photoMediaStatus(photo){
       if(!photo) return {label:'Missing',mediaBacked:false,thumbnailOnly:false,localOnly:false,missing:true,ready:'missing'};
       const hasMedia=!!(photo.fullPhotoMediaId||photo.mediaId);
@@ -2736,7 +2795,7 @@
       const summary=itemMediaStatusSummary(item);
       const folder=itemFolderName(item,index);
       const photoFiles=(item.photos||[]).map((shot,shotIndex)=>shotFileName(item,index,shot,shotIndex));
-      const storageFile=hasPhotoRef(getEffectiveStoragePhoto(item))?`${folder}-storage-location.jpg`:'';
+      const storageFile=hasPhotoRef(getEffectiveStoragePhoto(item))?storagePhotoFileName(item,index):'';
       return {folder,photoFiles,storageFile,drivePath:suggestedDrivePath(folder),action:driveUploadAction(summary),summary};
     }
     function googleSyncItemReadiness(item,index){
@@ -2868,7 +2927,7 @@
       plan.totalSuggestedFileCount=plan.listingPhotoCount+plan.storagePhotoCount;
       return plan;
     }
-    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const googleApiSetup=getGoogleApiSetup();const readiness=googleSyncReadinessSummary(items);const readinessGate=buildGoogleSyncReadinessGate(items);const actionQueue=buildGoogleSyncActionQueue(items);const syncHistory=getGoogleSyncHistory();const preflight=buildGoogleSyncPreflight();const syncRunLog=getGoogleSyncRunLog();const dryRun=buildGoogleSyncDryRun();return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:readinessGate,googleSyncActionQueue:actionQueue,googleSyncHistory:syncHistory,googleSyncPreflight:preflight,googleSyncRunLog:syncRunLog,googleSyncSettings,googleApiSetup,googleSyncReadiness:readiness,googleSyncDryRun:dryRun,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',futureGoogleSyncReadiness:googleSyncItemReadiness(item,index),driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:`${plan.folder}-storage-location.jpg`,drivePath:suggestedDrivePath(plan.folder,`${plan.folder}-storage-location.jpg`),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
+    function buildMediaManifest(){let items=getItems();const uploadPlan=driveUploadPlanSummary(items);const googleSyncSettings=getGoogleSyncSettings();const googleApiSetup=getGoogleApiSetup();const readiness=googleSyncReadinessSummary(items);const readinessGate=buildGoogleSyncReadinessGate(items);const actionQueue=buildGoogleSyncActionQueue(items);const syncHistory=getGoogleSyncHistory();const preflight=buildGoogleSyncPreflight();const syncRunLog=getGoogleSyncRunLog();const dryRun=buildGoogleSyncDryRun();return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:readinessGate,googleSyncActionQueue:actionQueue,googleSyncHistory:syncHistory,googleSyncPreflight:preflight,googleSyncRunLog:syncRunLog,googleSyncSettings,googleApiSetup,googleSyncReadiness:readiness,googleSyncDryRun:dryRun,purpose:'Google Drive media backup planning manifest. Use uploadPlan and each item driveUploadPlan to create Drive folders, rename/upload best-available photos, and then paste Drive folder/photo links back into the Sheets CSV. Media status fields identify whether photos are media-backed, thumbnail-only, local-only, or missing.',uploadPlan,workflow:['Create one Google Drive folder for each folderName under the configured Drive root folder.','Upload best-available listing photos using suggestedFiles.fileName.','Upload storageLocationPhoto.fileName when present.','Paste Drive folder and photo links into the matching CSV columns after upload.'],items:items.map((item,index)=>{const summary=itemMediaStatusSummary(item);const storagePhoto=getEffectiveStoragePhoto(item);const storageStatus=storagePhotoMediaStatus(item);const plan=itemDrivePlan(item,index);const syncStatus=driveSyncStatus(item);return {itemId:item.id,title:item.title,folderName:plan.folder,createdAt:item.createdAt,status:item.status,storageLocation:item.storage,marketplace:'Facebook Marketplace',futureGoogleSyncReadiness:googleSyncItemReadiness(item,index),driveUploadPlan:{action:plan.action,suggestedDrivePath:plan.drivePath,listingPhotoFiles:plan.photoFiles,storagePhotoFile:plan.storageFile,totalSuggestedFiles:plan.photoFiles.length+(plan.storageFile?1:0),qualityVersion:DRIVE_MEDIA_QUALITY_VERSION,progress:{status:syncStatus.label,doneSteps:syncStatus.done,totalSteps:syncStatus.total,...syncStatus.sync}},mediaSummary:{photoCount:summary.photoCount,mediaBackedPhotoCount:summary.mediaBacked,thumbnailOnlyPhotoCount:summary.thumbnailOnly,localOnlyPhotoCount:summary.localOnly,missingPhotoCount:summary.missing,driveUploadReadiness:summary.readiness},suggestedFiles:(item.photos||[]).map((shot,shotIndex)=>{const st=photoMediaStatus(shot);const fileName=shotFileName(item,index,shot,shotIndex);return {label:shot.label||`Photo ${shotIndex+1}`,fileName,drivePath:suggestedDrivePath(plan.folder,fileName),takenAt:shot.takenAt||'',mediaStatus:st.label,driveUploadStatus:st.ready,mediaId:shot.mediaId||'',fullPhotoMediaId:shot.fullPhotoMediaId||'',optimizedToThumbnail:!!shot.optimizedToThumbnail,hasEmbeddedDataUrl:!!shot.dataUrl,hasThumbnailDataUrl:!!shot.thumbnailDataUrl}}),storageLocationPhoto:storagePhoto?.dataUrl||storagePhoto?.thumbnailDataUrl||storagePhoto?.mediaId||storagePhoto?.fullPhotoMediaId?{label:storagePhoto.label||'Storage location photo',fileName:plan.storageFile,drivePath:suggestedDrivePath(plan.folder,plan.storageFile),takenAt:storagePhoto.takenAt||'',mediaStatus:storageStatus.label,driveUploadStatus:storageStatus.ready,mediaId:storagePhoto.mediaId||'',fullPhotoMediaId:storagePhoto.fullPhotoMediaId||'',optimizedToThumbnail:!!storagePhoto.optimizedToThumbnail,hasEmbeddedDataUrl:!!storagePhoto.dataUrl,hasThumbnailDataUrl:!!storagePhoto.thumbnailDataUrl,source:storagePhoto._photoScope==='shared'?'shared storage-location photo':'item-specific storage photo'}:null,itemDetails:{brand:item.brand||'',model:item.model||'',itemType:item.itemType||'',color:item.color||'',dimensions:item.dimensions||'',material:item.material||'',testedStatus:item.testedStatus||'',missingParts:item.missingParts||'',keywords:item.keywords||'',category:item.category||''},listing:{facebookTitle:item.fbTitle||'',facebookPrice:item.fbPrice||moneyText(item.price),facebookDescription:item.fbDescription||'',pickupNotes:item.fbPickup||''}}})}}
     function buildSheetsDriveRows(){
       let rows=[['Google Sheet Target','Drive Root Target','Date Created','Item ID','Item Title','Brand','Model','Item Type','Color','Size / Dimensions','Material','Tested Status','Missing Parts','Keywords','Condition','Asking Price','Listing Status','Marketplace','Storage Location','Category Hint','Accessories','Flaws / Damage','Notes','Assistant / Research Notes','Photo Count','Media-Backed Photo Count','Thumbnail-Only Photo Count','Local-Only Photo Count','Missing Photo Count','Drive Upload Readiness','Drive Upload Action','Drive Sync Status','Drive Folder Created','Listing Photos Uploaded','Storage Photo Uploaded','CSV Links Pasted','Suggested Drive Folder Name','Suggested Drive Path','Drive Folder Link','Listing Photo Media Status','Storage Photo Media Status','Front Photo Link','Right Photo Link','Back Photo Link','Left Photo Link','Extra Photo Links','Suggested Photo Filenames','Suggested Photo Drive Paths','Storage Location Photo Suggested Filename','Storage Location Photo Link','Facebook Title','Facebook Description','Pickup Notes']];
       const gs=getGoogleSyncSettings();
@@ -2882,7 +2941,7 @@
       let tableRows=rows.slice(1).map(r=>`<tr><td>${esc(r[4]||'Untitled')}</td><td>${esc(r[36]||'')}</td><td>${esc(r[24]||'0')}</td><td>${esc(r[16]||'')}</td><td>${esc(r[18]||'')}</td></tr>`).join('')||'<tr><td colspan="5">No inventory items were included in this backup.</td></tr>';
       let items=b.items.map((item,index)=>{
         let effectiveStoragePhoto=getEffectiveStoragePhoto(item);
-        let storageImg=effectiveStoragePhoto?.dataUrl?`<figure><img src="${effectiveStoragePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
+        let storageImg=effectiveStoragePhoto?.dataUrl?`<figure><img src="${effectiveStoragePhoto.dataUrl}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(storagePhotoFileName(item,index))}</figcaption></figure>`:'';
         let imgs=(item.photos||[]).map((p,pi)=>`<figure><img src="${p.dataUrl}" alt="${esc(p.label||'photo')}"><figcaption>${esc(p.label||`Photo ${pi+1}`)} · Suggested file: ${esc(shotFileName(item,index,p,pi))}</figcaption></figure>`).join('');
         let checklist=[];
         checklist.push((item.photos||[]).length?'Listing photos saved':'No listing photos saved');
@@ -2917,7 +2976,7 @@
           else if(storageData)fallbackHits++;
           else missingHits++;
         }
-        let storageImg=storageData?`<figure><img src="${storageData}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(itemFolderName(item,index)+'-storage-location.jpg')}</figcaption></figure>`:'';
+        let storageImg=storageData?`<figure><img src="${storageData}" alt="Storage location photo"><figcaption>Storage location photo · Suggested file: ${esc(storagePhotoFileName(item,index))}</figcaption></figure>`:'';
         let imgParts=[];
         for(let pi=0; pi<(item.photos||[]).length; pi++){
           const p=item.photos[pi];
@@ -3025,7 +3084,7 @@
       }
     }
 
-    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);let gate=b.googleSyncReadinessGate.summary;$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Future sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p><p>Future sync gate: <b>${gate.readyForFutureSync}</b> ready · <b>${gate.needsReview}</b> need review</p>`}
+    function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);let gate=b.googleSyncReadinessGate.summary;$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p><p>Sync gate: <b>${gate.readyForFutureSync}</b> ready · <b>${gate.needsReview}</b> need review</p>`}
     function itemBackupReadiness(item){
       let missing=[];
       if(!(item.photos||[]).length) missing.push('listing photos');
