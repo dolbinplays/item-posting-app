@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.1830</title>
+  <title>Item Posting Assistant v0.26.05.30.1930</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -405,7 +405,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.30.1830 · Original-quality Drive media</p>
+      <p class="eyebrow">v0.26.05.30.1930 · Lightweight original-photo storage</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -822,7 +822,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.1830';
+    const VERSION='v0.26.05.30.1930';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1215,7 +1215,14 @@
     }
     async function startRear(){const attempts=[{name:'Rear exact environment',c:{video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Rear ideal environment',c:{video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Any camera fallback',c:{video:true,audio:false}}];let errs=[];for(const a of attempts){try{await startWithConstraints(a.name,a.c);return}catch(e){errs.push(`${a.name}: ${e.name} ${e.message}`)}}alert('Camera could not start.\n\n'+errs.join('\n'))}
     $('startRearBtn').onclick=()=>{showScreen('capture');startRear()}; $('startDefaultBtn').onclick=()=>startWithConstraints('Default camera',{video:{width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('startFrontBtn').onclick=()=>startWithConstraints('Front camera',{video:{facingMode:{ideal:'user'},width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('stopCameraBtn').onclick=stopCamera;
-    function getShots(){return read(K.shots,[])} function setShots(s){if(safeWrite(K.shots,s)){renderShots();refreshBackupViews();return true}return false}
+    function lightweightPhotoRecord(photo){
+      if(!photo||typeof photo!=='object')return photo;
+      const next={...photo};
+      delete next.originalDataUrl;
+      if(next.thumbnailDataUrl===next.dataUrl)delete next.thumbnailDataUrl;
+      return next
+    }
+    function getShots(){return read(K.shots,[])} function setShots(s){if(safeWrite(K.shots,(s||[]).map(lightweightPhotoRecord))){renderShots();refreshBackupViews();return true}return false}
     function updateCapturePresetInfo(){let p=getSelectedPreset();$('capturePresetInfo').textContent=p?`Using ${p.name}: ${fmt(p.rotation)} per rotation. Capture points: 0s, ${fmt(p.rotation*.25)}, ${fmt(p.rotation*.5)}, ${fmt(p.rotation*.75)}.`:'Save or select a calibration preset first.';$('startAutoCaptureBtn').disabled=!p||!stream}
     function cameraPhotoSources(label){
       if(!stream||!video.videoWidth){alert('Camera is not running yet.');throw new Error('Camera not running')}
@@ -1226,7 +1233,7 @@
       let preview=document.createElement('canvas');preview.width=Math.max(1,Math.round(full.width*ratio));preview.height=Math.max(1,Math.round(full.height*ratio));
       preview.getContext('2d').drawImage(full,0,0,preview.width,preview.height);
       const previewDataUrl=preview.toDataURL('image/jpeg',.62);
-      return{fullDataUrl:full.toDataURL('image/jpeg',.94),photo:{captureId,label,dataUrl:previewDataUrl,thumbnailDataUrl:previewDataUrl,takenAt,width:full.width,height:full.height,previewWidth:preview.width,previewHeight:preview.height,optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true}}
+      return{fullDataUrl:full.toDataURL('image/jpeg',.94),photo:{captureId,label,dataUrl:previewDataUrl,takenAt,width:full.width,height:full.height,previewWidth:preview.width,previewHeight:preview.height,optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true}}
     }
     async function attachOriginalPhotoMedia(photo,fullDataUrl,meta={}){
       if(!photo||!fullDataUrl)return photo;
@@ -1235,7 +1242,7 @@
         photo.mediaId=mediaId;photo.fullPhotoMediaId=mediaId;photo.mediaBackedUpAt=new Date().toISOString();photo.originalBytesApprox=bytesOfString(fullDataUrl);photo.highQualityOriginalAvailable=true;
       }catch(e){
         console.warn('Could not store high-quality original in media library',e);
-        photo.originalDataUrl=fullDataUrl;photo.highQualityOriginalAvailable=true;
+        delete photo.originalDataUrl;photo.highQualityOriginalAvailable=false;photo.originalPreservationWarning='High-quality original could not be saved in the browser media library. Preview retained.';
       }
       return photo
     }
@@ -1243,10 +1250,11 @@
       const captured=cameraPhotoSources(label);
       return attachOriginalPhotoMedia(captured.photo,captured.fullDataUrl,{sourceKey:`camera:${captured.photo.captureId}`,kind:'camera-high-quality-original',label})
     }
+    function captureQualityText(photo){return photo?.highQualityOriginalAvailable?'high-quality original saved':'preview saved; original-quality browser storage was unavailable'}
     function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}} function beep(){try{let C=window.AudioContext||window.webkitAudioContext;if(!C)return;let ac=new C(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
     function renderShots(){let s=getShots(),g=$('shotsGrid');g.innerHTML='';if(!s.length){g.innerHTML='<div class="empty-state">No captures yet.</div>';return}s.forEach((sh,i)=>{let d=document.createElement('div');d.className='shot-card';d.innerHTML=`<img src="${sh.dataUrl}" alt="${sh.label}"><div class="shot-card-body"><strong>${sh.label}</strong><div class="actions"><button class="secondary" data-retake="${i}">Retake</button><button class="danger" data-del="${i}">Delete</button></div></div>`;g.appendChild(d)});g.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let a=getShots();a.splice(Number(b.dataset.del),1);setShots(a)});g.querySelectorAll('[data-retake]').forEach(b=>b.onclick=async()=>{let a=getShots(),i=Number(b.dataset.retake);a[i]=await captureCameraPhoto(a[i].label);setShots(a)})}
-    async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';cd.style.opacity='1';cd.style.visibility='visible';for(let i=3;i>0;i--){cd.textContent=String(i);await new Promise(requestAnimationFrame);await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));shots.push(await captureCameraPhoto(labels[i]));$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]} with high-quality original`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;$('captureStatus').textContent='Capture complete. High-quality originals saved; previews are ready for review.'}
-    $('manualShotBtn').onclick=async()=>{let s=getShots();s.push(await captureCameraPhoto('Manual shot '+(s.length+1)));setShots(s);$('captureStatus').textContent='Manual shot saved with a high-quality original and a lighter preview.'}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
+    async function autoCapture(){let p=getSelectedPreset();if(!p||capturing||!stream)return;capturing=true;$('captureBar').style.width='0%';$('startAutoCaptureBtn').disabled=true;let cd=$('countdown');cd.style.display='grid';cd.style.opacity='1';cd.style.visibility='visible';for(let i=3;i>0;i--){cd.textContent=String(i);await new Promise(requestAnimationFrame);await new Promise(r=>setTimeout(r,750))}cd.style.display='none';let labels=['Front','Right side','Back','Left side'],times=[0,p.rotation*.25,p.rotation*.5,p.rotation*.75],shots=[];let start=performance.now();for(let i=0;i<labels.length;i++){let wait=Math.max(0,times[i]*1000-(performance.now()-start));$('captureStatus').textContent=`Waiting for ${labels[i]} shot...`;await new Promise(r=>setTimeout(r,wait));const shot=await captureCameraPhoto(labels[i]);shots.push(shot);$('captureBar').style.width=`${((i+1)/labels.length)*100}%`;$('captureStatus').textContent=`Captured ${labels[i]}: ${captureQualityText(shot)}`;beep();buzz()}setShots(shots);capturing=false;$('startAutoCaptureBtn').disabled=false;const originalCount=shots.filter(s=>s.highQualityOriginalAvailable).length;$('captureStatus').textContent=`Capture complete. ${originalCount} of ${shots.length} high-quality originals saved; lightweight previews are ready.`}
+    $('manualShotBtn').onclick=async()=>{let s=getShots(),shot=await captureCameraPhoto('Manual shot '+(s.length+1));s.push(shot);setShots(s);$('captureStatus').textContent=`Manual shot captured: ${captureQualityText(shot)}.`}; $('startAutoCaptureBtn').onclick=autoCapture; $('clearShotsBtn').onclick=()=>{if(confirm('Clear current captures?')){setShots([]);$('captureBar').style.width='0%';$('captureStatus').textContent='Current captures cleared.'}};
     function cloneShots(shots){return (shots||[]).map(s=>({...s}))}
     function compressDataUrl(dataUrl,maxW=640,maxH=480,quality=.58){
       return new Promise(resolve=>{
@@ -1267,7 +1275,7 @@
     async function compactShots(shots,maxW=640,maxH=480,quality=.58){
       let out=[];
       for(const s of (shots||[])){
-        out.push({...s,dataUrl:await compressDataUrl(s.dataUrl,maxW,maxH,quality),compressedForInventory:true,optimized:true});
+        out.push(lightweightPhotoRecord({...s,dataUrl:await compressDataUrl(s.dataUrl,maxW,maxH,quality),compressedForInventory:true,optimized:true}));
       }
       return out;
     }
@@ -1511,6 +1519,8 @@
       try{
         const buttons=[$('createItemBtn'),$('newItemFromShotsBtn')].filter(Boolean);buttons.forEach(b=>b.disabled=true);
         $('captureStatus').textContent='Creating inventory item...';
+        if(!setShots(shots))return;
+        shots=getShots();
         let items=getItems(),title=(titleHint||$('sessionName').value||'').trim()||`Inventory item ${items.length+1}`;
         let item={id:id('item'),title,price:'',condition:'Used - Good',status:'Draft',brand:'',model:'',itemType:'',color:'',dimensions:'',material:'',testedStatus:'',missingParts:'',keywords:'',category:'',accessories:'',flaws:'',storage:'',notes:'',assistantNotes:'',assistantSuggestions:[],draftTone:'friendly',pickupMode:'Local pickup preferred',draftHistory:[],watermarkSettings:defaultWatermarkSettings(),storagePhoto:null,driveSync:defaultDriveSync(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),photos:await compactShots(shots)};
         Object.assign(item,generateDraft(item));
@@ -1782,7 +1792,10 @@
         if(mediaId){
           const rec=await mediaGet(mediaId);
           if(rec){rec.blob=dataUrlToBlob(rotatedOriginal);rec.bytes=rec.blob.size;rec.type=rec.blob.type;rec.updatedAt=new Date().toISOString();await mediaPut(rec)}
-        }else photo.originalDataUrl=rotatedOriginal;
+        }else{
+          const linked=await attachOriginalPhotoMedia(photo,rotatedOriginal,{sourceKey:`rotated:${photo.captureId||id('photo')}:${Date.now()}`,kind:'rotated-high-quality-original',label:photo.label,itemId:item.id,itemTitle:item.title});
+          Object.assign(photo,lightweightPhotoRecord(linked));
+        }
         delete photo.watermarkedDataUrl;delete photo.watermark;delete photo.watermarkedAt;
         item.driveSync={...normalizeDriveSync(item),mediaUploadQuality:''};item.updatedAt=new Date().toISOString();
         if(saveItemObject(item))loadItem(item.id)
@@ -1815,20 +1828,22 @@
               ctx.strokeStyle='rgba(2,6,23,.9)';ctx.lineWidth=Math.max(3,Math.round(fontSize*.08));ctx.strokeText(text,c.width/2,c.height/2);
               ctx.fillStyle='rgba(255,255,255,.96)';ctx.fillText(text,c.width/2,c.height/2);
             }else if(settings.placement==='corner-diagonal'){
-              const maxTextWidth=Math.max(80,Math.min(c.width*.78,c.height*.92));
-              fontSize=Math.max(5,Math.min(fontSize,Math.floor(fontSize*maxTextWidth/Math.max(1,ctx.measureText(text).width))));setFont();
-              const textWidth=ctx.measureText(text).width, diagonalPad=Math.max(8,Math.round(fontSize*.42));
+              const maxTextWidth=Math.max(80,Math.min(c.width*.72,c.height*.84));
+              fontSize=Math.max(12,Math.min(fontSize,Math.floor(fontSize*maxTextWidth/Math.max(1,ctx.measureText(text).width))));setFont();
+              const textWidth=ctx.measureText(text).width, diagonalPad=Math.max(10,Math.round(fontSize*.48));
+              const boxW=textWidth+diagonalPad*2, boxH=fontSize*1.72;
+              const insetX=Math.max(diagonalPad*1.2,boxH*.78), insetY=Math.max(diagonalPad*1.2,boxW*.72);
               ctx.save();
-              ctx.translate(c.width-diagonalPad,c.height-diagonalPad);
+              ctx.translate(c.width-insetX,c.height-insetY);
               ctx.rotate(-Math.PI/4);
-              ctx.textAlign='right';
-              ctx.globalAlpha=opacity*.92;
-              ctx.fillStyle='rgba(2,6,23,.72)';
-              const boxX=-textWidth-diagonalPad*1.5, boxY=-fontSize*.82, boxW=textWidth+diagonalPad*2, boxH=fontSize*1.58;
+              ctx.textAlign='center';
+              ctx.globalAlpha=Math.max(.58,opacity);
+              ctx.fillStyle='rgba(2,6,23,.9)';
+              const boxX=-boxW/2, boxY=-boxH/2;
               if(ctx.roundRect){ctx.beginPath();ctx.roundRect(boxX,boxY,boxW,boxH,Math.round(diagonalPad*.55));ctx.fill();}else ctx.fillRect(boxX,boxY,boxW,boxH);
-              ctx.globalAlpha=opacity;
-              ctx.strokeStyle='rgba(2,6,23,.9)';ctx.lineWidth=Math.max(2,Math.round(fontSize*.07));ctx.strokeText(text,0,0);
-              ctx.fillStyle='rgba(255,255,255,.96)';ctx.fillText(text,0,0);
+              ctx.globalAlpha=Math.max(.72,opacity);
+              ctx.strokeStyle='rgba(2,6,23,1)';ctx.lineWidth=Math.max(3,Math.round(fontSize*.1));ctx.strokeText(text,0,0);
+              ctx.fillStyle='rgba(255,255,255,1)';ctx.fillText(text,0,0);
               ctx.restore();
             }else{
               let boxW=Math.min(c.width-pad*2,Math.ceil(textW+pad*2)), boxH=Math.ceil(fontSize+pad*1.4), x=c.width-boxW-pad, y=c.height-boxH-pad;
@@ -1935,7 +1950,7 @@
         reader.onload=async()=>{
           try{
             const fullDataUrl=String(reader.result||''),previewDataUrl=await compressDataUrl(fullDataUrl,900,675,.74);
-            const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,thumbnailDataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
+            const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
             resolve(await attachOriginalPhotoMedia(photo,fullDataUrl,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||fullDataUrl.length}`,kind:'storage-high-quality-original',label:photo.label}))
           }catch(e){reject(e)}
         };
