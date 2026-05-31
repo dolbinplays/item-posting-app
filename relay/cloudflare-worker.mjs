@@ -4,6 +4,7 @@ const MAX_COMPARABLE_SCREENSHOTS=8;
 const MAX_BODY_BYTES=6*1024*1024;
 const ALLOWED_FIELDS=['brand','model','itemType','category','color','dimensions','material','condition','testedStatus','accessories','missingParts','flaws','keywords','fbTitle'];
 const COMPARABLE_HOSTS=['ebay.com','facebook.com','mercari.com','offerup.com'];
+const MODEL_TOKEN_RATES_USD_PER_MILLION={'gpt-5.4-mini':{input:0.75,output:4.50}};
 
 function corsHeaders(request,env){
   const origin=request.headers.get('Origin')||'';
@@ -34,6 +35,11 @@ function responseOutputText(response){
     }
   }
   return ''
+}
+
+function responseUsage(response,model){
+  const usage=response?.usage||{},inputTokens=Number(usage.input_tokens||0),outputTokens=Number(usage.output_tokens||0),rates=MODEL_TOKEN_RATES_USD_PER_MILLION[model]||null;
+  return {inputTokens,outputTokens,totalTokens:Number(usage.total_tokens||inputTokens+outputTokens),estimatedCostUsd:rates?Number(((inputTokens*rates.input+outputTokens*rates.output)/1000000).toFixed(6)):null,estimateBasis:rates?`${model}: $${rates.input.toFixed(2)}/1M input tokens and $${rates.output.toFixed(2)}/1M output tokens`:'No local rate configured for this model'}
 }
 
 function decodeHtml(value=''){
@@ -125,8 +131,9 @@ async function recognizeComparableScreenshot(request,env,body){
   if(!screenshots.length)return json(request,env,400,{error:'Include one or more compressed listing screenshots.'});
   const prompt=`Read these ${screenshots.length} resale-marketplace listing screenshots. Return one result for each screenshot in the same index order. Extract the marketplace, visible listing title, visible item price, and a short note with useful visible context such as condition, sold status, or shipping. Do not invent hidden details. Return an empty string for a field that is not clearly visible.`;
   const content=[{type:'input_text',text:prompt},...screenshots.flatMap((s,index)=>[{type:'input_text',text:`Screenshot index ${index}: ${String(s.fileName||'listing screenshot').slice(0,120)}`},{type:'input_image',image_url:s.dataUrl,detail:'auto'}])];
+  const model=env.OPENAI_MODEL||'gpt-5.4-mini';
   const upstream=await fetch(OPENAI_RESPONSES_URL,{method:'POST',headers:{'Authorization':`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
-    model:env.OPENAI_MODEL||'gpt-5.4-mini',
+    model,
     input:[{role:'user',content}],
     text:{format:{type:'json_schema',name:'comparable_screenshot',strict:true,schema:comparableScreenshotSchema()}}
   })});
@@ -134,7 +141,7 @@ async function recognizeComparableScreenshot(request,env,body){
   if(!upstream.ok)return json(request,env,502,{error:'OpenAI screenshot recognition failed.',upstreamStatus:upstream.status,upstreamError:response?.error?.message||'Unknown upstream error'});
   let parsed;
   try{parsed=JSON.parse(responseOutputText(response))}catch{return json(request,env,502,{error:'OpenAI returned an unreadable screenshot-recognition response.'})}
-  return json(request,env,200,{provider:'openai-responses-api',model:env.OPENAI_MODEL||'gpt-5.4-mini',listings:Array.isArray(parsed.listings)?parsed.listings:[]})
+  return json(request,env,200,{provider:'openai-responses-api',model,listings:Array.isArray(parsed.listings)?parsed.listings:[],usage:responseUsage(response,model)})
 }
 
 export default {
@@ -159,8 +166,9 @@ export default {
 Seller-entered item fields:
 ${JSON.stringify(item,null,2)}`;
     const content=[{type:'input_text',text:prompt},...photos.map(p=>({type:'input_image',image_url:p.dataUrl,detail:'auto'}))];
+    const model=env.OPENAI_MODEL||'gpt-5.4-mini';
     const upstream=await fetch(OPENAI_RESPONSES_URL,{method:'POST',headers:{'Authorization':`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
-      model:env.OPENAI_MODEL||'gpt-5.4-mini',
+      model,
       input:[{role:'user',content}],
       text:{format:{type:'json_schema',name:'item_recognition',strict:true,schema:recognitionSchema()}}
     })});
@@ -168,6 +176,6 @@ ${JSON.stringify(item,null,2)}`;
     if(!upstream.ok)return json(request,env,502,{error:'OpenAI recognition request failed.',upstreamStatus:upstream.status,upstreamError:response?.error?.message||'Unknown upstream error'});
     let parsed;
     try{parsed=JSON.parse(responseOutputText(response))}catch{return json(request,env,502,{error:'OpenAI returned an unreadable recognition response.'})}
-    return json(request,env,200,{provider:'openai-responses-api',model:env.OPENAI_MODEL||'gpt-5.4-mini',notes:String(parsed.notes||''),suggestions:Array.isArray(parsed.suggestions)?parsed.suggestions:[]})
+    return json(request,env,200,{provider:'openai-responses-api',model,notes:String(parsed.notes||''),suggestions:Array.isArray(parsed.suggestions)?parsed.suggestions:[],usage:responseUsage(response,model)})
   }
 };

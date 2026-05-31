@@ -39,6 +39,8 @@ The app sends `POST` JSON with `contractVersion`, current item fields, and up to
 
 The default model is `gpt-5.4-mini`. Override `OPENAI_MODEL` in Worker variables if needed.
 
+Successful paid AI responses include token usage and a locally calculated approximate USD cost. The current estimate for `gpt-5.4-mini` uses OpenAI's published rate of `$0.75` per million input tokens and `$4.50` per million output tokens. Treat the in-app total as a convenience estimate, not a replacement for the OpenAI billing dashboard. If the configured model changes, update the Worker's local rate table or the app will show that the call could not be priced locally.
+
 The relay also accepts a `comparable-url-v1` contract for the pricing workspace. This lookup does not call OpenAI. It fetches public metadata only from allowlisted eBay, Facebook Marketplace, Mercari, and OfferUp HTTPS URLs. Some marketplace pages hide title or price metadata behind login pages; the app keeps the pasted URL and falls back to manual entry for any missing field.
 
 For login-walled listings, the pricing workspace can send up to eight user-selected compressed screenshots with the `comparable-screenshot-v1` contract. This calls OpenAI vision once for the batch and returns marketplace, title, price, and note fields for each screenshot. Screenshots are sent only after the user explicitly chooses them and taps **Analyze Selected Screenshots**.

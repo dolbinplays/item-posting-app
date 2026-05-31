@@ -1,0 +1,53 @@
+# Item Posting Assistant Roadmap
+
+## Implemented Foundation
+
+- Phone-first item capture, calibration, storage presets, storage-location photos, and recoverable watermarks.
+- Compact mobile inventory browser with item editing and draft history.
+- Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
+- Save-time Google sync and local capture cleanup for ready inventory items.
+- Secure OpenAI relay for photo recognition, structured listing suggestions, and listing-draft assistance.
+- Pricing research workspace with marketplace search shortcuts, public URL lookup, manually saved comparables, screenshot batch recognition, and quick-sale / fair-market / high-end calculations.
+
+## Current Work
+
+- AI API usage visibility: show paid-action notices, locally track relay calls and approximate API cost, include usage history in backups, and document the billing assumptions.
+
+## Next Roadmap Stops
+
+### Stage 9 - Pricing Research Follow-Through
+
+- Marketplace-specific guidance generated from saved comparables.
+- Saved research summaries and clearer comparable review tools.
+- AI usage guardrails, optional spending warnings, and an administrator-facing usage view.
+
+### Stage 10 - Desktop Workstation Mode
+
+- Desktop browser workstation while the phone remains mounted as a camera station.
+- QR pairing and a shared item/session view.
+- Easier copy and paste into Facebook Marketplace from a laptop.
+
+### Stage 11 - Android APK Conversion
+
+- Installable Android version with app icon and name.
+- Better native storage, camera permissions, media permissions, and offline reliability.
+- Evaluate a Play Store distribution path.
+
+### Stage 12 - Multi-Camera Capture
+
+- Pair a second phone by QR code.
+- Photo, video, two-angle, and detail-camera modes.
+- Synchronized capture sessions.
+
+### Stage 13 - Advanced Inventory Tools
+
+- Storage-location management screen.
+- QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
+- Sold and shipped workflow with profit, fee, and shipping tracking.
+
+## Architecture Principles
+
+- Google Sheets is the inventory and listing index.
+- Google Drive is the long-term photo and video backup.
+- Browser-local media is temporary working storage and should remain optimized for phone reliability.
+- Paid AI calls must be explicit, visible to the user, and routed through the secure relay. Local tools and public URL lookup should remain free.
