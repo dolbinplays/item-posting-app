@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.2230</title>
+  <title>Item Posting Assistant v0.26.05.30.2350</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -54,6 +54,14 @@
     .filter-grid .full{grid-column:1/-1}
     .inventory-toolbar-note{margin-top:8px;color:var(--muted);font-size:.82rem;line-height:1.35}
     .inventory-count{margin-top:10px;color:#bae6fd;font-weight:900;font-size:.88rem}
+    .inventory-picker{margin-top:12px;border:1px solid var(--border);border-radius:16px;background:rgba(2,6,23,.42);overflow:hidden}
+    .inventory-picker summary{cursor:pointer;padding:12px;color:#bae6fd;font-weight:950;list-style:none}.inventory-picker summary::-webkit-details-marker{display:none}
+    .inventory-compact-list{display:grid;gap:7px;padding:0 8px 8px}
+    .inventory-compact-item{display:grid;grid-template-columns:54px 1fr;gap:10px;align-items:center;width:100%;text-align:left;padding:8px;border:1px solid var(--border);border-radius:13px;background:rgba(15,23,42,.7);color:var(--text)}
+    .inventory-compact-item.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(56,189,248,.28)}
+    .inventory-compact-thumb{width:54px;height:54px;border-radius:10px;object-fit:cover;background:#020617;border:1px solid rgba(255,255,255,.12)}
+    .inventory-compact-title{display:block;font-weight:950;line-height:1.2}.inventory-compact-meta{display:block;color:var(--muted);font-size:.78rem;line-height:1.3;margin-top:3px}
+    .save-workflow-status{margin-top:10px;padding:10px;border:1px solid rgba(56,189,248,.28);border-radius:13px;background:rgba(56,189,248,.08);color:#bae6fd;font-size:.82rem;line-height:1.35}
     .quick-status-row{display:grid;grid-template-columns:1fr;gap:6px;margin-top:9px}
     .quick-status-row select{padding:9px;border-radius:12px;font-size:.84rem}
     .quick-status-row label{color:var(--muted);font-size:.76rem;font-weight:900}
@@ -538,8 +546,8 @@
           </div>
           <div class="actions"><button id="newItemFromShotsBtn" class="primary">Create Item from Current Captures</button><button id="clearInventoryFiltersBtn" class="secondary">Clear Search / Filters</button><button id="scanInventoryBtn" class="secondary">Scan / Repair Inventory</button><button id="deleteIncompleteItemsBtn" class="danger">Delete Incomplete Draft Items</button></div>
           <div id="inventoryCount" class="inventory-count">0 items</div>
-          <p class="inventory-toolbar-note">Tip: use Needs Listing to focus on Draft and Ready to Post items. Quick status changes on cards save immediately.</p><p class="inventory-toolbar-note">If older test items will not open, use Scan / Repair Inventory to assign missing IDs, then select or delete them.</p>
-          <div id="inventoryList" class="inventory-grid" style="margin-top:12px"></div>
+          <p class="inventory-toolbar-note">Tip: use Needs Listing to focus on Draft and Ready to Post items. Open the compact picker to select an item without scrolling past large photos.</p><p class="inventory-toolbar-note">If older test items will not open, use Scan / Repair Inventory to assign missing IDs, then select or delete them.</p>
+          <details id="inventoryPicker" class="inventory-picker"><summary id="inventoryPickerSummary">Choose an inventory item</summary><div id="inventoryList" class="inventory-compact-list"></div></details>
         </div>
         <div class="card">
           <div id="itemDetailEmpty" class="empty-state">Select an item or create one from current captures.</div>
@@ -624,6 +632,7 @@
             <label class="small">Facebook description</label><div class="copy-row"><textarea id="fbDescription" rows="7"></textarea><button class="secondary copy-btn" data-copy="fbDescription">Copy</button></div>
             <label class="small">Pickup notes</label><div class="copy-row"><textarea id="fbPickup" rows="3"></textarea><button class="secondary copy-btn" data-copy="fbPickup">Copy</button></div>
             <div class="actions"><button id="saveItemBtn" class="success">Save Item</button><button id="generateDraftBtn" class="primary">Regenerate Draft</button><button id="saveDraftVersionBtn" class="secondary">Save Draft Version</button><button id="deleteItemBtn" class="danger">Delete Item</button></div>
+            <div id="itemSaveWorkflowStatus" class="save-workflow-status">Save Item stores the item locally, releases temporary capture-session previews, and backs up the item to Google Drive + Sheets when Google access is active.</div>
             <h3 style="margin-top:16px">Draft History</h3>
             <p class="note">Save listing versions here before making major edits. You can restore an older draft or copy a full listing bundle for Facebook Marketplace.</p>
             <div id="draftHistoryList" class="draft-history-list"></div>
@@ -822,7 +831,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.2230';
+    const VERSION='v0.26.05.30.2350';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1227,7 +1236,7 @@
     }
     function getShots(){return read(K.shots,[])} function setShots(s){if(safeWrite(K.shots,(s||[]).map(lightweightPhotoRecord))){renderShots();refreshBackupViews();return true}return false}
     function updateCapturePresetInfo(){let p=getSelectedPreset();$('capturePresetInfo').textContent=p?`Using ${p.name}: ${fmt(p.rotation)} per rotation. Capture points: 0s, ${fmt(p.rotation*.25)}, ${fmt(p.rotation*.5)}, ${fmt(p.rotation*.75)}.`:'Save or select a calibration preset first.';$('startAutoCaptureBtn').disabled=!p||!stream}
-    function cameraPhotoSources(label){
+    async function cameraPhotoSources(label){
       if(!stream||!video.videoWidth){alert('Camera is not running yet.');throw new Error('Camera not running')}
       const takenAt=new Date().toISOString(),captureId=id('capture');
       let full=document.createElement('canvas');full.width=video.videoWidth;full.height=video.videoHeight;
@@ -1236,13 +1245,14 @@
       let preview=document.createElement('canvas');preview.width=Math.max(1,Math.round(full.width*ratio));preview.height=Math.max(1,Math.round(full.height*ratio));
       preview.getContext('2d').drawImage(full,0,0,preview.width,preview.height);
       const previewDataUrl=preview.toDataURL('image/jpeg',.62);
-      return{fullDataUrl:full.toDataURL('image/jpeg',.94),photo:{captureId,label,dataUrl:previewDataUrl,takenAt,width:full.width,height:full.height,previewWidth:preview.width,previewHeight:preview.height,optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true}}
+      return{fullBlob:await new Promise((resolve,reject)=>full.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not encode photo blob.')),'image/jpeg',.94)),photo:{captureId,label,dataUrl:previewDataUrl,takenAt,width:full.width,height:full.height,previewWidth:preview.width,previewHeight:preview.height,optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true}}
     }
-    async function attachOriginalPhotoMedia(photo,fullDataUrl,meta={}){
-      if(!photo||!fullDataUrl)return photo;
+    async function attachOriginalPhotoMedia(photo,fullBlob,meta={}){
+      if(!photo||!fullBlob)return photo;
       try{
-        const mediaId=await storePhotoInMediaLibrary({...photo,dataUrl:fullDataUrl},{sourceKey:meta.sourceKey||`original:${photo.captureId||id('photo')}:${fullDataUrl.length}`,kind:meta.kind||'high-quality-original',label:photo.label,itemId:meta.itemId||'',itemTitle:meta.itemTitle||'',storageLocation:meta.storageLocation||''});
-        photo.mediaId=mediaId;photo.fullPhotoMediaId=mediaId;photo.mediaBackedUpAt=new Date().toISOString();photo.originalBytesApprox=bytesOfString(fullDataUrl);photo.highQualityOriginalAvailable=true;
+        const mediaId=photo.mediaId||id('media'),createdAt=new Date().toISOString();
+        await mediaPut({id:mediaId,sourceKey:meta.sourceKey||`original:${photo.captureId||id('photo')}:${fullBlob.size}`,itemId:meta.itemId||'',itemTitle:meta.itemTitle||'',kind:meta.kind||'high-quality-original',label:photo.label||meta.label||'Photo',storageLocation:meta.storageLocation||'',bytes:fullBlob.size,type:fullBlob.type||'image/jpeg',createdAt,blob:fullBlob});
+        photo.mediaId=mediaId;photo.fullPhotoMediaId=mediaId;photo.mediaBackedUpAt=createdAt;photo.originalBytesApprox=fullBlob.size;photo.highQualityOriginalAvailable=true;
       }catch(e){
         console.warn('Could not store high-quality original in media library',e);
         delete photo.originalDataUrl;photo.highQualityOriginalAvailable=false;photo.originalPreservationWarning='High-quality original could not be saved in the browser media library. Preview retained.';
@@ -1250,8 +1260,8 @@
       return photo
     }
     async function captureCameraPhoto(label){
-      const captured=cameraPhotoSources(label);
-      return attachOriginalPhotoMedia(captured.photo,captured.fullDataUrl,{sourceKey:`camera:${captured.photo.captureId}`,kind:'camera-high-quality-original',label})
+      const captured=await cameraPhotoSources(label);
+      return attachOriginalPhotoMedia(captured.photo,captured.fullBlob,{sourceKey:`camera:${captured.photo.captureId}`,kind:'camera-high-quality-original',label})
     }
     function captureQualityText(photo){return photo?.highQualityOriginalAvailable?'high-quality original saved':'preview saved; original-quality browser storage was unavailable'}
     function buzz(){try{navigator.vibrate&&navigator.vibrate(80)}catch{}} function beep(){try{let C=window.AudioContext||window.webkitAudioContext;if(!C)return;let ac=new C(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;g.gain.value=.04;o.start();setTimeout(()=>{o.stop();ac.close()},90)}catch{}}
@@ -1568,21 +1578,21 @@
     function renderInventory(){
       let items=getItems(),filtered=getFilteredInventory(),list=$('inventoryList');
       list.innerHTML='';
+      const picker=$('inventoryPicker'),summary=$('inventoryPickerSummary');
       let status=($('inventoryStatusFilter')?.value||'all');
       let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let q=($('inventorySearch')?.value||'').trim();
       $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter}`:'');
-      if(!filtered.length){list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';return}
+      if(!filtered.length){if(summary)summary.textContent='No matching inventory items';list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';return}
+      const selected=items.find(i=>i.id===selectedItemId);
+      if(summary)summary.textContent=selected?`${selected.title||'Untitled'} · ${new Date(selected.createdAt||Date.now()).toLocaleString()}`:'Choose an inventory item';
       filtered.forEach(i=>{
-        let first=photoDisplayDataUrl(i.photos?.[0]),card=document.createElement('div');
-        card.className='item-card'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;
-        let statusClass=['Draft','Ready to Post'].includes(i.status||'Draft')?' mini-pill needs-listing-badge':'mini-pill';
-        let syncStatus=driveSyncStatus(i);
-        card.innerHTML=`${first?`<img src="${first}">`:'<div class="empty-state">No photo</div>'}<div class="item-card-body"><div class="item-card-title">${escapeHtml(i.title||'Untitled')}</div><div class="item-meta"><span class="${statusClass.trim()}">${escapeHtml(i.status||'Draft')}</span><span>${escapeHtml(moneyText(i.price)||'No price')}</span><span>${escapeHtml(i.condition||'')}</span></div><div class="item-meta">${escapeHtml(i.storage||'No storage location yet')}</div><div class="item-meta">${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</div><div class="quick-status-row"><label>Quick status</label><select data-quick-status="${i.id}">${statusOptions(i.status)}</select></div></div>`;
+        let first=photoDisplayDataUrl(i.photos?.[0]),card=document.createElement('button');
+        card.type='button';card.className='inventory-compact-item'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;
+        card.innerHTML=`${first?`<img class="inventory-compact-thumb" src="${first}" alt="">`:'<span class="inventory-compact-thumb"></span>'}<span><span class="inventory-compact-title">${escapeHtml(i.title||'Untitled')}</span><span class="inventory-compact-meta">${escapeHtml(new Date(i.createdAt||Date.now()).toLocaleString())}<br>${escapeHtml(i.status||'Draft')} · ${escapeHtml(i.storage||'No storage location')}</span></span>`;
         list.appendChild(card)
       });
-      list.querySelectorAll('.item-card').forEach(c=>c.onclick=e=>{if(e.target.closest('select,button,input,textarea'))return;loadItem(c.dataset.id)});
-      list.querySelectorAll('[data-quick-status]').forEach(sel=>sel.onchange=e=>{e.stopPropagation();quickUpdateStatus(sel.dataset.quickStatus,sel.value)});
+      list.querySelectorAll('.inventory-compact-item').forEach(c=>c.onclick=()=>{loadItem(c.dataset.id);if(picker)picker.open=false});
     }
     function quickUpdateStatus(itemId,status){
       let items=getItems(),item=items.find(i=>i.id===itemId);if(!item)return;
@@ -1969,7 +1979,7 @@
           try{
             const fullDataUrl=String(reader.result||''),previewDataUrl=await compressDataUrl(fullDataUrl,900,675,.74);
             const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
-            resolve(await attachOriginalPhotoMedia(photo,fullDataUrl,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||fullDataUrl.length}`,kind:'storage-high-quality-original',label:photo.label}))
+            resolve(await attachOriginalPhotoMedia(photo,file,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||fullDataUrl.length}`,kind:'storage-high-quality-original',label:photo.label}))
           }catch(e){reject(e)}
         };
         reader.onerror=()=>reject(new Error('Could not read selected image'));
@@ -2031,7 +2041,14 @@
       if(!setItems(items))return null;
       return item;
     }
-    function saveItem(){
+    function releaseSavedItemCaptureSession(item){
+      const ids=new Set((item.photos||[]).map(p=>p.captureId||p.fullPhotoMediaId||p.mediaId).filter(Boolean));
+      if(ids.size){const sessions=read(K.sessions,[]),kept=sessions.filter(s=>!(s.photos||[]).some(p=>ids.has(p.captureId||p.fullPhotoMediaId||p.mediaId)));if(kept.length!==sessions.length){safeWrite(K.sessions,kept);renderSessions()}}
+      setShots([]);
+      if($('captureBar'))$('captureBar').style.width='0%';
+      if($('captureStatus'))$('captureStatus').textContent='Temporary captures released after item save.';
+    }
+    async function saveItem(){
       const btn=$('saveItemBtn');
       if(btn)btn.disabled=true;
       try{
@@ -2041,6 +2058,15 @@
         renderInventory();
         loadItem(saved.id);
         refreshBackupViews();
+        releaseSavedItemCaptureSession(saved);
+        $('itemSaveWorkflowStatus').textContent='Saved locally. Temporary capture-session previews released.';
+        if(googleAccessTokenInfo?.accessToken){
+          $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures. Backing up ready items to Google Drive + Sheets...';
+          await syncGoogleAllRemaining();
+          $('itemSaveWorkflowStatus').textContent='Saved locally. Temporary captures released. Google Drive + Sheets backup finished; check Backup for any readiness holds.';
+        }else{
+          $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures. Sign in to Google from Backup to enable automatic Drive + Sheets backup during this browser session.';
+        }
         alert(`Item saved: ${saved.title||'Untitled item'}`);
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
@@ -2272,6 +2298,8 @@
       return {...uploaded,action:'uploaded'};
     }
     async function photoBlobForDriveUpload(photo){
+      const mediaId=photo?.fullPhotoMediaId||photo?.mediaId;
+      if(mediaId){try{const rec=await mediaGet(mediaId);if(rec?.blob)return rec.blob}catch(e){console.warn('Could not read media blob for Drive upload',e)}}
       const dataUrl=await originalPhotoDataUrlFromMedia(photo);
       if(!dataUrl)throw new Error('Photo data was not available from media library or local data.');
       return dataUrlToBlob(dataUrl);
