@@ -2,6 +2,7 @@ const OPENAI_RESPONSES_URL='https://api.openai.com/v1/responses';
 const MAX_PHOTOS=4;
 const MAX_BODY_BYTES=6*1024*1024;
 const ALLOWED_FIELDS=['brand','model','itemType','category','color','dimensions','material','condition','testedStatus','accessories','missingParts','flaws','keywords','fbTitle'];
+const COMPARABLE_HOSTS=['ebay.com','facebook.com','mercari.com','offerup.com'];
 
 function corsHeaders(request,env){
   const origin=request.headers.get('Origin')||'';
@@ -34,6 +35,39 @@ function responseOutputText(response){
   return ''
 }
 
+function decodeHtml(value=''){
+  return String(value).replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+}
+
+function metaContent(html,key){
+  const escaped=key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const patterns=[new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']*)["'][^>]*>`,'i'),new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${escaped}["'][^>]*>`,'i')];
+  for(const pattern of patterns){const match=html.match(pattern);if(match)return decodeHtml(match[1])}
+  return ''
+}
+
+function comparableMarketplace(host){
+  if(host.endsWith('ebay.com'))return 'eBay Active';
+  if(host.endsWith('facebook.com'))return 'Facebook Marketplace';
+  if(host.endsWith('mercari.com'))return 'Mercari';
+  if(host.endsWith('offerup.com'))return 'OfferUp';
+  return 'Other'
+}
+
+async function lookupComparable(request,env,body){
+  let target;
+  try{target=new URL(String(body?.url||''))}catch{return json(request,env,400,{error:'Paste a valid marketplace listing URL.'})}
+  if(target.protocol!=='https:')return json(request,env,400,{error:'Comparable lookup requires an HTTPS URL.'});
+  const host=target.hostname.toLowerCase().replace(/^www\./,'');
+  if(!COMPARABLE_HOSTS.some(allowed=>host===allowed||host.endsWith('.'+allowed)))return json(request,env,400,{error:'Comparable lookup supports eBay, Facebook Marketplace, Mercari, and OfferUp URLs only.'});
+  const upstream=await fetch(target.href,{headers:{'User-Agent':'Mozilla/5.0 (compatible; ItemPostingAssistant/1.0)','Accept':'text/html,application/xhtml+xml'}});
+  if(!upstream.ok)return json(request,env,502,{error:`Marketplace returned HTTP ${upstream.status}. Enter the visible price manually.`});
+  const html=(await upstream.text()).slice(0,1200000);
+  const title=metaContent(html,'og:title')||metaContent(html,'twitter:title')||decodeHtml((html.match(/<title[^>]*>([^<]*)<\/title>/i)||[])[1]||'');
+  const price=metaContent(html,'product:price:amount')||metaContent(html,'og:price:amount')||metaContent(html,'twitter:data1')||'';
+  return json(request,env,200,{contractVersion:'comparable-url-v1',marketplace:comparableMarketplace(host),url:target.href,title:String(title||'').slice(0,240),price:String(price||'').match(/[0-9]+(?:\.[0-9]{1,2})?/)?.[0]||''})
+}
+
 function recognitionSchema(){
   return {
     type:'object',
@@ -64,12 +98,13 @@ export default {
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:corsHeaders(request,env)});
     if(request.method!=='POST')return json(request,env,405,{error:'Use POST for item recognition.'});
     if(!isAllowedOrigin(request,env))return json(request,env,403,{error:'Origin is not allowed.'});
-    if(!env.OPENAI_API_KEY)return json(request,env,500,{error:'Relay is missing OPENAI_API_KEY.'});
     const contentLength=Number(request.headers.get('Content-Length')||0);
     if(contentLength>MAX_BODY_BYTES)return json(request,env,413,{error:'Recognition payload is too large.'});
     let body;
     try{body=await request.json()}catch{return json(request,env,400,{error:'Expected a JSON request body.'})}
     if(JSON.stringify(body).length>MAX_BODY_BYTES)return json(request,env,413,{error:'Recognition payload is too large.'});
+    if(body?.contractVersion==='comparable-url-v1')return lookupComparable(request,env,body);
+    if(!env.OPENAI_API_KEY)return json(request,env,500,{error:'Relay is missing OPENAI_API_KEY.'});
     if(body?.contractVersion!=='item-recognition-v1')return json(request,env,400,{error:'Unsupported recognition contract.'});
     const photos=(Array.isArray(body.photos)?body.photos:[]).slice(0,MAX_PHOTOS).filter(p=>/^data:image\/[a-z0-9.+-]+;base64,/i.test(String(p?.dataUrl||'')));
     if(!photos.length)return json(request,env,400,{error:'Include at least one base64 listing photo.'});
