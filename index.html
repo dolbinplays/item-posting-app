@@ -43,7 +43,7 @@
     .assistant-value{display:block;color:#f8fafc;font-weight:900;margin-top:3px}
     .pricing-panel{margin:14px 0;padding:13px;border:1px solid rgba(34,197,94,.34);border-radius:18px;background:linear-gradient(180deg,rgba(34,197,94,.1),rgba(2,6,23,.38));display:grid;gap:10px}
     .pricing-panel .actions{margin-top:0}.pricing-links{display:flex;gap:8px;flex-wrap:wrap}.pricing-links a{display:inline-flex;padding:9px 11px;border:1px solid rgba(56,189,248,.28);border-radius:12px;background:rgba(56,189,248,.12);color:#bae6fd;font-size:.8rem;font-weight:900;text-decoration:none}
-    .pricing-comparable-list{display:grid;gap:8px}.pricing-comparable{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.46)}.pricing-comparable button{padding:8px 10px;font-size:.8rem;border-radius:10px}
+    .pricing-comparable-list{display:grid;gap:8px}.pricing-comparable{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.46)}.pricing-comparable button{padding:8px 10px;font-size:.8rem;border-radius:10px}.pricing-comparable-actions{display:grid;gap:6px}
     @media(min-width:760px){.pricing-guidance-grid{grid-template-columns:repeat(3,1fr)}}
 
     .draft-history-list{display:grid;gap:10px;margin-top:10px}
@@ -1730,7 +1730,7 @@
         if(!saveItemObject(item))throw new Error('Recognized comparables could not be saved.');
         pricingComparableScreenshotFiles=[];$('pricingComparableScreenshotFile').value='';loadItem(item.id);
         const priced=listings.filter(x=>pricingNumber(x.price)).length;
-        $('pricingResearchStatus').textContent=`Screenshot analysis saved ${listings.length} comparable listing${listings.length===1?'':'s'}. ${priced} included a recognized price.${priced<listings.length?' Add missing prices manually before calculating the range.':''}`;
+        $('pricingResearchStatus').textContent=`Screenshot analysis saved ${listings.length} comparable listing${listings.length===1?'':'s'}. ${priced} included a recognized price.${priced<listings.length?' Use Edit on any missing-price comparable before calculating the range.':''}`;
       }catch(e){$('pricingResearchStatus').textContent=`Screenshot recognition could not finish: ${e?.message||e}`}
       finally{if(btn)btn.disabled=false}
     }
@@ -1741,16 +1741,23 @@
       $('pricingQuickSale').value=p.quickSale||'';$('pricingFairMarket').value=p.fairMarket||'';$('pricingHighEnd').value=p.highEnd||'';$('pricingMarketplaceGuidance').value=p.marketplaceGuidance||'';$('pricingResearchNotes').value=p.notes||'';
       $('pricingResearchLinks').innerHTML=`<a href="https://www.facebook.com/marketplace/search/?query=${encoded}" target="_blank" rel="noopener">Search Facebook Marketplace</a><a href="https://www.ebay.com/sch/i.html?_nkw=${encoded}&LH_Complete=1&LH_Sold=1" target="_blank" rel="noopener">Search eBay Sold</a><a href="https://www.ebay.com/sch/i.html?_nkw=${encoded}" target="_blank" rel="noopener">Search eBay Active</a><a href="https://www.mercari.com/search/?keyword=${encoded}" target="_blank" rel="noopener">Search Mercari</a><a href="https://offerup.com/search?q=${encoded}" target="_blank" rel="noopener">Search OfferUp</a><a href="https://www.google.com/search?q=${encoded}" target="_blank" rel="noopener">Search Other</a>`;
       const list=$('pricingComparableList');list.innerHTML=p.comparables.length?'':'<div class="empty-state">No comparable listings saved yet.</div>';
-      p.comparables.slice().reverse().forEach(c=>{let row=document.createElement('div'),url=safeExternalUrl(c.url);row.className='pricing-comparable';row.innerHTML=`<div><strong>${escapeHtml(c.marketplace||'Comparable')} · ${escapeHtml(pricingMoney(c.price)||'No price')}</strong><div class="note">${escapeHtml(c.title||'Untitled comparable')}${c.notes?`<br>${escapeHtml(c.notes)}`:''}${url?`<br><a href="${escapeAttr(url)}" target="_blank" rel="noopener">Open comparable</a>`:''}</div></div><button class="danger" data-pricing-delete="${escapeAttr(c.id)}" type="button">Delete</button>`;list.appendChild(row)});
+      p.comparables.slice().reverse().forEach(c=>{let row=document.createElement('div'),url=safeExternalUrl(c.url);row.className='pricing-comparable';row.innerHTML=`<div><strong>${escapeHtml(c.marketplace||'Comparable')} · ${escapeHtml(pricingMoney(c.price)||'No price')}</strong><div class="note">${escapeHtml(c.title||'Untitled comparable')}${c.notes?`<br>${escapeHtml(c.notes)}`:''}${url?`<br><a href="${escapeAttr(url)}" target="_blank" rel="noopener">Open comparable</a>`:''}</div></div><div class="pricing-comparable-actions"><button class="secondary" data-pricing-edit="${escapeAttr(c.id)}" type="button">Edit</button><button class="danger" data-pricing-delete="${escapeAttr(c.id)}" type="button">Delete</button></div>`;list.appendChild(row)});
+      list.querySelectorAll('[data-pricing-edit]').forEach(b=>b.onclick=()=>editPricingComparable(b.dataset.pricingEdit));
       list.querySelectorAll('[data-pricing-delete]').forEach(b=>b.onclick=()=>deletePricingComparable(b.dataset.pricingDelete));
       $('pricingResearchStatus').textContent=p.comparables.length?`${p.comparables.length} comparable listing${p.comparables.length===1?'':'s'} saved.${p.calculatedAt?` Price range calculated ${new Date(p.calculatedAt).toLocaleString()}.`:''}`:'No comparable listings saved yet.';
     }
+    let editingPricingComparableId='';
     function addPricingComparable(){
       let item=collectItem();if(!item)return;
       const price=getField('pricingComparablePrice'),title=getField('pricingComparableTitle'),url=getField('pricingComparableUrl'),notes=getField('pricingComparableNotes'),marketplace=$('pricingComparableMarketplace').value;
       if(!pricingNumber(price)){alert('Enter a comparable price first.');return}
-      const p=normalizePricingResearch(item);p.comparables.push({id:id('comp'),marketplace,title:title||`${marketplace} comparable`,price,url,notes,savedAt:new Date().toISOString()});p.updatedAt=new Date().toISOString();item.pricingResearch=p;item.updatedAt=p.updatedAt;
-      if(saveItemObject(item)){$('pricingComparablePaste').value='';$('pricingComparablePrice').value='';$('pricingComparableTitle').value='';$('pricingComparableUrl').value='';$('pricingComparableNotes').value='';loadItem(item.id);$('pricingResearchStatus').textContent=`Comparable saved. ${p.comparables.length} comparable listing${p.comparables.length===1?'':'s'} ready for price-range calculation.`}
+      const p=normalizePricingResearch(item),savedAt=new Date().toISOString(),comparable={id:editingPricingComparableId||id('comp'),marketplace,title:title||`${marketplace} comparable`,price,url,notes,savedAt},index=p.comparables.findIndex(c=>c.id===editingPricingComparableId),action=editingPricingComparableId&&index>=0?'updated':'saved';if(action==='updated')p.comparables[index]=comparable;else p.comparables.push(comparable);editingPricingComparableId='';p.updatedAt=savedAt;item.pricingResearch=p;item.updatedAt=p.updatedAt;
+      if(saveItemObject(item)){$('pricingComparablePaste').value='';$('pricingComparablePrice').value='';$('pricingComparableTitle').value='';$('pricingComparableUrl').value='';$('pricingComparableNotes').value='';loadItem(item.id);$('pricingResearchStatus').textContent=`Comparable ${action}. ${p.comparables.length} comparable listing${p.comparables.length===1?'':'s'} ready for price-range calculation.`}
+    }
+    function editPricingComparable(compId){
+      let item=collectItem();if(!item)return;
+      const comparable=normalizePricingResearch(item).comparables.find(c=>c.id===compId);if(!comparable)return;
+      editingPricingComparableId=compId;$('pricingComparableMarketplace').value=comparable.marketplace||'Other';$('pricingComparableTitle').value=comparable.title||'';$('pricingComparablePrice').value=comparable.price||'';$('pricingComparableUrl').value=comparable.url||'';$('pricingComparableNotes').value=comparable.notes||'';$('pricingResearchStatus').textContent='Comparable loaded for editing. Add or correct its price, then tap Save Comparable.'
     }
     function deletePricingComparable(compId){
       let item=collectItem();if(!item)return;
