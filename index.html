@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.2350</title>
+  <title>Item Posting Assistant v0.26.05.30.2410</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -831,7 +831,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.2350';
+    const VERSION='v0.26.05.30.2410';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1884,6 +1884,22 @@
         img.src=dataUrl;
       });
     }
+    function makeBlobThumbnailDataUrl(blob,maxW=360,maxH=270,quality=.68){
+      return new Promise((resolve,reject)=>{
+        if(!blob){resolve('');return}
+        const url=URL.createObjectURL(blob),img=new Image();
+        img.onload=()=>{
+          try{
+            const ratio=Math.min(maxW/img.width,maxH/img.height,1),c=document.createElement('canvas');
+            c.width=Math.max(1,Math.round(img.width*ratio));c.height=Math.max(1,Math.round(img.height*ratio));
+            c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+            resolve(c.toDataURL('image/jpeg',quality));
+          }catch(e){reject(e)}finally{URL.revokeObjectURL(url)}
+        };
+        img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Could not load image for thumbnail.'))};
+        img.src=url;
+      });
+    }
     async function applyWatermarkToSelectedPhotos(){
       if(!selectedItemId){alert('Select an inventory item first.');return}
       let settings=readWatermarkSettings();
@@ -1972,19 +1988,10 @@
       }
     }
     async function imageFileToStoragePhoto(file){
-      return new Promise((resolve,reject)=>{
-        if(!file){reject(new Error('No file selected'));return}
-        let reader=new FileReader();
-        reader.onload=async()=>{
-          try{
-            const fullDataUrl=String(reader.result||''),previewDataUrl=await compressDataUrl(fullDataUrl,900,675,.74);
-            const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
-            resolve(await attachOriginalPhotoMedia(photo,file,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||fullDataUrl.length}`,kind:'storage-high-quality-original',label:photo.label}))
-          }catch(e){reject(e)}
-        };
-        reader.onerror=()=>reject(new Error('Could not read selected image'));
-        reader.readAsDataURL(file);
-      });
+      if(!file)throw new Error('No file selected');
+      const previewDataUrl=await makeBlobThumbnailDataUrl(file,900,675,.74);
+      const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
+      return attachOriginalPhotoMedia(photo,file,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||0}`,kind:'storage-high-quality-original',label:photo.label});
     }
     function saveStoragePhotoToSelected(storagePhoto){
       if(!selectedItemId){alert('Select or create an inventory item first.');return false}
