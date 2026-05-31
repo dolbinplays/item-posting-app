@@ -40,3 +40,5 @@ The app sends `POST` JSON with `contractVersion`, current item fields, and up to
 The default model is `gpt-5.4-mini`. Override `OPENAI_MODEL` in Worker variables if needed.
 
 The relay also accepts a `comparable-url-v1` contract for the pricing workspace. This lookup does not call OpenAI. It fetches public metadata only from allowlisted eBay, Facebook Marketplace, Mercari, and OfferUp HTTPS URLs. Some marketplace pages hide title or price metadata behind login pages; the app keeps the pasted URL and falls back to manual entry for any missing field.
+
+For login-walled listings, the pricing workspace can send up to eight user-selected compressed screenshots with the `comparable-screenshot-v1` contract. This calls OpenAI vision once for the batch and returns marketplace, title, price, and note fields for each screenshot. Screenshots are sent only after the user explicitly chooses them and taps **Analyze Selected Screenshots**.

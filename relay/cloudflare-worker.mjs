@@ -1,5 +1,6 @@
 const OPENAI_RESPONSES_URL='https://api.openai.com/v1/responses';
 const MAX_PHOTOS=4;
+const MAX_COMPARABLE_SCREENSHOTS=8;
 const MAX_BODY_BYTES=6*1024*1024;
 const ALLOWED_FIELDS=['brand','model','itemType','category','color','dimensions','material','condition','testedStatus','accessories','missingParts','flaws','keywords','fbTitle'];
 const COMPARABLE_HOSTS=['ebay.com','facebook.com','mercari.com','offerup.com'];
@@ -93,6 +94,49 @@ function recognitionSchema(){
   }
 }
 
+function comparableScreenshotSchema(){
+  return {
+    type:'object',
+    additionalProperties:false,
+    required:['listings'],
+    properties:{
+      listings:{
+        type:'array',
+        maxItems:MAX_COMPARABLE_SCREENSHOTS,
+        items:{
+          type:'object',
+          additionalProperties:false,
+          required:['screenshotIndex','marketplace','title','price','notes'],
+          properties:{
+            screenshotIndex:{type:'integer'},
+            marketplace:{type:'string',enum:['Facebook Marketplace','eBay Sold','eBay Active','Mercari','OfferUp','Other']},
+            title:{type:'string'},
+            price:{type:'string'},
+            notes:{type:'string'}
+          }
+        }
+      }
+    }
+  }
+}
+
+async function recognizeComparableScreenshot(request,env,body){
+  const screenshots=(Array.isArray(body?.screenshots)?body.screenshots:[]).slice(0,MAX_COMPARABLE_SCREENSHOTS).filter(s=>/^data:image\/[a-z0-9.+-]+;base64,/i.test(String(s?.dataUrl||'')));
+  if(!screenshots.length)return json(request,env,400,{error:'Include one or more compressed listing screenshots.'});
+  const prompt=`Read these ${screenshots.length} resale-marketplace listing screenshots. Return one result for each screenshot in the same index order. Extract the marketplace, visible listing title, visible item price, and a short note with useful visible context such as condition, sold status, or shipping. Do not invent hidden details. Return an empty string for a field that is not clearly visible.`;
+  const content=[{type:'input_text',text:prompt},...screenshots.flatMap((s,index)=>[{type:'input_text',text:`Screenshot index ${index}: ${String(s.fileName||'listing screenshot').slice(0,120)}`},{type:'input_image',image_url:s.dataUrl,detail:'auto'}])];
+  const upstream=await fetch(OPENAI_RESPONSES_URL,{method:'POST',headers:{'Authorization':`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
+    model:env.OPENAI_MODEL||'gpt-5.4-mini',
+    input:[{role:'user',content}],
+    text:{format:{type:'json_schema',name:'comparable_screenshot',strict:true,schema:comparableScreenshotSchema()}}
+  })});
+  const response=await upstream.json();
+  if(!upstream.ok)return json(request,env,502,{error:'OpenAI screenshot recognition failed.',upstreamStatus:upstream.status,upstreamError:response?.error?.message||'Unknown upstream error'});
+  let parsed;
+  try{parsed=JSON.parse(responseOutputText(response))}catch{return json(request,env,502,{error:'OpenAI returned an unreadable screenshot-recognition response.'})}
+  return json(request,env,200,{provider:'openai-responses-api',model:env.OPENAI_MODEL||'gpt-5.4-mini',listings:Array.isArray(parsed.listings)?parsed.listings:[]})
+}
+
 export default {
   async fetch(request,env){
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:corsHeaders(request,env)});
@@ -105,6 +149,7 @@ export default {
     if(JSON.stringify(body).length>MAX_BODY_BYTES)return json(request,env,413,{error:'Recognition payload is too large.'});
     if(body?.contractVersion==='comparable-url-v1')return lookupComparable(request,env,body);
     if(!env.OPENAI_API_KEY)return json(request,env,500,{error:'Relay is missing OPENAI_API_KEY.'});
+    if(body?.contractVersion==='comparable-screenshot-v1')return recognizeComparableScreenshot(request,env,body);
     if(body?.contractVersion!=='item-recognition-v1')return json(request,env,400,{error:'Unsupported recognition contract.'});
     const photos=(Array.isArray(body.photos)?body.photos:[]).slice(0,MAX_PHOTOS).filter(p=>/^data:image\/[a-z0-9.+-]+;base64,/i.test(String(p?.dataUrl||'')));
     if(!photos.length)return json(request,env,400,{error:'Include at least one base64 listing photo.'});

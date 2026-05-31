@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.30.2615</title>
+  <title>Item Posting Assistant v0.26.05.31.1030</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -417,7 +417,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.30.2615 · Reliable comparable saving</p>
+      <p class="eyebrow">v0.26.05.31.1030 · Screenshot comparable recognition</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -624,6 +624,9 @@
               <div id="pricingComparableList" class="pricing-comparable-list"></div>
               <label class="small">Quick paste a comparable</label><textarea id="pricingComparablePaste" rows="3" placeholder="Paste copied listing text, price, and URL here. The app will fill the comparable fields for review."></textarea>
               <div class="actions"><button id="lookupPricingComparableBtn" class="success" type="button">Look Up Pasted URL</button><button id="parsePricingComparableBtn" class="primary" type="button">Parse Pasted Listing</button><button id="pasteAndParsePricingComparableBtn" class="secondary" type="button">Paste from Clipboard</button></div>
+              <input id="pricingComparableScreenshotFile" type="file" accept="image/*" multiple style="display:none">
+              <p class="photo-manage-note">For login-walled listings, choose up to 8 screenshots at once. The app compresses them and sends the batch to your secure relay and OpenAI only when you tap Analyze Selected Screenshots.</p>
+              <div class="actions"><button id="choosePricingComparableScreenshotBtn" class="secondary" type="button">Choose Listing Screenshots</button><button id="analyzePricingComparableScreenshotBtn" class="primary" type="button">Analyze Selected Screenshots</button></div>
               <div class="grid two">
                 <div><label class="small">Marketplace</label><select id="pricingComparableMarketplace"><option>Facebook Marketplace</option><option>eBay Sold</option><option>eBay Active</option><option>Mercari</option><option>OfferUp</option><option>Other</option></select></div>
                 <div><label class="small">Comparable price</label><input id="pricingComparablePrice" placeholder="35"></div>
@@ -860,7 +863,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.30.2615';
+    const VERSION='v0.26.05.31.1030';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1664,6 +1667,7 @@
     function pricingNumber(v){let n=Number(String(v||'').replace(/[^0-9.]/g,''));return Number.isFinite(n)?n:0}
     function pricingMoney(v){let n=pricingNumber(v);return n?'$'+n.toFixed(n%1?2:0):''}
     function safeExternalUrl(v){try{const u=new URL(String(v||''));return ['http:','https:'].includes(u.protocol)?u.href:''}catch{return ''}}
+    function usefulComparableTitle(v){const title=String(v||'').trim(),generic=new Set(['facebook','facebook marketplace','marketplace','ebay','mercari','offerup']);return title&&!generic.has(title.toLowerCase())?title:''}
     function comparableMarketplaceFromText(text,url=''){
       const blob=(String(text||'')+' '+String(url||'')).toLowerCase();
       if(blob.includes('ebay.'))return blob.includes('sold')?'eBay Sold':'eBay Active';
@@ -1698,10 +1702,37 @@
         const response=await fetch(settings.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contractVersion:'comparable-url-v1',url})}),data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data?.error||`Relay returned HTTP ${response.status}`);
         if(data.marketplace)$('pricingComparableMarketplace').value=data.marketplace;
-        if(data.title)$('pricingComparableTitle').value=String(data.title).slice(0,180);
+        if(usefulComparableTitle(data.title))$('pricingComparableTitle').value=usefulComparableTitle(data.title).slice(0,180);
         if(pricingNumber(data.price))$('pricingComparablePrice').value=String(data.price);
         $('pricingResearchStatus').textContent=data.price?`Public listing details found. Review the fields, then tap Save Comparable.`:`URL recognized, but the marketplace did not expose a public price. Enter the price you see, then tap Save Comparable.`;
       }catch(e){$('pricingResearchStatus').textContent=`URL kept for review. Automatic lookup could not read this listing: ${e?.message||e}. Enter the visible price manually, then tap Save Comparable.`}
+    }
+    let pricingComparableScreenshotFiles=[];
+    function choosePricingComparableScreenshot(){$('pricingComparableScreenshotFile').click()}
+    function handlePricingComparableScreenshotFile(){
+      pricingComparableScreenshotFiles=[...($('pricingComparableScreenshotFile')?.files||[])].slice(0,8);
+      $('pricingResearchStatus').textContent=pricingComparableScreenshotFiles.length?`${pricingComparableScreenshotFiles.length} screenshot${pricingComparableScreenshotFiles.length===1?'':'s'} selected. Tap Analyze Selected Screenshots to send the compressed batch to the secure relay.`:'No listing screenshots selected.'
+    }
+    async function analyzePricingComparableScreenshot(){
+      if(!pricingComparableScreenshotFiles.length){alert('Choose one or more listing screenshots first.');return}
+      const settings=getAssistantRelaySettings();
+      if(!settings.url||!isAllowedAssistantRelayUrl(settings.url)){alert('Configure the secure recognition relay first.');return}
+      const btn=$('analyzePricingComparableScreenshotBtn');if(btn)btn.disabled=true;
+      $('pricingResearchStatus').textContent=`Compressing and analyzing ${pricingComparableScreenshotFiles.length} listing screenshot${pricingComparableScreenshotFiles.length===1?'':'s'}...`;
+      try{
+        const screenshots=[];for(const file of pricingComparableScreenshotFiles)screenshots.push({fileName:file.name||'listing screenshot',dataUrl:await makeBlobThumbnailDataUrl(file,1100,1100,.72)});
+        const response=await fetch(settings.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contractVersion:'comparable-screenshot-v1',screenshots})}),data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||`Relay returned HTTP ${response.status}`);
+        let item=collectItem();if(!item)return;
+        const p=normalizePricingResearch(item),listings=Array.isArray(data.listings)?data.listings:[],now=new Date().toISOString();
+        listings.forEach((listing,index)=>p.comparables.push({id:id('comp'),marketplace:String(listing.marketplace||'Other'),title:String(listing.title||`Screenshot comparable ${index+1}`).slice(0,180),price:String(listing.price||''),url:'',notes:String(listing.notes||'Recognized from uploaded listing screenshot.').slice(0,240),savedAt:now,source:'screenshot-recognition'}));
+        p.updatedAt=now;item.pricingResearch=p;item.updatedAt=now;
+        if(!saveItemObject(item))throw new Error('Recognized comparables could not be saved.');
+        pricingComparableScreenshotFiles=[];$('pricingComparableScreenshotFile').value='';loadItem(item.id);
+        const priced=listings.filter(x=>pricingNumber(x.price)).length;
+        $('pricingResearchStatus').textContent=`Screenshot analysis saved ${listings.length} comparable listing${listings.length===1?'':'s'}. ${priced} included a recognized price.${priced<listings.length?' Add missing prices manually before calculating the range.':''}`;
+      }catch(e){$('pricingResearchStatus').textContent=`Screenshot recognition could not finish: ${e?.message||e}`}
+      finally{if(btn)btn.disabled=false}
     }
     function readPricingResearchForm(item){let existing=normalizePricingResearch(item);return {...existing,quickSale:getField('pricingQuickSale'),fairMarket:getField('pricingFairMarket'),highEnd:getField('pricingHighEnd'),marketplaceGuidance:getField('pricingMarketplaceGuidance'),notes:getField('pricingResearchNotes'),updatedAt:new Date().toISOString()}}
     function pricingSearchQuery(item){return joinParts([item?.brand,item?.model,item?.itemType,item?.title],' ').trim()||'marketplace item'}
@@ -2189,7 +2220,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('choosePricingComparableScreenshotBtn','onclick',choosePricingComparableScreenshot);on('pricingComparableScreenshotFile','onchange',handlePricingComparableScreenshotFile);on('analyzePricingComparableScreenshotBtn','onclick',analyzePricingComparableScreenshot);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
