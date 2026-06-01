@@ -19,6 +19,8 @@ The repository now includes:
 - `manifest.webmanifest`
 - `sw.js`
 - `icons/app-icon.svg`
+- `icons/app-icon-192.png`
+- `icons/app-icon-512.png`
 - An in-app PWA install status panel and install button
 
 The service worker uses network-first navigation so a new deployment can refresh `index.html` while preserving an offline app-shell fallback.
@@ -27,10 +29,9 @@ The service worker uses network-first navigation so a new deployment can refresh
 
 The development PC still needs Java, Android SDK tooling, and Bubblewrap before it can build an APK. The Trusted Web Activity step will also need:
 
-1. Production PNG launcher icons derived from the current SVG.
-2. A generated Android wrapper project.
-3. An Android signing key.
-4. A hosted `/.well-known/assetlinks.json` association for full-screen verified app mode.
-5. Phone testing for camera, Google sign-in, Drive sync, offline launch, and update behavior.
+1. A generated Android wrapper project.
+2. An Android signing key.
+3. A hosted `/.well-known/assetlinks.json` association for full-screen verified app mode.
+4. Phone testing for camera, Google sign-in, Drive sync, offline launch, and update behavior.
 
 Do not replace the PWA with a local WebView bundle unless a specific native feature requires it. A local WebView origin would change the already-tested Google OAuth and storage assumptions.

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0120</title>
+  <title>Item Posting Assistant v0.26.06.01.0140</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -48,6 +48,7 @@
     .pricing-panel .actions{margin-top:0}.pricing-links{display:flex;gap:8px;flex-wrap:wrap}.pricing-links a{display:inline-flex;padding:9px 11px;border:1px solid rgba(56,189,248,.28);border-radius:12px;background:rgba(56,189,248,.12);color:#bae6fd;font-size:.8rem;font-weight:900;text-decoration:none}
     .pricing-comparable-list{display:grid;gap:8px}.pricing-comparable{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.46)}.pricing-comparable button{padding:8px 10px;font-size:.8rem;border-radius:10px}.pricing-comparable-actions{display:grid;gap:6px}
     .workstation-grid{display:grid;gap:14px}.workstation-list{display:grid;gap:8px;max-height:70vh;overflow:auto}.workstation-item{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;width:100%;padding:9px;text-align:left;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.46);color:var(--text)}.workstation-item.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(56,189,248,.36)}.workstation-item.needs-review,.inventory-compact-item.needs-review{border-color:rgba(250,204,21,.72);background:rgba(120,53,15,.24);box-shadow:0 0 0 1px rgba(250,204,21,.16)}.workstation-item.active.needs-review,.inventory-compact-item.active.needs-review{border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,.3)}.sync-review-note{display:block;margin-top:4px;color:#fde68a;font-size:.76rem;font-weight:900;line-height:1.25}.workstation-thumb{width:58px;height:58px;object-fit:cover;border-radius:10px;background:rgba(148,163,184,.15)}.workstation-preview-photo{width:min(260px,100%);max-height:260px;object-fit:contain;border-radius:13px;background:#020617}.workstation-copy-grid{display:grid;gap:10px}.workstation-copy-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start}.workstation-copy-row textarea{min-height:130px}.workstation-meta{display:grid;gap:6px;padding:10px;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.38)}.workstation-action-link{display:inline-flex;align-items:center;padding:10px 13px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(56,189,248,.14);color:#bae6fd;font-size:.84rem;font-weight:900;text-decoration:none}.workstation-checklist{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.workstation-check{padding:6px 9px;border:1px solid var(--border);border-radius:999px;background:rgba(2,6,23,.42);color:#cbd5e1;font-size:.76rem;font-weight:900}.workstation-check.done{border-color:rgba(34,197,94,.65);background:rgba(21,128,61,.22);color:#bbf7d0}
+    .item-workflow-nav{display:flex;gap:7px;overflow:auto;padding:4px 0 10px}.item-workflow-tab{white-space:nowrap;padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);font-size:.78rem}.item-workflow-tab.active{background:rgba(56,189,248,.22);border-color:var(--accent);color:#e0f2fe}.item-workflow-tab.done{border-color:rgba(34,197,94,.62);color:#bbf7d0}.item-workflow-stage{margin:10px 0;border:1px solid var(--border);border-radius:16px;background:rgba(2,6,23,.28);overflow:hidden}.item-workflow-stage summary{cursor:pointer;padding:12px;font-weight:950;color:#bae6fd;list-style:none}.item-workflow-stage summary::-webkit-details-marker{display:none}.item-workflow-stage[open] summary{border-bottom:1px solid var(--border);background:rgba(56,189,248,.08)}.item-workflow-stage-body{padding:12px}.item-workflow-footer{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px;padding-top:12px;border-top:1px solid var(--border)}.item-workflow-footer button{flex:1 1 150px}.item-workflow-status{margin:0 0 10px;color:#bae6fd;font-size:.86rem;font-weight:900}
     @media(min-width:900px){.workstation-grid{grid-template-columns:minmax(280px,.72fr) minmax(0,1.28fr)}.workstation-copy-grid{grid-template-columns:1fr 1fr}.workstation-copy-row.full{grid-column:1/-1}}
     @media(min-width:760px){.pricing-guidance-grid{grid-template-columns:repeat(3,1fr)}}
 
@@ -422,7 +423,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0120 · Synced remote photo previews</p>
+      <p class="eyebrow">v0.26.06.01.0140 · Guided listing accordion workflow</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -569,6 +570,10 @@
           <div id="itemDetailEmpty" class="empty-state">Select an item or create one from current captures.</div>
           <div id="itemDetailForm" style="display:none">
             <h2>Item Detail</h2>
+            <p class="note">Work through one collapsible section at a time. Save Draft &amp; Continue preserves the entire item, records a draft-history checkpoint, and opens the next section.</p>
+            <div id="itemWorkflowNav" class="item-workflow-nav"></div>
+            <p id="itemWorkflowStatus" class="item-workflow-status"></p>
+            <span data-workflow-start="photos"></span>
             <div id="itemDetailImages" class="photo-manage-grid"></div><p class="photo-manage-note">Photo order is the listing order. Marking a photo as primary moves it to the first position. Labels are used for backup filenames and listing organization.</p>
             <div class="watermark-panel">
               <h3 style="margin:0">Watermark</h3>
@@ -585,6 +590,8 @@
               <div class="watermark-preview-note" id="watermarkStatus">Watermark not applied yet.</div>
               <div class="actions"><button id="applyWatermarkBtn" class="primary" type="button">Apply to Listing Photos</button><button id="restoreOriginalPhotosBtn" class="secondary" type="button">Restore Originals</button></div>
             </div>
+            <span data-workflow-end="photos"></span>
+            <span data-workflow-start="details"></span>
             <label class="small">Title</label><input id="itemTitle">
             <label class="small">Price</label><input id="itemPrice" placeholder="25">
             <label class="small">Condition</label><select id="itemCondition"><option>New</option><option>Like New</option><option>Used - Good</option><option>Used - Fair</option><option>For parts or repair</option></select>
@@ -628,6 +635,8 @@
               <label class="small">Warn before paid AI calls after estimated spend reaches</label><input id="aiUsageWarningUsd" inputmode="decimal" placeholder="1.00">
               <div class="actions"><button id="saveAiUsageSettingsBtn" class="success" type="button">Save Usage Warning</button><button id="clearAiUsageBtn" class="secondary" type="button">Clear Local Usage Log</button></div>
             </div>
+            <span data-workflow-end="details"></span>
+            <span data-workflow-start="pricing"></span>
             <div class="pricing-panel">
               <h3 style="margin:0">Pricing Research</h3>
               <p class="photo-manage-note">Save comparable listings and turn them into a starting price range. Research links open marketplace searches in a new tab; this app does not scrape marketplace results.</p>
@@ -658,6 +667,8 @@
               <div id="pricingResearchStatus" class="watermark-preview-note">No comparable listings saved yet.</div>
               <div class="actions"><button id="addPricingComparableBtn" class="success" type="button">Save Comparable</button><button id="calculatePricingGuidanceBtn" class="primary" type="button">Calculate Price Range</button><button id="applyFairMarketPriceBtn" class="secondary" type="button">Use Fair-Market Price</button></div>
             </div>
+            <span data-workflow-end="pricing"></span>
+            <span data-workflow-start="storage"></span>
             <label class="small">Storage location</label><input id="itemStorage" placeholder="Garage shelf B, blue tote...">
             <div class="storage-tools">
               <select id="itemStoragePreset"><option value="">Choose saved storage preset...</option></select>
@@ -677,6 +688,8 @@
               <p class="photo-manage-note">Use this for the bin, shelf, tote, or room where the item is stored. It is included in JSON and rebuildable HTML backups.</p>
             </div>
             <label class="small">Notes</label><textarea id="itemNotes" rows="3"></textarea>
+            <span data-workflow-end="storage"></span>
+            <span data-workflow-start="draft"></span>
             <h3 style="margin-top:16px">Facebook Marketplace Draft</h3>
             <label class="small">Tone</label><select id="draftTone"><option value="friendly">Friendly</option><option value="direct">Direct</option><option value="detailed">Detailed</option></select>
             <label class="small">Pickup/shipping wording</label><select id="pickupMode"><option>Local pickup preferred</option><option>Public meetup preferred</option><option>Local pickup or shipping available</option><option>Shipping available at buyer expense</option></select>
@@ -689,6 +702,7 @@
             <h3 style="margin-top:16px">Draft History</h3>
             <p class="note">Save listing versions here before making major edits. You can restore an older draft or copy a full listing bundle for Facebook Marketplace.</p>
             <div id="draftHistoryList" class="draft-history-list"></div>
+            <span data-workflow-end="draft"></span>
           </div>
         </div>
       </div>
@@ -932,7 +946,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0120';
+    const VERSION='v0.26.06.01.0140';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1422,6 +1436,42 @@
     // Inventory
     let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
     function saveItemObject(item){if(!item?.id)return false;let items=getItems(),index=items.findIndex(i=>i.id===item.id);if(index<0)return false;items[index]=item;let saved=setItems(items);if(saved)scheduleGoogleWorkspacePush('saved item update');return saved}
+    const ITEM_WORKFLOW_STAGES=[['photos','1. Photos & Watermark'],['details','2. Item Details & AI'],['pricing','3. Pricing Research'],['storage','4. Storage Location'],['draft','5. Marketplace Draft']];
+    let itemWorkflowOpenStage='';
+    function initializeItemWorkflow(){
+      if(document.querySelector('.item-workflow-stage'))return;
+      ITEM_WORKFLOW_STAGES.forEach(([key,label],index)=>{
+        const start=document.querySelector(`[data-workflow-start="${key}"]`),end=document.querySelector(`[data-workflow-end="${key}"]`);if(!start||!end)return;
+        const details=document.createElement('details');details.className='item-workflow-stage';details.dataset.workflowStage=key;
+        const summary=document.createElement('summary');summary.textContent=label;const body=document.createElement('div');body.className='item-workflow-stage-body';
+        let node=start.nextSibling;while(node&&node!==end){const next=node.nextSibling;body.appendChild(node);node=next}
+        const footer=document.createElement('div');footer.className='item-workflow-footer';footer.innerHTML=`${index?'<button class="secondary" type="button" data-workflow-prev>Previous Section</button>':''}<button class="success" type="button" data-workflow-save>${index===ITEM_WORKFLOW_STAGES.length-1?'Save Draft Checkpoint':'Save Draft & Continue'}</button>${index<ITEM_WORKFLOW_STAGES.length-1?'<button class="secondary" type="button" data-workflow-next>Next Without Saving</button>':''}`;
+        body.appendChild(footer);details.append(summary,body);start.replaceWith(details);end.remove();
+        summary.onclick=()=>setTimeout(()=>{if(details.open)openItemWorkflowStage(key)},0);
+        footer.querySelector('[data-workflow-prev]')?.addEventListener('click',()=>openItemWorkflowStage(ITEM_WORKFLOW_STAGES[index-1][0]));
+        footer.querySelector('[data-workflow-next]')?.addEventListener('click',()=>openItemWorkflowStage(ITEM_WORKFLOW_STAGES[index+1][0]));
+        footer.querySelector('[data-workflow-save]')?.addEventListener('click',()=>saveItemWorkflowStage(key));
+      })
+    }
+    function openItemWorkflowStage(key){
+      itemWorkflowOpenStage=key;
+      document.querySelectorAll('.item-workflow-stage').forEach(el=>el.open=el.dataset.workflowStage===key);
+      renderItemWorkflow()
+    }
+    function renderItemWorkflow(item=getItems().find(i=>i.id===selectedItemId)){
+      const nav=$('itemWorkflowNav'),status=$('itemWorkflowStatus');if(!nav||!status||!item)return;
+      const current=itemWorkflowOpenStage||item.listingWorkflowStage||'photos',completed=Array.isArray(item.listingWorkflowCompleted)?item.listingWorkflowCompleted:[];
+      nav.innerHTML=ITEM_WORKFLOW_STAGES.map(([key,label])=>`<button type="button" class="item-workflow-tab${key===current?' active':''}${completed.includes(key)?' done':''}" data-workflow-open="${key}">${completed.includes(key)?'&#10003; ':''}${escapeHtml(label)}</button>`).join('');
+      nav.querySelectorAll('[data-workflow-open]').forEach(button=>button.onclick=()=>openItemWorkflowStage(button.dataset.workflowOpen));
+      status.textContent=`Guided listing progress: ${completed.length} of ${ITEM_WORKFLOW_STAGES.length} sections saved.`;
+      document.querySelectorAll('.item-workflow-stage').forEach(el=>el.open=el.dataset.workflowStage===current)
+    }
+    function saveItemWorkflowStage(key){
+      let item=collectItem();if(!item)return;
+      const index=ITEM_WORKFLOW_STAGES.findIndex(([stage])=>stage===key),next=ITEM_WORKFLOW_STAGES[Math.min(index+1,ITEM_WORKFLOW_STAGES.length-1)][0],label=ITEM_WORKFLOW_STAGES[index]?.[1]||'Listing section';
+      item.listingWorkflowCompleted=[...new Set([...(item.listingWorkflowCompleted||[]),key])];item.listingWorkflowStage=next;item.draftHistory=item.draftHistory||[];item.draftHistory.push(currentDraftSnapshot(item,`${label} checkpoint`));item.updatedAt=new Date().toISOString();
+      itemWorkflowOpenStage=next;if(saveItemObject(item)){loadItem(item.id);alert(index===ITEM_WORKFLOW_STAGES.length-1?'Draft checkpoint saved.':'Draft saved. Opening the next listing section.')}
+    }
     const DRIVE_MEDIA_QUALITY_VERSION='best-available-original-v1';
     const DRIVE_SYNC_STEPS=[
       ['folderCreated','Drive folder created'],
@@ -1759,6 +1809,7 @@
       let item=getItems().find(i=>i.id===idv);
       if(!item){alert('This inventory item could not be opened. Run Scan / Repair Inventory, then try again.');return;}
       selectedItemId=idv;
+      itemWorkflowOpenStage=item.listingWorkflowStage||'photos';
       item.driveSync=normalizeDriveSync(item);
       $('itemDetailEmpty').style.display='none';$('itemDetailForm').style.display='block';
       $('itemTitle').value=item.title||'';$('itemPrice').value=item.price||'';$('itemCondition').value=item.condition||'Used - Good';$('itemStatus').value=item.status||'Draft';
@@ -1769,7 +1820,7 @@
       renderAssistantSuggestions(item);
       $('draftTone').value=item.draftTone||'friendly';$('pickupMode').value=item.pickupMode||'Local pickup preferred';
       $('fbTitle').value=item.fbTitle||'';$('fbPrice').value=item.fbPrice||moneyText(item.price);$('fbDescription').value=item.fbDescription||generateDraft(item).fbDescription;$('fbPickup').value=item.fbPickup||generateDraft(item).fbPickup;
-      renderItemPhotos(item);renderStoragePhoto(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderInventory()
+      renderItemPhotos(item);renderStoragePhoto(item);renderDraftHistory(item);renderStoragePresets();renderRecentStorageChips();renderItemWorkflow(item);renderInventory()
     }
     function currentDraftSnapshot(item,label){return {id:id('draft'),label:label||`Draft ${((item.draftHistory||[]).length)+1}`,savedAt:new Date().toISOString(),fbTitle:item.fbTitle||'',fbPrice:item.fbPrice||'',fbDescription:item.fbDescription||'',fbPickup:item.fbPickup||'',tone:item.draftTone||'friendly',pickupMode:item.pickupMode||'Local pickup preferred'}}
     function renderDraftHistory(item){let list=$('draftHistoryList');if(!list)return;let h=item.draftHistory||[];list.innerHTML=h.length?'':'<div class="empty-state">No saved draft versions yet.</div>';h.slice().reverse().forEach(d=>{let card=document.createElement('div');card.className='draft-history-card';card.innerHTML=`<strong>${escapeHtml(d.label||'Saved draft')}</strong><span class="note">${new Date(d.savedAt||Date.now()).toLocaleString()} · ${escapeHtml(d.tone||'tone not saved')}</span><div class="draft-preview">${escapeHtml((d.fbTitle||'')+'\n'+(d.fbPrice||'')+'\n\n'+(d.fbDescription||'')).slice(0,900)}</div><div class="draft-history-actions"><button class="success" data-draft-restore="${d.id}">Restore</button><button class="secondary" data-draft-copy="${d.id}">Copy All</button><button class="danger" data-draft-delete="${d.id}">Delete</button></div>`;list.appendChild(card)});wireDraftHistoryButtons()}
@@ -3654,7 +3705,7 @@
     function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); renderPwaInstallStatus(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
