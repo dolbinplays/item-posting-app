@@ -29,7 +29,7 @@
 - Google-only shared workspace for a single user or small household: lightweight item records sync through Drive while Sheets remains the index and Drive remains media storage. Explicit pull, push, and two-way merge foundation implemented.
 - Automatic shared-workspace checks after Google sign-in, on tab focus, and at a cautious visible-tab polling interval. Local inventory edits queue a delayed pull-merge-push so phone and laptop records stay aligned without constant manual button taps. Implemented.
 - Safe copy-and-paste handoff code for quickly configuring a second device with the same Google workspace. Implemented. Optional QR rendering can build on the same handoff payload later.
-- Easier copy and paste into Facebook Marketplace from a laptop.
+- Easier copy and paste into Facebook Marketplace from a laptop, with a per-item posting checklist for Marketplace, title, price, description, and pickup notes. Implemented.
 
 ### Stage 11 - Android APK Conversion
 
