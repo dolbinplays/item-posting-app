@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "Item Posting Assistant",
+  "short_name": "Item Posting",
+  "description": "Capture inventory photos, prepare marketplace drafts, and sync listing records through Google Drive and Sheets.",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "./icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

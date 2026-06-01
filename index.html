@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.31.2100</title>
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
+  <title>Item Posting Assistant v0.26.06.01.0100</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -419,7 +422,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.31.2100 · Workstation posting checklist</p>
+      <p class="eyebrow">v0.26.06.01.0100 · Installable PWA foundation</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -719,6 +722,12 @@
           </div>
         </div>
       </div>
+      <div class="card" style="margin-top:14px">
+        <h2>Install App on This Device</h2>
+        <p class="note">Install the web app for an app-like home-screen launch and offline shell startup. Inventory data remains in this browser profile and continues to sync through Google Drive when signed in.</p>
+        <div id="pwaInstallStatus" class="note"></div>
+        <div class="actions"><button id="pwaInstallBtn" class="success" type="button" disabled>Install Item Posting Assistant</button></div>
+      </div>
     </section>
 
     <section id="backup" class="screen">
@@ -923,7 +932,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.31.2100';
+    const VERSION='v0.26.06.01.0100';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -2378,6 +2387,23 @@
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
+    let pwaInstallPrompt=null;
+    function isPwaStandalone(){return window.matchMedia?.('(display-mode: standalone)').matches||navigator.standalone===true}
+    function renderPwaInstallStatus(message=''){
+      const status=$('pwaInstallStatus'),button=$('pwaInstallBtn');if(!status||!button)return;
+      if(isPwaStandalone()){status.innerHTML='<p><b>Installed app mode is active.</b> This device is launching the standalone PWA.</p>';button.disabled=true;button.textContent='App Installed';return}
+      if(pwaInstallPrompt){status.innerHTML='<p><b>Ready to install.</b> Tap the button below, then confirm the browser install prompt.</p>';button.disabled=false;button.textContent='Install Item Posting Assistant';return}
+      status.innerHTML=message||'<p>The install prompt is not available yet. On Android Chrome, open the browser menu and choose <b>Add to Home screen</b> or <b>Install app</b> if offered.</p>';button.disabled=true;button.textContent='Install Prompt Not Available'
+    }
+    async function installPwa(){
+      if(!pwaInstallPrompt){renderPwaInstallStatus();return}
+      const prompt=pwaInstallPrompt;pwaInstallPrompt=null;await prompt.prompt();const choice=await prompt.userChoice;
+      renderPwaInstallStatus(choice.outcome==='accepted'?'<p>Install accepted. Launch the new home-screen app when installation finishes.</p>':'<p>Install dismissed. You can try again from the browser menu later.</p>')
+    }
+    window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();pwaInstallPrompt=event;renderPwaInstallStatus()});
+    window.addEventListener('appinstalled',()=>{pwaInstallPrompt=null;renderPwaInstallStatus('<p><b>App installed.</b> You can launch it from your home screen.</p>')});
+    if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').then(()=>renderPwaInstallStatus()).catch(e=>renderPwaInstallStatus(`<p>Offline shell registration failed: ${escapeHtml(e?.message||e)}</p>`)));
+    on('pwaInstallBtn','onclick',installPwa);
     const GOOGLE_SYNC_SCHEMA_VERSION='google-sync-schema-v1';
     function googleSyncSchema(){return{schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,appVersion:VERSION,rowIdentity:'Item ID',driveFolderIdentity:'Suggested Drive Path',photoIdentity:'Suggested Photo Drive Paths',syncModes:['dry-run','manual-export','test-api-sync'],entities:['googleSyncSettings','googleApiSetup','googleSignInStatus','googleApiProbeStatus','googleDriveRootStatus','googleDriveItemFoldersStatus','googleDrivePhotoUploadStatus','googleSyncNextBatchStatus','googleSyncCompletionReport','googleSyncHealthCheck','googleSheetStatus','googleSheetRowsStatus','driveSync','mediaSummary','driveUploadPlan','googleSyncDryRun','googleSyncReadinessGate','googleSyncActionQueue','googleSyncHistory','googleSyncPreflight','googleSyncRunLog'],tokenStorage:'in-memory only for test access tokens; no Google tokens are stored in localStorage or backups'}}
     function googleAuthorizationRequirements(){return{status:'test-access-user-initiated',noAuthInThisBuild:false,scopes:[{scope:'https://www.googleapis.com/auth/spreadsheets',service:'Google Sheets API',purpose:'Create or update the inventory spreadsheet rows and write Drive links/status columns.'},{scope:'https://www.googleapis.com/auth/drive.file',service:'Google Drive API',purpose:'Create app-managed folders and upload item/storage photos selected or created by this app.'}],plannedOperations:['Sign in with Google after user action','Create or select target Sheet','Create Drive root and item folders','Upload listing and storage photos for one folder-backed item per action','Write folder/photo links and sync status back to the Sheet','Run incremental sync using Item ID and media IDs'],notPlanned:['Read unrelated Drive files','Delete Drive files','Post listings to Facebook','Store Google password','Store Google access tokens']}}
@@ -3626,7 +3652,7 @@
     function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); renderPwaInstallStatus(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>

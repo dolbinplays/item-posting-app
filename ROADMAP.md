@@ -12,7 +12,7 @@
 
 ## Current Work
 
-- Stage 11 Android APK conversion feasibility and packaging plan.
+- Stage 11 installable PWA phone test, followed by Android Trusted Web Activity wrapper tooling.
 
 ## Next Roadmap Stops
 
@@ -34,8 +34,9 @@
 
 ### Stage 11 - Android APK Conversion
 
-- Next implementation checkpoint: choose a conservative web-wrapper approach and document the packaging path before changing the working browser app.
-- Installable Android version with app icon and name.
+- Conservative packaging path chosen: installable PWA first, then an Android Trusted Web Activity wrapper after phone testing and Android tooling setup.
+- Installable PWA foundation with app name, icon, manifest, offline shell, and an in-app install control. Implemented; phone test pending.
+- Android APK wrapper with Bubblewrap, production PNG icons, signing key, and hosted Digital Asset Links association.
 - Better native storage, camera permissions, media permissions, and offline reliability.
 - Evaluate a Play Store distribution path.
 
