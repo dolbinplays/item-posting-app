@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0140</title>
+  <title>Item Posting Assistant v0.26.06.01.0150</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -423,7 +423,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0140 · Guided listing accordion workflow</p>
+      <p class="eyebrow">v0.26.06.01.0150 · Storage preview sync and draft cleanup</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -697,7 +697,7 @@
             <label class="small">Facebook price</label><div class="copy-row"><input id="fbPrice"><button class="secondary copy-btn" data-copy="fbPrice">Copy</button></div>
             <label class="small">Facebook description</label><div class="copy-row"><textarea id="fbDescription" rows="7"></textarea><button class="secondary copy-btn" data-copy="fbDescription">Copy</button></div>
             <label class="small">Pickup notes</label><div class="copy-row"><textarea id="fbPickup" rows="3"></textarea><button class="secondary copy-btn" data-copy="fbPickup">Copy</button></div>
-            <div class="actions"><button id="saveItemBtn" class="success">Save Item</button><button id="generateDraftBtn" class="primary">Regenerate Draft</button><button id="saveDraftVersionBtn" class="secondary">Save Draft Version</button><button id="deleteItemBtn" class="danger">Delete Item</button></div>
+            <div class="actions"><button id="saveItemBtn" class="success">Save Item</button><button id="generateDraftBtn" class="primary">Regenerate Draft</button><button id="saveDraftVersionBtn" class="secondary">Save Draft Version</button><button id="clearDraftHistoryBtn" class="secondary">Clear Draft History</button><button id="deleteItemBtn" class="danger">Delete Item</button></div>
             <div id="itemSaveWorkflowStatus" class="save-workflow-status">Save Item stores the item locally, releases temporary capture-session previews, and backs up the item to Google Drive + Sheets when Google access is active.</div>
             <h3 style="margin-top:16px">Draft History</h3>
             <p class="note">Save listing versions here before making major edits. You can restore an older draft or copy a full listing bundle for Facebook Marketplace.</p>
@@ -946,8 +946,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0140';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.06.01.0150';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -1830,6 +1830,7 @@
     function restoreDraftVersion(idv){let {item,draft}=findDraft(idv);if(!item||!draft)return;if(!confirm('Restore this saved draft into the current Facebook draft fields?'))return;Object.assign(item,{fbTitle:draft.fbTitle||'',fbPrice:draft.fbPrice||'',fbDescription:draft.fbDescription||'',fbPickup:draft.fbPickup||'',draftTone:draft.tone||item.draftTone,pickupMode:draft.pickupMode||item.pickupMode,updatedAt:new Date().toISOString()});if(saveItemObject(item))loadItem(item.id)}
     async function copyDraftVersion(idv){let {draft}=findDraft(idv);if(!draft)return;let text=`Title: ${draft.fbTitle||''}\nPrice: ${draft.fbPrice||''}\n\nDescription:\n${draft.fbDescription||''}\n\nPickup Notes:\n${draft.fbPickup||''}`;try{await navigator.clipboard.writeText(text);alert('Saved draft copied to clipboard.')}catch{alert('Could not copy automatically. Restore the draft, then use the field copy buttons.')}}
     function deleteDraftVersion(idv){let {item}=findDraft(idv);if(!item)return;if(!confirm('Delete this saved draft version?'))return;item.draftHistory=(item.draftHistory||[]).filter(d=>d.id!==idv);item.updatedAt=new Date().toISOString();if(saveItemObject(item))loadItem(item.id)}
+    function clearDraftHistory(){let item=getItems().find(i=>i.id===selectedItemId);if(!item)return;let count=(item.draftHistory||[]).length;if(!count){alert('This item has no saved draft checkpoints to clear.');return}if(!confirm(`Delete all ${count} saved draft checkpoint${count===1?'':'s'} for this item? The current item fields and listing draft will remain saved.`))return;item.draftHistory=[];item.updatedAt=new Date().toISOString();if(saveItemObject(item)){loadItem(item.id);alert('Saved draft history cleared. The current item was kept.')}}
     function defaultPricingResearch(){return {quickSale:'',fairMarket:'',highEnd:'',marketplaceGuidance:'',notes:'',summary:'',comparables:[],calculatedAt:'',updatedAt:''}}
     function normalizePricingResearch(item){let p=item?.pricingResearch&&typeof item.pricingResearch==='object'?item.pricingResearch:{};return {...defaultPricingResearch(),...p,comparables:Array.isArray(p.comparables)?p.comparables:[]}}
     function pricingNumber(v){let n=Number(String(v||'').replace(/[^0-9.]/g,''));return Number.isFinite(n)?n:0}
@@ -2433,7 +2434,7 @@
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i))){scheduleGoogleWorkspacePush('regenerated listing draft');loadItem(item.id)}} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;scheduleGoogleWorkspacePush('deleted inventory item');selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
-    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('saveAiUsageSettingsBtn','onclick',saveAiUsageSettings);on('clearAiUsageBtn','onclick',clearAiUsage);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('choosePricingComparableScreenshotBtn','onclick',choosePricingComparableScreenshot);on('pricingComparableScreenshotFile','onchange',handlePricingComparableScreenshotFile);on('analyzePricingComparableScreenshotBtn','onclick',analyzePricingComparableScreenshot);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('copyPricingResearchSummaryBtn','onclick',copyPricingResearchSummary);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('clearDraftHistoryBtn','onclick',clearDraftHistory);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('saveAiUsageSettingsBtn','onclick',saveAiUsageSettings);on('clearAiUsageBtn','onclick',clearAiUsage);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('choosePricingComparableScreenshotBtn','onclick',choosePricingComparableScreenshot);on('pricingComparableScreenshotFile','onchange',handlePricingComparableScreenshotFile);on('analyzePricingComparableScreenshotBtn','onclick',analyzePricingComparableScreenshot);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('copyPricingResearchSummaryBtn','onclick',copyPricingResearchSummary);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
     on('workstationSearch','oninput',renderWorkstation);on('workstationStatusFilter','onchange',renderWorkstation);on('workstationOpenEditorBtn','onclick',openWorkstationItemEditor);on('workstationCopyBundleBtn','onclick',copyWorkstationBundle);on('workstationResetChecklistBtn','onclick',resetWorkstationPostingChecklist);on('workstationFacebookBtn','onclick',()=>markWorkstationPostingStep('marketplace'));on('workstationItemStatus','onchange',updateWorkstationItemStatus);document.querySelectorAll('[data-workstation-copy]').forEach(b=>b.onclick=()=>copyWorkstationField(b.dataset.workstationCopy));
 
     // Backup
@@ -2554,21 +2555,24 @@
         document.head.appendChild(s);
       });
     }
-    async function requestGoogleAccess(){
+    function rememberGoogleReconnect(enabled){if(enabled)localStorage.setItem(K.googleReconnectPreference,'yes');else localStorage.removeItem(K.googleReconnectPreference)}
+    async function requestGoogleAccess({silent=false}={}){
       const setup=getGoogleApiSetup();
       if(!setup.oauthClientId){alert('Save a Google OAuth Client ID first.');return}
       try{
         await loadGoogleIdentity();
         googleTokenClient=google.accounts.oauth2.initTokenClient({client_id:setup.oauthClientId,scope:googleSyncScopes(),callback:(response)=>{
-          if(response.error){googleAccessTokenInfo=null;renderGoogleSignInStatus(`Access request failed: ${response.error}`);return}
+          if(response.error){googleAccessTokenInfo=null;renderGoogleSignInStatus(silent?'Silent Google reconnect was not available. Tap Sign In to Google when you are ready.':`Access request failed: ${response.error}`);return}
           googleAccessTokenInfo={grantedAt:new Date().toISOString(),expiresIn:response.expires_in||'',scope:response.scope||googleSyncScopes(),tokenType:response.token_type||'Bearer',accessToken:response.access_token};
+          rememberGoogleReconnect(true);
           renderGoogleSignInStatus('Temporary access token granted and held in memory only.');
           startGoogleWorkspaceAutoSync();
-        },error_callback:(err)=>{googleAccessTokenInfo=null;renderGoogleSignInStatus(`Access popup failed: ${err?.type||'unknown error'}`)}});
-        googleTokenClient.requestAccessToken({prompt:'consent'});
-      }catch(e){alert('Could not start Google sign-in: '+(e?.message||e))}
+        },error_callback:(err)=>{googleAccessTokenInfo=null;renderGoogleSignInStatus(silent?'Silent Google reconnect was not available. Tap Sign In to Google when you are ready.':`Access popup failed: ${err?.type||'unknown error'}`)}});
+        googleTokenClient.requestAccessToken({prompt:silent?'':'consent'});
+      }catch(e){if(silent)renderGoogleSignInStatus('Silent Google reconnect was not available. Tap Sign In to Google when you are ready.');else alert('Could not start Google sign-in: '+(e?.message||e))}
     }
-    function forgetGoogleAccess(){googleAccessTokenInfo=null;stopGoogleWorkspaceAutoSync();renderGoogleSignInStatus('Temporary access token forgotten.')}
+    function trySilentGoogleReconnect(){if(localStorage.getItem(K.googleReconnectPreference)==='yes'&&getGoogleApiSetup().oauthClientId)requestGoogleAccess({silent:true})}
+    function forgetGoogleAccess(){googleAccessTokenInfo=null;rememberGoogleReconnect(false);stopGoogleWorkspaceAutoSync();renderGoogleSignInStatus('Temporary access token forgotten. Automatic Google reconnect disabled on this device.')}
     async function runGoogleApiProbe(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
       renderGoogleApiProbeStatus('<p>Running read-only Drive API probe...</p>');
@@ -2626,7 +2630,7 @@
     function sharedWorkspacePhotoPreview(photo){return photoDisplayDataUrl(photo)||''}
     function sharedWorkspacePhotoRecord(photo){if(!photo||typeof photo!=='object')return null;const dataUrl=sharedWorkspacePhotoPreview(photo);return {label:photo.label||'',takenAt:photo.takenAt||'',watermark:photo.watermark||null,dataUrl,thumbnailDataUrl:dataUrl,remoteWorkspacePreview:!!dataUrl}}
     function workspacePhotosHavePreview(photos){return (photos||[]).some(photo=>!!photoDisplayDataUrl(photo))}
-    function sharedWorkspaceItemRecord(item){return {...item,photos:(item.photos||[]).map(sharedWorkspacePhotoRecord).filter(Boolean),storagePhoto:sharedWorkspacePhotoRecord(item.storagePhoto)}}
+    function sharedWorkspaceItemRecord(item){return {...item,photos:(item.photos||[]).map(sharedWorkspacePhotoRecord).filter(Boolean),storagePhoto:sharedWorkspacePhotoRecord(getEffectiveStoragePhoto(item))}}
     function buildGoogleWorkspacePayload(){return {schemaVersion:'google-workspace-v1',appVersion:VERSION,updatedAt:new Date().toISOString(),items:getItems().map(sharedWorkspaceItemRecord),storagePresets:getStoragePresets(),googleSyncSettings:getGoogleSyncSettings()}}
     function workspaceTimestamp(value){let n=Date.parse(value||'');return Number.isFinite(n)?n:0}
     function mergeWorkspaceItems(localItems,remoteItems){
@@ -3573,8 +3577,8 @@
     on('applyGoogleDeviceSetupBtn','onclick',applyGoogleDeviceSetupCode);
     on('clearGoogleApiSetupBtn','onclick',clearGoogleApiSetup);
     on('loadGoogleIdentityBtn','onclick',()=>loadGoogleIdentity().catch(e=>alert(e.message||e)));
-    on('requestGoogleAccessBtn','onclick',requestGoogleAccess);
-    on('dashboardGoogleAccessBtn','onclick',requestGoogleAccess);
+    on('requestGoogleAccessBtn','onclick',()=>requestGoogleAccess());
+    on('dashboardGoogleAccessBtn','onclick',()=>requestGoogleAccess());
     on('forgetGoogleAccessBtn','onclick',forgetGoogleAccess);
     on('runGoogleApiProbeBtn','onclick',runGoogleApiProbe);
     on('googleWorkspaceSyncBtn','onclick',syncGoogleWorkspace);
@@ -3705,7 +3709,7 @@
     function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);trySilentGoogleReconnect();
   })();
   </script>
 </body>

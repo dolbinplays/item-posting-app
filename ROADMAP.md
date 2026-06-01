@@ -5,9 +5,11 @@
 - Phone-first item capture, calibration, storage presets, storage-location photos, and recoverable watermarks.
 - Compact mobile inventory browser with item editing and draft history.
 - Guided inventory accordion with saved checkpoints for photos, details, pricing, storage, and marketplace draft assembly.
+- Item-level saved draft-history cleanup and cross-device compressed storage-location previews.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Save-time Google sync and local capture cleanup for ready inventory items.
+- Optional silent Google reconnect preference that reacquires an in-memory token when Google allows it without storing access tokens.
 - Secure OpenAI relay for photo recognition, structured listing suggestions, and listing-draft assistance.
 - Pricing research workspace with marketplace search shortcuts, public URL lookup, manually saved comparables, screenshot batch recognition, and quick-sale / fair-market / high-end calculations.
 
