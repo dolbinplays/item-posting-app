@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0180</title>
+  <title>Item Posting Assistant v0.26.06.01.0190</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0180 · In-context storage recovery</p>
+      <p class="eyebrow">v0.26.06.01.0190 · Resilient low-storage recovery</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -966,8 +966,9 @@
         <button id="storageRecoveryClearSessionsBtn" class="success" type="button">Clear Old Saved Capture Sessions<span class="storage-recovery-hint">Recommended first. Keeps inventory items, saved item photos, and the temporary captures for the item you are currently building.</span></button>
         <button id="storageRecoveryClearDraftHistoryBtn" class="secondary" type="button">Clear Selected Item Draft History<span class="storage-recovery-hint">Keeps the selected item's current fields and current listing draft. Removes only its older restore checkpoints.</span></button>
         <button id="storageRecoveryClearShotsBtn" class="secondary" type="button">Clear Current Temporary Captures<span class="storage-recovery-hint">Use only after creating the inventory item or if you are willing to retake the current capture photos.</span></button>
+        <button id="storageRecoveryOptimizeBtn" class="success" type="button">Optimize Inventory Previews Safely<span class="storage-recovery-hint">Best next step when the counters above are already zero. Copies full inventory photos to the browser media library, then keeps small previews in the main app records.</span></button>
         <button id="storageRecoveryOpenBackupBtn" class="primary" type="button">Open More Backup Cleanup Tools<span class="storage-recovery-hint">Jump directly to storage cleanup, backup exports, and deliberate inventory-photo optimization.</span></button>
-        <button id="storageRecoveryCloseBtn" class="secondary" type="button">Close and Retry Save</button>
+        <button id="storageRecoveryCloseBtn" class="secondary" type="button">Close Warning · Keep Auto Sync Paused</button>
       </div>
     </div>
   </div>
@@ -975,19 +976,21 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0180';
+    const VERSION='v0.26.06.01.0190';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
     function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
     function isStorageQuotaError(e){return !!e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22||e.code===1014)}
+    let storageRecoveryActive=false;
     function updateStorageRecoveryDialog(message){
       const overlay=$('storageRecoveryOverlay');if(!overlay)return false;
+      storageRecoveryActive=true;
       const sessions=read(K.sessions,[]),shots=read(K.shots,[]),items=read(K.items,[]);
       const selected=items.find(item=>item.id===selectedItemId),drafts=selected?.draftHistory?.length||0;
       $('storageRecoveryMessage').textContent=message||'The app could not save the latest change. Start with the least disruptive cleanup option below, then retry your save.';
-      $('storageRecoveryCounts').innerHTML=`Current temporary captures: <b>${shots.length}</b> · Old saved capture sessions: <b>${sessions.length}</b> · Selected item draft checkpoints: <b>${drafts}</b><br><span class="storage-recovery-hint">The first two cleanup buttons do not delete inventory items or their saved photos.</span>`;
+      $('storageRecoveryCounts').innerHTML=`Current temporary captures: <b>${shots.length}</b> · Old saved capture sessions: <b>${sessions.length}</b> · Selected item draft checkpoints: <b>${drafts}</b><br><span class="storage-recovery-hint">Automatic workspace checks are paused for this app session. Cleanup buttons do not delete inventory items.</span>`;
       $('storageRecoveryClearSessionsBtn').disabled=!sessions.length;
       $('storageRecoveryClearDraftHistoryBtn').disabled=!drafts;
       $('storageRecoveryClearShotsBtn').disabled=!shots.length;
@@ -997,6 +1000,7 @@
     function storageError(e){
       const quota=isStorageQuotaError(e);
       const msg=quota?'Storage is full. Choose a low-impact cleanup option below, then retry your save.':(e?.message||e||'Unknown storage error');
+      if(quota)stopGoogleWorkspaceAutoSync({render:false});
       if(!quota||!updateStorageRecoveryDialog(msg))alert('Could not save data: '+msg);
       try{$('captureStatus').textContent='Save failed: '+msg}catch{}
       console.error(e);
@@ -1341,7 +1345,7 @@
     const id=p=>p+'_'+Date.now()+'_'+Math.random().toString(16).slice(2);
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
     const titleCase=s=>String(s||'').replace(/\w\S*/g,t=>t[0].toUpperCase()+t.slice(1).toLowerCase());
-    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name);if(name==='workstation')renderWorkstation();if(name==='backup') {refreshBackupViews();renderMediaDbStats();renderStorageUsage();}}
+    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));try{localStorage.setItem(K.lastTab,name)}catch{}if(name==='workstation')renderWorkstation();if(name==='backup') {refreshBackupViews();renderMediaDbStats();renderStorageUsage();}}
     function getDeviceRole(){return localStorage.getItem(K.deviceRole)||'full'}
     function renderDeviceRole(){
       const role=getDeviceRole(),select=$('deviceRole'),status=$('deviceRoleStatus');if(select)select.value=role;
@@ -2604,7 +2608,7 @@
         document.head.appendChild(s);
       });
     }
-    function rememberGoogleReconnect(enabled){if(enabled)localStorage.setItem(K.googleReconnectPreference,'yes');else localStorage.removeItem(K.googleReconnectPreference)}
+    function rememberGoogleReconnect(enabled){try{if(enabled)localStorage.setItem(K.googleReconnectPreference,'yes');else localStorage.removeItem(K.googleReconnectPreference)}catch(e){console.warn('Could not save Google reconnect preference while browser storage is full.',e)}}
     async function requestGoogleAccess({silent=false}={}){
       const setup=getGoogleApiSetup();
       if(!setup.oauthClientId){alert('Save a Google OAuth Client ID first.');return}
@@ -2727,20 +2731,21 @@
     }
     async function runPullGoogleWorkspace(){try{await pullGoogleWorkspace()}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace pull failed:</b> ${escapeHtml(e?.message||e)}</p>`)}}
     async function runPushGoogleWorkspace(){try{await pushGoogleWorkspace()}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace push failed:</b> ${escapeHtml(e?.message||e)}</p>`)}}
-    function googleWorkspaceAutoReady(){return !!googleAccessTokenInfo?.accessToken&&!document.hidden}
-    function stopGoogleWorkspaceAutoSync(){
+    function googleWorkspaceAutoReady(){return !!googleAccessTokenInfo?.accessToken&&!document.hidden&&!storageRecoveryActive}
+    function stopGoogleWorkspaceAutoSync({render=true}={}){
       if(googleWorkspacePullTimer){clearInterval(googleWorkspacePullTimer);googleWorkspacePullTimer=null}
       if(googleWorkspacePushTimer){clearTimeout(googleWorkspacePushTimer);googleWorkspacePushTimer=null}
-      renderGoogleWorkspaceStatus()
+      if(render)renderGoogleWorkspaceStatus()
     }
     function startGoogleWorkspaceAutoSync(){
+      if(storageRecoveryActive){renderGoogleWorkspaceStatus('<p><b>Automatic workspace checks are paused:</b> free browser storage first, then refresh the app to resume automatic checks.</p>');return}
       if(googleWorkspacePullTimer)clearInterval(googleWorkspacePullTimer);
       googleWorkspacePullTimer=setInterval(()=>autoPullGoogleWorkspace('periodic visible-tab check'),GOOGLE_WORKSPACE_AUTO_PULL_MS);
       renderGoogleWorkspaceStatus();
       autoPullGoogleWorkspace('Google sign-in')
     }
     function scheduleGoogleWorkspacePush(reason='local inventory update'){
-      if(!googleAccessTokenInfo?.accessToken)return;
+      if(!googleAccessTokenInfo?.accessToken||storageRecoveryActive)return;
       googleWorkspaceDirtyReason=reason;
       if(googleWorkspacePushTimer)clearTimeout(googleWorkspacePushTimer);
       googleWorkspacePushTimer=setTimeout(()=>{googleWorkspacePushTimer=null;autoPushGoogleWorkspace(reason)},1800)
@@ -3666,6 +3671,7 @@
     on('storageRecoveryClearSessionsBtn','onclick',clearSavedSessionsFromRecovery);
     on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
     on('storageRecoveryClearShotsBtn','onclick',clearTemporaryCapturesFromRecovery);
+    on('storageRecoveryOptimizeBtn','onclick',optimizeInventoryPreviewsFromRecovery);
     on('storageRecoveryOpenBackupBtn','onclick',openStorageCleanupFromRecovery);
     on('storageRecoveryCloseBtn','onclick',hideStorageRecoveryDialog);
 
@@ -3732,6 +3738,46 @@
         if($('captureStatus'))$('captureStatus').textContent='Temporary captures cleared.';
         renderShots();
       }
+    }
+    async function optimizePhotoForRecovery(photo,meta){
+      if(!photo||typeof photo!=='object')return false;
+      let changed=false;
+      const original=photo.originalDataUrl||photo.dataUrl||photo.thumbnailDataUrl||'';
+      if(original){
+        if(!photo.fullPhotoMediaId){
+          const fullId=photo.mediaId||await storePhotoInMediaLibrary({...photo,dataUrl:original},{...meta,sourceKey:`${meta.sourceKey}:full:${original.length}`});
+          photo.mediaId=fullId;photo.fullPhotoMediaId=fullId;
+        }
+        const thumbnail=await makeThumbnailDataUrl(original,360,270,.62);
+        photo.dataUrl=thumbnail;photo.thumbnailDataUrl=thumbnail;photo.optimizedToThumbnail=true;photo.optimizedAt=new Date().toISOString();
+        delete photo.originalDataUrl;changed=true;
+      }
+      const marked=photo.watermarkedDataUrl||photo.watermarkedPreviewDataUrl||'';
+      if(marked){
+        if(!photo.watermarkedMediaId)photo.watermarkedMediaId=await storePhotoInMediaLibrary({dataUrl:marked,label:photo.label||'Watermarked photo'},{...meta,kind:'watermarked-photo',sourceKey:`${meta.sourceKey}:watermarked:${marked.length}`});
+        photo.watermarkedPreviewDataUrl=await makeThumbnailDataUrl(marked,360,270,.62);
+        delete photo.watermarkedDataUrl;changed=true;
+      }
+      return changed
+    }
+    async function optimizeInventoryPreviewsFromRecovery(){
+      if(!confirm('Optimize local inventory previews now? Full-size photos will be copied into this browser media library first. Inventory items and their current listing details will remain saved.'))return;
+      const btn=$('storageRecoveryOptimizeBtn');if(btn)btn.disabled=true;
+      updateStorageRecoveryDialog('Optimizing local inventory previews. Keep this app open until the operation finishes...');
+      try{
+        const items=getItems(),locs=getStorageLocationPhotos();let optimized=0;
+        for(const item of items){
+          for(let i=0;i<(item.photos||[]).length;i++)if(await optimizePhotoForRecovery(item.photos[i],{sourceKey:`recovery:item:${item.id}:photo:${i}`,kind:'inventory-photo',label:item.photos[i]?.label,itemId:item.id,itemTitle:item.title}))optimized++;
+          if(await optimizePhotoForRecovery(item.storagePhoto,{sourceKey:`recovery:item:${item.id}:storage:${item.storage||''}`,kind:'item-storage-photo',label:'Storage location photo',itemId:item.id,itemTitle:item.title,storageLocation:item.storage}))optimized++;
+        }
+        for(const [location,photo] of Object.entries(locs))if(await optimizePhotoForRecovery(photo,{sourceKey:`recovery:shared-storage:${location}`,kind:'shared-storage-photo',label:'Shared storage location photo',storageLocation:location}))optimized++;
+        if(!recoveryWrite(K.items,items,`Inventory preview optimization saved for ${optimized} photo${optimized===1?'':'s'}.`))return;
+        recoveryWrite(K.storageLocationPhotos,locs,'Shared storage-location previews optimized.');
+        renderInventory();if(selectedItemId)loadItem(selectedItemId);await renderMediaDbStats();await renderStorageUsage();
+        updateStorageRecoveryDialog(`Recovery optimization completed for ${optimized} photo${optimized===1?'':'s'}. Automatic workspace checks remain paused until you refresh the app. Close this warning and continue working, or refresh when convenient.`);
+      }catch(e){
+        console.error(e);updateStorageRecoveryDialog('Preview optimization could not finish: '+(e?.message||e)+'. Open the Backup cleanup tools to export a backup or use the additional cleanup controls.');
+      }finally{if(btn)btn.disabled=false}
     }
     function openStorageCleanupFromRecovery(){
       hideStorageRecoveryDialog();showScreen('backup');

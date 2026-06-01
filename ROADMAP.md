@@ -64,5 +64,5 @@
 - Google Sheets is the inventory and listing index.
 - Google Drive is the long-term photo and video backup.
 - Browser-local media is temporary working storage and should remain optimized for phone reliability.
-- Low-storage warnings open an in-context recovery dialog with least-disruptive cleanup actions first: old capture sessions, selected-item draft checkpoints, current temporary captures, then the full Backup cleanup tools. Implemented.
+- Low-storage warnings open an in-context recovery dialog, pause automatic workspace writes for the session, and offer least-disruptive cleanup actions first: old capture sessions, selected-item draft checkpoints, current temporary captures, emergency thumbnail optimization with full copies retained in IndexedDB, then the full Backup cleanup tools. Implemented.
 - Paid AI calls must be explicit, visible to the user, and routed through the secure relay. Local tools and public URL lookup should remain free.
