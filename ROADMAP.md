@@ -11,15 +11,16 @@
 
 ## Current Work
 
-- AI API usage visibility: show paid-action notices, locally track relay calls and approximate API cost, include usage history in backups, and document the billing assumptions.
+- Stage 9 pricing research follow-through.
 
 ## Next Roadmap Stops
 
 ### Stage 9 - Pricing Research Follow-Through
 
-- Marketplace-specific guidance generated from saved comparables.
-- Saved research summaries and clearer comparable review tools.
-- AI usage guardrails, optional spending warnings, and an administrator-facing usage view.
+- Marketplace-specific guidance generated from saved comparables. Implemented.
+- Saved research summaries and clearer comparable review tools. Implemented.
+- AI usage guardrails and optional browser-local spending warnings. Implemented.
+- Centralized administrator-facing AI usage view for a future multi-user release.
 
 ### Stage 10 - Desktop Workstation Mode
 
