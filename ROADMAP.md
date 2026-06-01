@@ -26,7 +26,9 @@
 ### Stage 10 - Desktop Workstation Mode
 
 - Desktop browser workstation for inventory review, draft preview, status updates, and Facebook Marketplace copy controls. Foundation implemented.
-- QR pairing and a shared item/session view.
+- Google-only shared workspace for a single user or small household: lightweight item records sync through Drive while Sheets remains the index and Drive remains media storage. Explicit pull, push, and two-way merge foundation implemented.
+- Automatic shared-workspace checks on startup, tab focus, and a cautious polling interval.
+- Optional QR handoff for quickly configuring a second device with the same Google workspace.
 - Easier copy and paste into Facebook Marketplace from a laptop.
 
 ### Stage 11 - Android APK Conversion

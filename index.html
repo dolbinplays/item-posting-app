@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.31.1600</title>
+  <title>Item Posting Assistant v0.26.05.31.1730</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -419,7 +419,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.31.1600 · Sync review highlights + workstation</p>
+      <p class="eyebrow">v0.26.05.31.1730 · Shared Google workspace</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -734,6 +734,12 @@
               <button id="dashboardHealthBtn" class="secondary" type="button">Check Sync Health</button>
             </div>
           </div>
+          <div class="sync-dashboard">
+            <h3>Shared Google Workspace</h3>
+            <p class="note">Use the same Google account on your phone and computer. This syncs lightweight inventory records through one JSON file in the Drive root folder. Full photos stay in Drive and browser-local camera media stays on the device that captured it.</p>
+            <div id="googleWorkspaceStatus" class="note"></div>
+            <div class="actions"><button id="googleWorkspaceSyncBtn" class="success" type="button">Sync Workspace Both Ways</button><button id="googleWorkspacePullBtn" class="secondary" type="button">Pull + Merge from Drive</button><button id="googleWorkspacePushBtn" class="secondary" type="button">Push Local Workspace</button></div>
+          </div>
           <details class="sync-advanced">
             <summary>Advanced Google setup and troubleshooting</summary>
           <h3 style="margin-top:8px">Google Sync Settings</h3>
@@ -909,8 +915,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.31.1600';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.05.31.1730';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -2375,6 +2381,7 @@
       if($('connectGoogleSheetBtn'))$('connectGoogleSheetBtn').disabled=!tokenReady;
       if($('writeGoogleSheetRowsBtn'))$('writeGoogleSheetRowsBtn').disabled=!tokenReady;
       if($('writeAllGoogleSheetRowsBtn'))$('writeAllGoogleSheetRowsBtn').disabled=!tokenReady;
+      ['googleWorkspaceSyncBtn','googleWorkspacePullBtn','googleWorkspacePushBtn'].forEach(idv=>{if($(idv))$(idv).disabled=!tokenReady});
     }
     function renderGoogleApiProbeStatus(message=''){
       const el=$('googleApiProbeStatus'); if(!el)return;
@@ -2385,6 +2392,15 @@
       const el=$('googleDriveRootStatus'); if(!el)return;
       el.innerHTML=message||`<p>Configured Drive root: <b>${escapeHtml(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant')}</b>. Not connected in this page session.</p>`;
       if($('connectGoogleDriveRootBtn'))$('connectGoogleDriveRootBtn').disabled=!googleAccessTokenInfo;
+    }
+    const GOOGLE_WORKSPACE_FILE='item-posting-shared-workspace.json';
+    function getGoogleWorkspaceState(){return read(K.googleWorkspaceState,{})||{}}
+    function setGoogleWorkspaceState(state){return safeWrite(K.googleWorkspaceState,{...getGoogleWorkspaceState(),...state,updatedAt:new Date().toISOString()})}
+    function renderGoogleWorkspaceStatus(message=''){
+      const el=$('googleWorkspaceStatus');if(!el)return;
+      const state=getGoogleWorkspaceState();
+      el.innerHTML=message||`<p>Shared file: <b>${GOOGLE_WORKSPACE_FILE}</b><br>${state.lastSyncedAt?`Last workspace sync: <b>${escapeHtml(new Date(state.lastSyncedAt).toLocaleString())}</b>`:'No shared workspace sync has run in this browser yet.'}${state.fileId?`<br>Drive file ID: <code>${escapeHtml(state.fileId)}</code>`:''}</p>`;
+      ['googleWorkspaceSyncBtn','googleWorkspacePullBtn','googleWorkspacePushBtn'].forEach(idv=>{if($(idv))$(idv).disabled=!googleAccessTokenInfo})
     }
     function renderGoogleDriveItemFoldersStatus(message=''){
       const el=$('googleDriveItemFoldersStatus'); if(!el)return;
@@ -2499,6 +2515,52 @@
       if(!createRes.ok)throw new Error(folder.error?.message||createRes.statusText);
       return {...folder,action:'created'};
     }
+    function sharedWorkspacePhotoRecord(photo){if(!photo||typeof photo!=='object')return null;return {label:photo.label||'',takenAt:photo.takenAt||'',watermark:photo.watermark||null}}
+    function sharedWorkspaceItemRecord(item){return {...item,photos:(item.photos||[]).map(sharedWorkspacePhotoRecord).filter(Boolean),storagePhoto:sharedWorkspacePhotoRecord(item.storagePhoto)}}
+    function buildGoogleWorkspacePayload(){return {schemaVersion:'google-workspace-v1',appVersion:VERSION,updatedAt:new Date().toISOString(),items:getItems().map(sharedWorkspaceItemRecord),storagePresets:getStoragePresets(),googleSyncSettings:getGoogleSyncSettings()}}
+    function workspaceTimestamp(value){let n=Date.parse(value||'');return Number.isFinite(n)?n:0}
+    function mergeWorkspaceItems(localItems,remoteItems){
+      const merged=new Map((localItems||[]).filter(i=>i?.id).map(item=>[item.id,item]));
+      (remoteItems||[]).filter(i=>i?.id).forEach(remote=>{const local=merged.get(remote.id);if(!local){merged.set(remote.id,remote);return}if(workspaceTimestamp(remote.updatedAt)>workspaceTimestamp(local.updatedAt)){merged.set(remote.id,{...local,...remote,photos:(local.photos||[]).length?local.photos:(remote.photos||[]),storagePhoto:local.storagePhoto||remote.storagePhoto})}});
+      return [...merged.values()]
+    }
+    async function findGoogleWorkspaceFile(rootId){
+      const headers={Authorization:`Bearer ${googleAccessTokenInfo.accessToken}`},q=`name = '${GOOGLE_WORKSPACE_FILE}' and '${rootId}' in parents and trashed = false`;
+      const res=await fetch('https://www.googleapis.com/drive/v3/files?fields=files(id,name,modifiedTime,webViewLink)&spaces=drive&q='+encodeURIComponent(q),{headers}),data=await res.json();
+      if(!res.ok)throw new Error(data.error?.message||res.statusText);return data.files&&data.files[0]||null
+    }
+    async function downloadGoogleWorkspace(fileId){
+      const res=await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`,{headers:{Authorization:`Bearer ${googleAccessTokenInfo.accessToken}`}});
+      if(!res.ok)throw new Error((await res.text())||res.statusText);return res.json()
+    }
+    async function uploadGoogleWorkspace(rootId,fileId,payload){
+      const boundary='ipa_workspace_'+Date.now().toString(36),metadata=fileId?{}:{name:GOOGLE_WORKSPACE_FILE,parents:[rootId]},body=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(payload)}\r\n`,`--${boundary}--`],{type:`multipart/related; boundary=${boundary}`});
+      const endpoint=fileId?`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=multipart&fields=id,name,modifiedTime,webViewLink`:'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,webViewLink';
+      const res=await fetch(endpoint,{method:fileId?'PATCH':'POST',headers:{Authorization:`Bearer ${googleAccessTokenInfo.accessToken}`,'Content-Type':`multipart/related; boundary=${boundary}`},body}),data=await res.json();
+      if(!res.ok)throw new Error(data.error?.message||res.statusText);return data
+    }
+    async function pullGoogleWorkspace({silent=false}={}){
+      if(!googleAccessTokenInfo?.accessToken){alert('Sign in to Google first.');return null}
+      renderGoogleWorkspaceStatus('<p>Pulling shared workspace from Drive...</p>');
+      const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant'),file=await findGoogleWorkspaceFile(root.id);
+      if(!file){renderGoogleWorkspaceStatus('<p>No shared workspace file exists yet. Push Local Workspace to create it.</p>');return {root,file:null,merged:0}}
+      const remote=await downloadGoogleWorkspace(file.id),localItems=getItems(),items=mergeWorkspaceItems(localItems,remote.items),before=JSON.stringify(localItems);
+      if(!setItems(items))throw new Error('Merged workspace could not be saved locally.');
+      if(Array.isArray(remote.storagePresets))setStoragePresets([...getStoragePresets(),...remote.storagePresets]);
+      setGoogleWorkspaceState({fileId:file.id,modifiedTime:file.modifiedTime||'',lastPulledAt:new Date().toISOString(),lastSyncedAt:new Date().toISOString()});renderInventory();renderWorkstation();refreshBackupViews();renderGoogleWorkspaceStatus();
+      const merged=before===JSON.stringify(items)?0:1;if(!silent)alert(merged?'Shared workspace merged into this browser.':'Shared workspace checked. Local records were already current.');return {root,file,merged}
+    }
+    async function pushGoogleWorkspace({silent=false}={}){
+      if(!googleAccessTokenInfo?.accessToken){alert('Sign in to Google first.');return null}
+      renderGoogleWorkspaceStatus('<p>Pushing local workspace to Drive...</p>');
+      const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant'),existing=await findGoogleWorkspaceFile(root.id),file=await uploadGoogleWorkspace(root.id,existing?.id||'',buildGoogleWorkspacePayload());
+      setGoogleWorkspaceState({fileId:file.id,modifiedTime:file.modifiedTime||'',lastPushedAt:new Date().toISOString(),lastSyncedAt:new Date().toISOString()});renderGoogleWorkspaceStatus();if(!silent)alert(`Shared workspace ${existing?'updated':'created'} in Google Drive.`);return {root,file}
+    }
+    async function syncGoogleWorkspace(){
+      try{await pullGoogleWorkspace({silent:true});await pushGoogleWorkspace({silent:true});alert('Shared Google workspace synced both ways.')}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace sync failed:</b> ${escapeHtml(e?.message||e)}</p>`)}
+    }
+    async function runPullGoogleWorkspace(){try{await pullGoogleWorkspace()}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace pull failed:</b> ${escapeHtml(e?.message||e)}</p>`)}}
+    async function runPushGoogleWorkspace(){try{await pushGoogleWorkspace()}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace push failed:</b> ${escapeHtml(e?.message||e)}</p>`)}}
     async function processGoogleDriveItemFolders(limit=3){
       const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant');
       const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).slice(0,limit);
@@ -3078,7 +3140,7 @@
     }
     function saveGoogleSyncSettingsFromForm(){if(setGoogleSyncSettings({sheetName:$('googleSheetName')?.value,driveRootFolder:$('googleDriveRoot')?.value}))alert('Google sync settings saved.')}
     function saveGoogleApiSetupFromForm(){if(setGoogleApiSetup({oauthClientId:$('googleOAuthClientId')?.value}))alert('Google API setup saved.')}
-    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncHistory:getGoogleSyncHistory(),googleSyncPreflight:buildGoogleSyncPreflight(),googleSyncRunLog:getGoogleSyncRunLog(),googleSyncSettings:getGoogleSyncSettings(),googleApiSetup:getGoogleApiSetup(),assistantRelaySettings:getAssistantRelaySettings(),aiUsageLog:getAiUsageLog(),aiUsageSettings:getAiUsageSettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
+    function backupObj(){return{version:VERSION,exportedAt:new Date().toISOString(),googleSyncSchema:googleSyncSchema(),googleAuthorizationRequirements:googleAuthorizationRequirements(),googleSyncReadinessGate:buildGoogleSyncReadinessGate(),googleSyncActionQueue:buildGoogleSyncActionQueue(),googleSyncHistory:getGoogleSyncHistory(),googleSyncPreflight:buildGoogleSyncPreflight(),googleSyncRunLog:getGoogleSyncRunLog(),googleSyncSettings:getGoogleSyncSettings(),googleWorkspaceState:getGoogleWorkspaceState(),googleApiSetup:getGoogleApiSetup(),assistantRelaySettings:getAssistantRelaySettings(),aiUsageLog:getAiUsageLog(),aiUsageSettings:getAiUsageSettings(),presets:getPresets(),shots:getShots(),sessions:read(K.sessions,[]),items:getItems(),storagePresets:getStoragePresets(),storageLocationPhotos:getStorageLocationPhotos()}}
     function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
     function toCsv(rows){return rows.map(r=>r.map(csvEscape).join(',')).join('\n')}
     function safeName(v){return String(v||'untitled-item').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'untitled-item'}
@@ -3332,7 +3394,7 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-media-aware-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-aware-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=async()=>{try{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=true; if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building media-aware rebuild backup from IndexedDB/full-photo sources...'; const html=await buildRebuildHtmlMediaAware(); download(`item-posting-media-aware-rebuild-backup-${VERSION}.html`,html,'text/html'); if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media-aware rebuild backup exported.';}catch(e){alert('Could not export media-aware rebuild backup: '+(e?.message||e)); console.error(e)}finally{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=false;}};
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.assistantRelaySettings,b.assistantRelaySettings||defaultAssistantRelaySettings()))return;if(!safeWrite(K.aiUsageLog,b.aiUsageLog||[]))return;if(!safeWrite(K.aiUsageSettings,b.aiUsageSettings||defaultAiUsageSettings()))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderAssistantRelaySettings();renderAiUsage();renderGoogleSyncSettings();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.assistantRelaySettings,b.assistantRelaySettings||defaultAssistantRelaySettings()))return;if(!safeWrite(K.aiUsageLog,b.aiUsageLog||[]))return;if(!safeWrite(K.aiUsageSettings,b.aiUsageSettings||defaultAiUsageSettings()))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleWorkspaceState,b.googleWorkspaceState||{}))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderAssistantRelaySettings();renderAiUsage();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
     if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
     if($('restoreSelectedMediaBtn'))$('restoreSelectedMediaBtn').onclick=restoreSelectedItemFullPhotosFromMediaLibrary;
@@ -3349,6 +3411,9 @@
     on('dashboardGoogleAccessBtn','onclick',requestGoogleAccess);
     on('forgetGoogleAccessBtn','onclick',forgetGoogleAccess);
     on('runGoogleApiProbeBtn','onclick',runGoogleApiProbe);
+    on('googleWorkspaceSyncBtn','onclick',syncGoogleWorkspace);
+    on('googleWorkspacePullBtn','onclick',runPullGoogleWorkspace);
+    on('googleWorkspacePushBtn','onclick',runPushGoogleWorkspace);
     on('connectGoogleDriveRootBtn','onclick',connectGoogleDriveRoot);
     on('connectGoogleDriveItemFoldersBtn','onclick',connectGoogleDriveItemFolders);
     on('uploadGoogleDrivePhotosBtn','onclick',uploadGoogleDrivePhotosForNextItem);
@@ -3471,10 +3536,10 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Storage uploads are written into <b>Storage Location Photo Link</b>.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
+    updateDiag(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);
   })();
   </script>
 </body>
