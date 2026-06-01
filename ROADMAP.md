@@ -8,6 +8,7 @@
 - Item-level saved draft-history cleanup and cross-device compressed storage-location previews.
 - Device roles for full app, photo capture station, and desktop workstation layouts. Capture-station mode hides laptop-only workstation navigation while keeping inventory and backup available.
 - Guided workflow checkpoint saves retry without adding another history snapshot when browser storage is tight.
+- Inventory rendering remains read-only: opening an item no longer attempts optional shared storage-photo cache writes.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Save-time Google sync and local capture cleanup for ready inventory items.
