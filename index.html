@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0150</title>
+  <title>Item Posting Assistant v0.26.06.01.0160</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -423,7 +423,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0150 · Storage preview sync and draft cleanup</p>
+      <p class="eyebrow">v0.26.06.01.0160 · Capture-station mode and resilient checkpoints</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -458,6 +458,14 @@
         <p class="note">Install the web app for an app-like home-screen launch and offline shell startup. Inventory data remains in this browser profile and continues to sync through Google Drive when signed in.</p>
         <div id="pwaInstallStatus" class="note"></div>
         <div class="actions"><button id="pwaInstallBtn" class="success" type="button" disabled>Install Item Posting Assistant</button></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2>Device Role</h2>
+        <p class="note">Choose a simpler capture-station layout for a mounted phone, a laptop-focused workstation layout, or the full app. This changes navigation clutter, not your saved inventory.</p>
+        <label class="small">Use this device primarily as</label>
+        <select id="deviceRole"><option value="full">Full app</option><option value="capture">Photo capture station</option><option value="workstation">Desktop workstation</option></select>
+        <div class="actions"><button id="saveDeviceRoleBtn" class="success" type="button">Save Device Role</button></div>
+        <div id="deviceRoleStatus" class="note"></div>
       </div>
     </section>
 
@@ -946,8 +954,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0150';
-    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
+    const VERSION='v0.26.06.01.0160';
+    const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
@@ -1299,12 +1307,21 @@
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
     const titleCase=s=>String(s||'').replace(/\w\S*/g,t=>t[0].toUpperCase()+t.slice(1).toLowerCase());
     function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name);if(name==='workstation')renderWorkstation();if(name==='backup') {refreshBackupViews();renderMediaDbStats();renderStorageUsage();}}
+    function getDeviceRole(){return localStorage.getItem(K.deviceRole)||'full'}
+    function renderDeviceRole(){
+      const role=getDeviceRole(),select=$('deviceRole'),status=$('deviceRoleStatus');if(select)select.value=role;
+      document.querySelectorAll('.tab').forEach(tab=>{const screen=tab.dataset.screen;tab.style.display=role==='capture'&&screen==='workstation'?'none':role==='workstation'&&['calibration','capture'].includes(screen)?'none':''});
+      if(status)status.innerHTML=`<p>Current role: <b>${escapeHtml(role==='capture'?'Photo capture station':role==='workstation'?'Desktop workstation':'Full app')}</b>.</p>`;
+      const active=document.querySelector('.screen.active')?.id;if(active&&document.querySelector(`.tab[data-screen="${active}"]`)?.style.display==='none')showScreen(role==='workstation'?'workstation':'setup')
+    }
+    function saveDeviceRole(){localStorage.setItem(K.deviceRole,$('deviceRole')?.value||'full');renderDeviceRole();alert('Device role saved.')}
     document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>showScreen(t.dataset.screen)));
 
     // Setup
     const checks=[...document.querySelectorAll('.setup-check')];
     function updateReady(){let c=checks.filter(x=>x.checked).length, ready=c===checks.length;$('readyText').textContent=ready?'Capture station ready':`${c} of ${checks.length} ready`;$('readyDot').classList.toggle('ready',ready);$('continueBtn').disabled=!ready}
     checks.forEach(c=>c.addEventListener('change',updateReady)); $('resetBtn').onclick=()=>{checks.forEach(c=>c.checked=false);updateReady()}; $('continueBtn').onclick=()=>showScreen('calibration'); updateReady();
+    on('saveDeviceRoleBtn','onclick',saveDeviceRole);
 
     // Calibration
     let calStart=0,calTimer=null,latestRotation=null;
@@ -1470,7 +1487,8 @@
       let item=collectItem();if(!item)return;
       const index=ITEM_WORKFLOW_STAGES.findIndex(([stage])=>stage===key),next=ITEM_WORKFLOW_STAGES[Math.min(index+1,ITEM_WORKFLOW_STAGES.length-1)][0],label=ITEM_WORKFLOW_STAGES[index]?.[1]||'Listing section';
       item.listingWorkflowCompleted=[...new Set([...(item.listingWorkflowCompleted||[]),key])];item.listingWorkflowStage=next;item.draftHistory=item.draftHistory||[];item.draftHistory.push(currentDraftSnapshot(item,`${label} checkpoint`));item.updatedAt=new Date().toISOString();
-      itemWorkflowOpenStage=next;if(saveItemObject(item)){loadItem(item.id);alert(index===ITEM_WORKFLOW_STAGES.length-1?'Draft checkpoint saved.':'Draft saved. Opening the next listing section.')}
+      itemWorkflowOpenStage=next;if(saveItemObject(item)){loadItem(item.id);alert(index===ITEM_WORKFLOW_STAGES.length-1?'Draft checkpoint saved.':'Draft saved. Opening the next listing section.');return}
+      item.draftHistory.pop();if(saveItemObject(item)){loadItem(item.id);alert('Item changes saved and the next section opened, but the extra history checkpoint was skipped because this browser is low on storage. Use Backup > Storage Usage & Cleanup when convenient.')}
     }
     const DRIVE_MEDIA_QUALITY_VERSION='best-available-original-v1';
     const DRIVE_SYNC_STEPS=[
@@ -3709,7 +3727,7 @@
     function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
 
     // Init
-    updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)) showScreen(last);trySilentGoogleReconnect();
+    updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); renderDeviceRole(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)&&document.querySelector(`.tab[data-screen="${last}"]`)?.style.display!=='none') showScreen(last);trySilentGoogleReconnect();
   })();
   </script>
 </body>

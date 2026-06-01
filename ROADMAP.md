@@ -6,6 +6,8 @@
 - Compact mobile inventory browser with item editing and draft history.
 - Guided inventory accordion with saved checkpoints for photos, details, pricing, storage, and marketplace draft assembly.
 - Item-level saved draft-history cleanup and cross-device compressed storage-location previews.
+- Device roles for full app, photo capture station, and desktop workstation layouts. Capture-station mode hides laptop-only workstation navigation while keeping inventory and backup available.
+- Guided workflow checkpoint saves retry without adding another history snapshot when browser storage is tight.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Save-time Google sync and local capture cleanup for ready inventory items.
