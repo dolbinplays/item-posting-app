@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0190</title>
+  <title>Item Posting Assistant v0.26.06.01.0200</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0190 · Resilient low-storage recovery</p>
+      <p class="eyebrow">v0.26.06.01.0200 · Routine draft-history cleanup</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -976,7 +976,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0190';
+    const VERSION='v0.26.06.01.0200';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -2463,24 +2463,35 @@
       if($('captureBar'))$('captureBar').style.width='0%';
       if($('captureStatus'))$('captureStatus').textContent='Temporary captures released after item save.';
     }
+    function offerDraftHistoryCleanupAfterSave(item){
+      const count=item?.draftHistory?.length||0;if(!count)return 0;
+      const recommended=['Ready to Post','Listed','Sold'].includes(item.status);
+      const lead=recommended?`This item is marked "${item.status}", so cleanup is recommended.`:'This is optional housekeeping after the final save.';
+      if(!confirm(`${lead}\n\nClear ${count} older draft-history checkpoint${count===1?'':'s'} now?\n\nThe current saved item fields and final marketplace draft will remain.`))return 0;
+      item.draftHistory=[];item.updatedAt=new Date().toISOString();
+      if(!saveItemObject(item))return 0;
+      renderDraftHistory(item);return count
+    }
     async function saveItem(){
       const btn=$('saveItemBtn');
       if(btn)btn.disabled=true;
       try{
         let saved=collectItem();
         if(!saved)return;
+        const clearedDrafts=offerDraftHistoryCleanupAfterSave(saved);
         selectedItemId=saved.id;
         renderInventory();
         loadItem(saved.id);
         refreshBackupViews();
         releaseSavedItemCaptureSession(saved);
-        $('itemSaveWorkflowStatus').textContent='Saved locally. Temporary capture-session previews released.';
+        const cleanupNote=clearedDrafts?` ${clearedDrafts} older draft checkpoint${clearedDrafts===1?' was':'s were'} cleared.`:'';
+        $('itemSaveWorkflowStatus').textContent='Saved locally. Temporary capture-session previews released.'+cleanupNote;
         if(googleAccessTokenInfo?.accessToken){
-          $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures. Backing up ready items to Google Drive + Sheets...';
+          $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures.'+cleanupNote+' Backing up ready items to Google Drive + Sheets...';
           await syncGoogleAllRemaining();
-          $('itemSaveWorkflowStatus').textContent='Saved locally. Temporary captures released. Google Drive + Sheets backup finished; check Backup for any readiness holds.';
+          $('itemSaveWorkflowStatus').textContent='Saved locally. Temporary captures released.'+cleanupNote+' Google Drive + Sheets backup finished; check Backup for any readiness holds.';
         }else{
-          $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures. Sign in to Google from Backup to enable automatic Drive + Sheets backup during this browser session.';
+          $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures.'+cleanupNote+' Sign in to Google from Backup to enable automatic Drive + Sheets backup during this browser session.';
         }
         scheduleGoogleWorkspacePush('saved inventory item');
         alert(`Item saved: ${saved.title||'Untitled item'}`);
