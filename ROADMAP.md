@@ -12,7 +12,7 @@
 
 ## Current Work
 
-- Stage 10 desktop workstation mode.
+- Stage 11 Android APK conversion feasibility and packaging plan.
 
 ## Next Roadmap Stops
 
@@ -25,6 +25,7 @@
 
 ### Stage 10 - Desktop Workstation Mode
 
+- Core Stage 10 workflow confirmed on phone and laptop.
 - Desktop browser workstation for inventory review, draft preview, status updates, and Facebook Marketplace copy controls. Foundation implemented.
 - Google-only shared workspace for a single user or small household: lightweight item records sync through Drive while Sheets remains the index and Drive remains media storage. Explicit pull, push, and two-way merge foundation implemented.
 - Automatic shared-workspace checks after Google sign-in, on tab focus, and at a cautious visible-tab polling interval. Local inventory edits queue a delayed pull-merge-push so phone and laptop records stay aligned without constant manual button taps. Implemented.
@@ -33,6 +34,7 @@
 
 ### Stage 11 - Android APK Conversion
 
+- Next implementation checkpoint: choose a conservative web-wrapper approach and document the packaging path before changing the working browser app.
 - Installable Android version with app icon and name.
 - Better native storage, camera permissions, media permissions, and offline reliability.
 - Evaluate a Play Store distribution path.
