@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0170</title>
+  <title>Item Posting Assistant v0.26.06.01.0180</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -150,6 +150,12 @@
     .cleanup-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px}
     @media(min-width:760px){.cleanup-grid{grid-template-columns:repeat(2,1fr)}}
     .cleanup-grid button{font-size:.88rem;padding:10px}
+    .storage-recovery-overlay{position:fixed;inset:0;z-index:320;display:none;place-items:center;padding:16px;background:rgba(2,6,23,.84)}
+    .storage-recovery-overlay.active{display:grid}
+    .storage-recovery-dialog{width:min(620px,100%);max-height:92vh;overflow:auto;padding:18px;border:1px solid rgba(56,189,248,.42);border-radius:22px;background:linear-gradient(180deg,#17233a,#0f172a);box-shadow:0 24px 70px rgba(0,0,0,.58)}
+    .storage-recovery-dialog h2{color:#fef3c7}.storage-recovery-dialog .note{margin:8px 0}
+    .storage-recovery-actions{display:grid;gap:9px;margin-top:14px}.storage-recovery-actions button{width:100%;text-align:left}
+    .storage-recovery-hint{display:block;margin-top:3px;font-size:.78rem;font-weight:700;line-height:1.3;opacity:.82}
 
     /* =========================================================
        Professional Textured UI Layer
@@ -423,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0170 · Read-only inventory rendering</p>
+      <p class="eyebrow">v0.26.06.01.0180 · In-context storage recovery</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -951,18 +957,47 @@
     <p class="footer-note">GitHub Pages prototype · phone-first, Facebook Marketplace-first</p>
   </main>
 
+  <div id="storageRecoveryOverlay" class="storage-recovery-overlay" role="dialog" aria-modal="true" aria-labelledby="storageRecoveryTitle">
+    <div class="storage-recovery-dialog">
+      <h2 id="storageRecoveryTitle">Browser Storage Is Full</h2>
+      <p id="storageRecoveryMessage" class="note">The app could not save the latest change. Start with the least disruptive cleanup option below, then retry your save.</p>
+      <div id="storageRecoveryCounts" class="note"></div>
+      <div class="storage-recovery-actions">
+        <button id="storageRecoveryClearSessionsBtn" class="success" type="button">Clear Old Saved Capture Sessions<span class="storage-recovery-hint">Recommended first. Keeps inventory items, saved item photos, and the temporary captures for the item you are currently building.</span></button>
+        <button id="storageRecoveryClearDraftHistoryBtn" class="secondary" type="button">Clear Selected Item Draft History<span class="storage-recovery-hint">Keeps the selected item's current fields and current listing draft. Removes only its older restore checkpoints.</span></button>
+        <button id="storageRecoveryClearShotsBtn" class="secondary" type="button">Clear Current Temporary Captures<span class="storage-recovery-hint">Use only after creating the inventory item or if you are willing to retake the current capture photos.</span></button>
+        <button id="storageRecoveryOpenBackupBtn" class="primary" type="button">Open More Backup Cleanup Tools<span class="storage-recovery-hint">Jump directly to storage cleanup, backup exports, and deliberate inventory-photo optimization.</span></button>
+        <button id="storageRecoveryCloseBtn" class="secondary" type="button">Close and Retry Save</button>
+      </div>
+    </div>
+  </div>
+
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0170';
+    const VERSION='v0.26.06.01.0180';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
     const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
     function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+    function isStorageQuotaError(e){return !!e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22||e.code===1014)}
+    function updateStorageRecoveryDialog(message){
+      const overlay=$('storageRecoveryOverlay');if(!overlay)return false;
+      const sessions=read(K.sessions,[]),shots=read(K.shots,[]),items=read(K.items,[]);
+      const selected=items.find(item=>item.id===selectedItemId),drafts=selected?.draftHistory?.length||0;
+      $('storageRecoveryMessage').textContent=message||'The app could not save the latest change. Start with the least disruptive cleanup option below, then retry your save.';
+      $('storageRecoveryCounts').innerHTML=`Current temporary captures: <b>${shots.length}</b> · Old saved capture sessions: <b>${sessions.length}</b> · Selected item draft checkpoints: <b>${drafts}</b><br><span class="storage-recovery-hint">The first two cleanup buttons do not delete inventory items or their saved photos.</span>`;
+      $('storageRecoveryClearSessionsBtn').disabled=!sessions.length;
+      $('storageRecoveryClearDraftHistoryBtn').disabled=!drafts;
+      $('storageRecoveryClearShotsBtn').disabled=!shots.length;
+      overlay.classList.add('active');return true;
+    }
+    function hideStorageRecoveryDialog(){$('storageRecoveryOverlay')?.classList.remove('active')}
     function storageError(e){
-      const msg=(e&&e.name==='QuotaExceededError')?'Storage is full. Export a Rebuildable HTML Backup, then use Backup > Storage Usage & Cleanup to clear temporary captures/saved sessions or compress existing inventory photos.':(e?.message||e||'Unknown storage error');
-      alert('Could not save data: '+msg);
+      const quota=isStorageQuotaError(e);
+      const msg=quota?'Storage is full. Choose a low-impact cleanup option below, then retry your save.':(e?.message||e||'Unknown storage error');
+      if(!quota||!updateStorageRecoveryDialog(msg))alert('Could not save data: '+msg);
       try{$('captureStatus').textContent='Save failed: '+msg}catch{}
       console.error(e);
       return false;
@@ -3628,6 +3663,11 @@
     on('clearSavedSessionsBtn','onclick',clearSavedSessions);
     on('compressInventoryBtn','onclick',compressExistingInventoryPhotos);
     on('refreshStorageStatsBtn','onclick',()=>{renderStorageUsage();renderMediaDbStats();refreshBackupViews();});
+    on('storageRecoveryClearSessionsBtn','onclick',clearSavedSessionsFromRecovery);
+    on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
+    on('storageRecoveryClearShotsBtn','onclick',clearTemporaryCapturesFromRecovery);
+    on('storageRecoveryOpenBackupBtn','onclick',openStorageCleanupFromRecovery);
+    on('storageRecoveryCloseBtn','onclick',hideStorageRecoveryDialog);
 
     async function renderStorageUsage(){
       const est=await storageEstimate();
@@ -3661,6 +3701,42 @@
         renderStorageUsage();
         alert('Temporary captures cleared.');
       }
+    }
+    function recoveryWrite(key,value,successMessage){
+      try{
+        write(key,value);
+        refreshBackupViews();renderStorageUsage();
+        updateStorageRecoveryDialog(successMessage+' Retry the save when you are ready.');
+        return true;
+      }catch(e){
+        console.error(e);
+        updateStorageRecoveryDialog('That cleanup attempt could not be saved because browser storage is still full. Try another option or open the Backup cleanup tools.');
+        return false;
+      }
+    }
+    function clearSavedSessionsFromRecovery(){
+      if(!confirm('Clear old saved capture sessions? Inventory items, their saved photos, and the temporary captures for the item you are currently building will remain.'))return;
+      if(recoveryWrite(K.sessions,[],'Old saved capture sessions cleared.'))renderSessions();
+    }
+    function clearSelectedDraftHistoryFromRecovery(){
+      const items=getItems(),item=items.find(entry=>entry.id===selectedItemId),count=item?.draftHistory?.length||0;
+      if(!count){updateStorageRecoveryDialog('The selected item has no older draft checkpoints to clear. Try another cleanup option.');return}
+      if(!confirm(`Clear ${count} saved draft checkpoint${count===1?'':'s'} for the selected item? Its current fields and current listing draft will remain.`))return;
+      item.draftHistory=[];item.updatedAt=new Date().toISOString();
+      if(recoveryWrite(K.items,items,'Selected item draft history cleared.')){renderDraftHistory(item);renderInventory()}
+    }
+    function clearTemporaryCapturesFromRecovery(){
+      if(!confirm('Clear the current temporary capture photos? Only choose this after creating the inventory item or if you are willing to retake these photos.'))return;
+      if(recoveryWrite(K.shots,[],'Current temporary captures cleared.')){
+        if($('captureBar'))$('captureBar').style.width='0%';
+        if($('captureStatus'))$('captureStatus').textContent='Temporary captures cleared.';
+        renderShots();
+      }
+    }
+    function openStorageCleanupFromRecovery(){
+      hideStorageRecoveryDialog();showScreen('backup');
+      const tools=document.querySelector('details.backup-tools');if(tools)tools.open=true;
+      setTimeout(()=>$('storageUsageBox')?.scrollIntoView({behavior:'smooth',block:'center'}),0);
     }
 
     function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);let gate=b.googleSyncReadinessGate.summary;$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p><p>Sync gate: <b>${gate.readyForFutureSync}</b> ready · <b>${gate.needsReview}</b> need review</p>`}
