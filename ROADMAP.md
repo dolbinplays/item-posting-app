@@ -27,7 +27,7 @@
 
 - Desktop browser workstation for inventory review, draft preview, status updates, and Facebook Marketplace copy controls. Foundation implemented.
 - Google-only shared workspace for a single user or small household: lightweight item records sync through Drive while Sheets remains the index and Drive remains media storage. Explicit pull, push, and two-way merge foundation implemented.
-- Automatic shared-workspace checks on startup, tab focus, and a cautious polling interval.
+- Automatic shared-workspace checks after Google sign-in, on tab focus, and at a cautious visible-tab polling interval. Local inventory edits queue a delayed pull-merge-push so phone and laptop records stay aligned without constant manual button taps. Implemented.
 - Optional QR handoff for quickly configuring a second device with the same Google workspace.
 - Easier copy and paste into Facebook Marketplace from a laptop.
 

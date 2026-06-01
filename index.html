@@ -915,7 +915,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.31.1800';
+    const VERSION='v0.26.05.31.1900';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1404,7 +1404,7 @@
 
     // Inventory
     let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
-    function saveItemObject(item){if(!item?.id)return false;let items=getItems(),index=items.findIndex(i=>i.id===item.id);if(index<0)return false;items[index]=item;return setItems(items)}
+    function saveItemObject(item){if(!item?.id)return false;let items=getItems(),index=items.findIndex(i=>i.id===item.id);if(index<0)return false;items[index]=item;let saved=setItems(items);if(saved)scheduleGoogleWorkspacePush('saved item update');return saved}
     const DRIVE_MEDIA_QUALITY_VERSION='best-available-original-v1';
     const DRIVE_SYNC_STEPS=[
       ['folderCreated','Drive folder created'],
@@ -1626,6 +1626,7 @@
         Object.assign(item,generateDraft(item));
         items.push(item);
         if(!setItems(items))return;
+        scheduleGoogleWorkspacePush('new inventory item');
         selectedItemId=item.id;renderInventory();loadItem(item.id);showScreen('inventory');
         $('captureStatus').textContent=`Inventory item created: ${title}`;
         alert(`Inventory item created: ${title}`);
@@ -1714,6 +1715,7 @@
       let items=getItems(),item=items.find(i=>i.id===itemId);if(!item)return;
       item.status=status;item.updatedAt=new Date().toISOString();
       if(setItems(items)){
+        scheduleGoogleWorkspacePush('workstation status update');
         if(selectedItemId===itemId){$('itemStatus').value=status;}
         renderInventory();renderWorkstation();refreshBackupViews();
       }
@@ -2341,10 +2343,11 @@
         }else{
           $('itemSaveWorkflowStatus').textContent='Saved locally and released temporary captures. Sign in to Google from Backup to enable automatic Drive + Sheets backup during this browser session.';
         }
+        scheduleGoogleWorkspacePush('saved inventory item');
         alert(`Item saved: ${saved.title||'Untitled item'}`);
       }catch(e){storageError(e)}
       finally{if(btn)btn.disabled=false;}
-    } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
+    } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i))){scheduleGoogleWorkspacePush('regenerated listing draft');loadItem(item.id)}} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;scheduleGoogleWorkspacePush('deleted inventory item');selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
     on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('saveAiUsageSettingsBtn','onclick',saveAiUsageSettings);on('clearAiUsageBtn','onclick',clearAiUsage);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('choosePricingComparableScreenshotBtn','onclick',choosePricingComparableScreenshot);on('pricingComparableScreenshotFile','onchange',handlePricingComparableScreenshotFile);on('analyzePricingComparableScreenshotBtn','onclick',analyzePricingComparableScreenshot);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('copyPricingResearchSummaryBtn','onclick',copyPricingResearchSummary);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
     on('workstationSearch','oninput',renderWorkstation);on('workstationStatusFilter','onchange',renderWorkstation);on('workstationOpenEditorBtn','onclick',openWorkstationItemEditor);on('workstationCopyBundleBtn','onclick',copyWorkstationBundle);on('workstationItemStatus','onchange',updateWorkstationItemStatus);document.querySelectorAll('[data-workstation-copy]').forEach(b=>b.onclick=()=>copyWorkstationField(b.dataset.workstationCopy));
 
@@ -2394,12 +2397,14 @@
       if($('connectGoogleDriveRootBtn'))$('connectGoogleDriveRootBtn').disabled=!googleAccessTokenInfo;
     }
     const GOOGLE_WORKSPACE_FILE='item-posting-shared-workspace.json';
+    const GOOGLE_WORKSPACE_AUTO_PULL_MS=60000;
+    let googleWorkspaceAutoBusy=false, googleWorkspacePushTimer=null, googleWorkspacePullTimer=null, googleWorkspaceDirtyReason='';
     function getGoogleWorkspaceState(){return read(K.googleWorkspaceState,{})||{}}
     function setGoogleWorkspaceState(state){return safeWrite(K.googleWorkspaceState,{...getGoogleWorkspaceState(),...state,updatedAt:new Date().toISOString()})}
     function renderGoogleWorkspaceStatus(message=''){
       const el=$('googleWorkspaceStatus');if(!el)return;
       const state=getGoogleWorkspaceState();
-      el.innerHTML=message||`<p>Shared file: <b>${GOOGLE_WORKSPACE_FILE}</b><br>${state.lastSyncedAt?`Last workspace sync: <b>${escapeHtml(new Date(state.lastSyncedAt).toLocaleString())}</b>`:'No shared workspace sync has run in this browser yet.'}${state.fileId?`<br>Drive file ID: <code>${escapeHtml(state.fileId)}</code>`:''}${state.locatedOutsideConfiguredRoot?'<br><b>Review Drive root settings:</b> the shared file was found outside this browser&apos;s selected root folder.':''}</p>`;
+      el.innerHTML=message||`<p>Shared file: <b>${GOOGLE_WORKSPACE_FILE}</b><br>${state.lastSyncedAt?`Last workspace sync: <b>${escapeHtml(new Date(state.lastSyncedAt).toLocaleString())}</b>`:'No shared workspace sync has run in this browser yet.'}${googleAccessTokenInfo?.accessToken?'<br>Automatic workspace checks: <b>active while this tab is visible</b>.':'<br>Automatic workspace checks resume after Google sign-in.'}${state.fileId?`<br>Drive file ID: <code>${escapeHtml(state.fileId)}</code>`:''}${state.locatedOutsideConfiguredRoot?'<br><b>Review Drive root settings:</b> the shared file was found outside this browser&apos;s selected root folder.':''}</p>`;
       ['googleWorkspaceSyncBtn','googleWorkspacePullBtn','googleWorkspacePushBtn'].forEach(idv=>{if($(idv))$(idv).disabled=!googleAccessTokenInfo})
     }
     function renderGoogleDriveItemFoldersStatus(message=''){
@@ -2456,11 +2461,12 @@
           if(response.error){googleAccessTokenInfo=null;renderGoogleSignInStatus(`Access request failed: ${response.error}`);return}
           googleAccessTokenInfo={grantedAt:new Date().toISOString(),expiresIn:response.expires_in||'',scope:response.scope||googleSyncScopes(),tokenType:response.token_type||'Bearer',accessToken:response.access_token};
           renderGoogleSignInStatus('Temporary access token granted and held in memory only.');
+          startGoogleWorkspaceAutoSync();
         },error_callback:(err)=>{googleAccessTokenInfo=null;renderGoogleSignInStatus(`Access popup failed: ${err?.type||'unknown error'}`)}});
         googleTokenClient.requestAccessToken({prompt:'consent'});
       }catch(e){alert('Could not start Google sign-in: '+(e?.message||e))}
     }
-    function forgetGoogleAccess(){googleAccessTokenInfo=null;renderGoogleSignInStatus('Temporary access token forgotten.')}
+    function forgetGoogleAccess(){googleAccessTokenInfo=null;stopGoogleWorkspaceAutoSync();renderGoogleSignInStatus('Temporary access token forgotten.')}
     async function runGoogleApiProbe(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
       renderGoogleApiProbeStatus('<p>Running read-only Drive API probe...</p>');
@@ -2547,10 +2553,11 @@
       const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant'),file=await findGoogleWorkspaceFile(root.id);
       if(!file){renderGoogleWorkspaceStatus('<p>No shared workspace file exists yet. Push Local Workspace to create it.</p>');return {root,file:null,merged:0}}
       const remote=await downloadGoogleWorkspace(file.id),localItems=getItems(),items=mergeWorkspaceItems(localItems,remote.items),before=JSON.stringify(localItems);
-      if(!setItems(items))throw new Error('Merged workspace could not be saved locally.');
+      const merged=before!==JSON.stringify(items);
+      if(merged&&!setItems(items))throw new Error('Merged workspace could not be saved locally.');
       if(Array.isArray(remote.storagePresets))setStoragePresets([...getStoragePresets(),...remote.storagePresets]);
       setGoogleWorkspaceState({fileId:file.id,modifiedTime:file.modifiedTime||'',locatedOutsideConfiguredRoot:!!file.locatedOutsideRoot,lastPulledAt:new Date().toISOString(),lastSyncedAt:new Date().toISOString()});renderInventory();renderWorkstation();refreshBackupViews();renderGoogleWorkspaceStatus(file.locatedOutsideRoot?'<p><b>Shared workspace merged.</b> The file was found by account-wide fallback search because the configured Drive root did not match its parent folder. Check the Drive root setting on both devices.</p>':'');
-      const merged=before===JSON.stringify(items)?0:1;if(!silent)alert(merged?'Shared workspace merged into this browser.':'Shared workspace checked. Local records were already current.');return {root,file,merged}
+      if(!silent)alert(merged?'Shared workspace merged into this browser.':'Shared workspace checked. Local records were already current.');return {root,file,merged:merged?1:0}
     }
     async function pushGoogleWorkspace({silent=false}={}){
       if(!googleAccessTokenInfo?.accessToken){alert('Sign in to Google first.');return null}
@@ -2563,6 +2570,40 @@
     }
     async function runPullGoogleWorkspace(){try{await pullGoogleWorkspace()}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace pull failed:</b> ${escapeHtml(e?.message||e)}</p>`)}}
     async function runPushGoogleWorkspace(){try{await pushGoogleWorkspace()}catch(e){renderGoogleWorkspaceStatus(`<p><b>Workspace push failed:</b> ${escapeHtml(e?.message||e)}</p>`)}}
+    function googleWorkspaceAutoReady(){return !!googleAccessTokenInfo?.accessToken&&!document.hidden}
+    function stopGoogleWorkspaceAutoSync(){
+      if(googleWorkspacePullTimer){clearInterval(googleWorkspacePullTimer);googleWorkspacePullTimer=null}
+      if(googleWorkspacePushTimer){clearTimeout(googleWorkspacePushTimer);googleWorkspacePushTimer=null}
+      renderGoogleWorkspaceStatus()
+    }
+    function startGoogleWorkspaceAutoSync(){
+      if(googleWorkspacePullTimer)clearInterval(googleWorkspacePullTimer);
+      googleWorkspacePullTimer=setInterval(()=>autoPullGoogleWorkspace('periodic visible-tab check'),GOOGLE_WORKSPACE_AUTO_PULL_MS);
+      renderGoogleWorkspaceStatus();
+      autoPullGoogleWorkspace('Google sign-in')
+    }
+    function scheduleGoogleWorkspacePush(reason='local inventory update'){
+      if(!googleAccessTokenInfo?.accessToken)return;
+      googleWorkspaceDirtyReason=reason;
+      if(googleWorkspacePushTimer)clearTimeout(googleWorkspacePushTimer);
+      googleWorkspacePushTimer=setTimeout(()=>{googleWorkspacePushTimer=null;autoPushGoogleWorkspace(reason)},1800)
+    }
+    async function autoPullGoogleWorkspace(reason='visible-tab check'){
+      if(!googleWorkspaceAutoReady()||googleWorkspaceAutoBusy)return;
+      googleWorkspaceAutoBusy=true;
+      try{await pullGoogleWorkspace({silent:true});setGoogleWorkspaceState({lastAutoPullAt:new Date().toISOString(),lastAutoPullReason:reason});if(googleWorkspaceDirtyReason){const pushReason=googleWorkspaceDirtyReason;await pushGoogleWorkspace({silent:true});googleWorkspaceDirtyReason='';setGoogleWorkspaceState({lastAutoPushAt:new Date().toISOString(),lastAutoPushReason:pushReason})}renderGoogleWorkspaceStatus()}
+      catch(e){renderGoogleWorkspaceStatus(`<p><b>Automatic workspace check paused:</b> ${escapeHtml(e?.message||e)}<br>Use the manual workspace buttons to retry.</p>`)}
+      finally{googleWorkspaceAutoBusy=false}
+    }
+    async function autoPushGoogleWorkspace(reason='local inventory update'){
+      if(!googleWorkspaceAutoReady()||googleWorkspaceAutoBusy)return;
+      googleWorkspaceAutoBusy=true;
+      try{await pullGoogleWorkspace({silent:true});await pushGoogleWorkspace({silent:true});googleWorkspaceDirtyReason='';setGoogleWorkspaceState({lastAutoPushAt:new Date().toISOString(),lastAutoPushReason:reason});renderGoogleWorkspaceStatus()}
+      catch(e){renderGoogleWorkspaceStatus(`<p><b>Automatic workspace push paused:</b> ${escapeHtml(e?.message||e)}<br>Use Sync Workspace Both Ways to retry.</p>`)}
+      finally{googleWorkspaceAutoBusy=false}
+    }
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoPullGoogleWorkspace('tab became visible')});
+    window.addEventListener('focus',()=>autoPullGoogleWorkspace('window focus'));
     async function processGoogleDriveItemFolders(limit=3){
       const root=await findOrCreateDriveFolder(getGoogleSyncSettings().driveRootFolder||'Item Posting Assistant');
       const items=getItems(), ready=items.map((item,index)=>({item,index,readiness:googleSyncItemReadiness(item,index),plan:itemDrivePlan(item,index),sync:normalizeDriveSync(item)})).filter(x=>x.readiness.readyForFutureSync&&!x.sync.driveFolderLink).slice(0,limit);
