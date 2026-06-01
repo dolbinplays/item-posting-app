@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0100</title>
+  <title>Item Posting Assistant v0.26.06.01.0110</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -422,7 +422,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0100 · Installable PWA foundation</p>
+      <p class="eyebrow">v0.26.06.01.0110 · Visible PWA install control</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -451,6 +451,12 @@
           <div class="actions"><span class="pill"><span id="readyDot" class="dot"></span><span id="readyText">0 of 5 ready</span></span></div>
           <div class="actions"><button id="continueBtn" class="primary" disabled>Continue to Calibration</button><button id="resetBtn" class="secondary">Reset Checklist</button></div>
         </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2>Install App on This Device</h2>
+        <p class="note">Install the web app for an app-like home-screen launch and offline shell startup. Inventory data remains in this browser profile and continues to sync through Google Drive when signed in.</p>
+        <div id="pwaInstallStatus" class="note"></div>
+        <div class="actions"><button id="pwaInstallBtn" class="success" type="button" disabled>Install Item Posting Assistant</button></div>
       </div>
     </section>
 
@@ -722,12 +728,6 @@
           </div>
         </div>
       </div>
-      <div class="card" style="margin-top:14px">
-        <h2>Install App on This Device</h2>
-        <p class="note">Install the web app for an app-like home-screen launch and offline shell startup. Inventory data remains in this browser profile and continues to sync through Google Drive when signed in.</p>
-        <div id="pwaInstallStatus" class="note"></div>
-        <div class="actions"><button id="pwaInstallBtn" class="success" type="button" disabled>Install Item Posting Assistant</button></div>
-      </div>
     </section>
 
     <section id="backup" class="screen">
@@ -932,7 +932,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0100';
+    const VERSION='v0.26.06.01.0110';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
