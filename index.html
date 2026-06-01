@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Item Posting Assistant v0.26.05.31.1345</title>
+  <title>Item Posting Assistant v0.26.05.31.1600</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -44,6 +44,8 @@
     .pricing-panel{margin:14px 0;padding:13px;border:1px solid rgba(34,197,94,.34);border-radius:18px;background:linear-gradient(180deg,rgba(34,197,94,.1),rgba(2,6,23,.38));display:grid;gap:10px}
     .pricing-panel .actions{margin-top:0}.pricing-links{display:flex;gap:8px;flex-wrap:wrap}.pricing-links a{display:inline-flex;padding:9px 11px;border:1px solid rgba(56,189,248,.28);border-radius:12px;background:rgba(56,189,248,.12);color:#bae6fd;font-size:.8rem;font-weight:900;text-decoration:none}
     .pricing-comparable-list{display:grid;gap:8px}.pricing-comparable{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.46)}.pricing-comparable button{padding:8px 10px;font-size:.8rem;border-radius:10px}.pricing-comparable-actions{display:grid;gap:6px}
+    .workstation-grid{display:grid;gap:14px}.workstation-list{display:grid;gap:8px;max-height:70vh;overflow:auto}.workstation-item{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;width:100%;padding:9px;text-align:left;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.46);color:var(--text)}.workstation-item.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(56,189,248,.36)}.workstation-item.needs-review,.inventory-compact-item.needs-review{border-color:rgba(250,204,21,.72);background:rgba(120,53,15,.24);box-shadow:0 0 0 1px rgba(250,204,21,.16)}.workstation-item.active.needs-review,.inventory-compact-item.active.needs-review{border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,.3)}.sync-review-note{display:block;margin-top:4px;color:#fde68a;font-size:.76rem;font-weight:900;line-height:1.25}.workstation-thumb{width:58px;height:58px;object-fit:cover;border-radius:10px;background:rgba(148,163,184,.15)}.workstation-preview-photo{width:min(260px,100%);max-height:260px;object-fit:contain;border-radius:13px;background:#020617}.workstation-copy-grid{display:grid;gap:10px}.workstation-copy-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start}.workstation-copy-row textarea{min-height:130px}.workstation-meta{display:grid;gap:6px;padding:10px;border:1px solid var(--border);border-radius:13px;background:rgba(2,6,23,.38)}.workstation-action-link{display:inline-flex;align-items:center;padding:10px 13px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(56,189,248,.14);color:#bae6fd;font-size:.84rem;font-weight:900;text-decoration:none}
+    @media(min-width:900px){.workstation-grid{grid-template-columns:minmax(280px,.72fr) minmax(0,1.28fr)}.workstation-copy-grid{grid-template-columns:1fr 1fr}.workstation-copy-row.full{grid-column:1/-1}}
     @media(min-width:760px){.pricing-guidance-grid{grid-template-columns:repeat(3,1fr)}}
 
     .draft-history-list{display:grid;gap:10px;margin-top:10px}
@@ -417,7 +419,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.05.31.1345 · Pricing research summaries</p>
+      <p class="eyebrow">v0.26.05.31.1600 · Sync review highlights + workstation</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -427,6 +429,7 @@
       <button class="tab" data-screen="calibration">Calibration</button>
       <button class="tab" data-screen="capture">Capture</button>
       <button class="tab" data-screen="inventory">Inventory</button>
+      <button class="tab" data-screen="workstation">Workstation</button>
       <button class="tab" data-screen="backup">Backup</button>
     </nav>
 
@@ -682,6 +685,40 @@
       </div>
     </section>
 
+    <section id="workstation" class="screen">
+      <div class="card">
+        <h2>Desktop Workstation</h2>
+        <p class="note">Use this view on a laptop to review saved inventory and copy listing text into Facebook Marketplace. This foundation reads inventory stored in the current browser. Cross-device QR pairing and live phone-to-laptop sharing are the next workstation layer.</p>
+      </div>
+      <div class="workstation-grid">
+        <div class="card">
+          <h3 style="margin-top:0">Inventory Queue</h3>
+          <input id="workstationSearch" placeholder="Search workstation inventory...">
+          <label class="small">Status filter</label>
+          <select id="workstationStatusFilter"><option value="needs-listing">Needs Listing: Draft + Ready to Post</option><option value="all">All statuses</option><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select>
+          <div id="workstationCount" class="inventory-count">0 items</div>
+          <div id="workstationList" class="workstation-list"></div>
+        </div>
+        <div class="card">
+          <div id="workstationEmpty" class="empty-state">Choose an item from the workstation queue.</div>
+          <div id="workstationDetail" style="display:none">
+            <h3 id="workstationTitle" style="margin-top:0">Selected Item</h3>
+            <img id="workstationPhoto" class="workstation-preview-photo" alt="">
+            <div id="workstationMeta" class="workstation-meta" style="margin-top:10px"></div>
+            <div class="actions"><button id="workstationOpenEditorBtn" class="primary" type="button">Open Full Inventory Editor</button><button id="workstationCopyBundleBtn" class="success" type="button">Copy Full Listing Bundle</button><a id="workstationFacebookBtn" class="workstation-action-link" href="https://www.facebook.com/marketplace/create/item" target="_blank" rel="noopener">Open Facebook Marketplace</a></div>
+            <label class="small">Update listing status</label><select id="workstationItemStatus"><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select>
+            <div class="workstation-copy-grid">
+              <div class="workstation-copy-row"><input id="workstationFbTitle" readonly><button class="secondary" data-workstation-copy="workstationFbTitle" type="button">Copy Title</button></div>
+              <div class="workstation-copy-row"><input id="workstationFbPrice" readonly><button class="secondary" data-workstation-copy="workstationFbPrice" type="button">Copy Price</button></div>
+              <div class="workstation-copy-row full"><textarea id="workstationFbDescription" readonly></textarea><button class="secondary" data-workstation-copy="workstationFbDescription" type="button">Copy Description</button></div>
+              <div class="workstation-copy-row full"><textarea id="workstationFbPickup" readonly></textarea><button class="secondary" data-workstation-copy="workstationFbPickup" type="button">Copy Pickup Notes</button></div>
+              <div class="workstation-copy-row full"><textarea id="workstationPricingSummary" readonly placeholder="Calculate a pricing summary in the inventory editor first."></textarea><button class="secondary" data-workstation-copy="workstationPricingSummary" type="button">Copy Pricing Summary</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="backup" class="screen">
       <div class="grid two">
         <div class="card">
@@ -872,7 +909,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.05.31.1345';
+    const VERSION='v0.26.05.31.1600';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1224,7 +1261,7 @@
     const id=p=>p+'_'+Date.now()+'_'+Math.random().toString(16).slice(2);
     const moneyText=v=>{let c=String(v||'').replace(/[^0-9.]/g,''); if(!c)return ''; let n=Number(c); return Number.isFinite(n)?'$'+n.toFixed(n%1?2:0):String(v)};
     const titleCase=s=>String(s||'').replace(/\w\S*/g,t=>t[0].toUpperCase()+t.slice(1).toLowerCase());
-    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name); if(name==='backup') {refreshBackupViews();renderMediaDbStats();renderStorageUsage();}}
+    function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.screen===name));localStorage.setItem(K.lastTab,name);if(name==='workstation')renderWorkstation();if(name==='backup') {refreshBackupViews();renderMediaDbStats();renderStorageUsage();}}
     document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>showScreen(t.dataset.screen)));
 
     // Setup
@@ -1627,23 +1664,52 @@
       let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let q=($('inventorySearch')?.value||'').trim();
       $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter}`:'');
-      if(!filtered.length){if(summary)summary.textContent='No matching inventory items';list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';return}
+      if(!filtered.length){if(summary)summary.textContent='No matching inventory items';list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';renderWorkstation();return}
       const selected=items.find(i=>i.id===selectedItemId);
       if(summary)summary.textContent=selected?`${selected.title||'Untitled'} · ${new Date(selected.createdAt||Date.now()).toLocaleString()}`:'Choose an inventory item';
       filtered.forEach(i=>{
-        let first=photoDisplayDataUrl(i.photos?.[0]),card=document.createElement('button');
-        card.type='button';card.className='inventory-compact-item'+(i.id===selectedItemId?' active':'');card.dataset.id=i.id;
-        card.innerHTML=`${first?`<img class="inventory-compact-thumb" src="${first}" alt="">`:'<span class="inventory-compact-thumb"></span>'}<span><span class="inventory-compact-title">${escapeHtml(i.title||'Untitled')}</span><span class="inventory-compact-meta">${escapeHtml(new Date(i.createdAt||Date.now()).toLocaleString())}<br>${escapeHtml(i.status||'Draft')} · ${escapeHtml(i.storage||'No storage location')}</span></span>`;
+        let first=photoDisplayDataUrl(i.photos?.[0]),card=document.createElement('button'),readiness=googleSyncItemReadiness(i,items.findIndex(item=>item.id===i.id)),needsReview=!readiness.readyForFutureSync;
+        card.type='button';card.className='inventory-compact-item'+(i.id===selectedItemId?' active':'')+(needsReview?' needs-review':'');card.dataset.id=i.id;
+        card.innerHTML=`${first?`<img class="inventory-compact-thumb" src="${first}" alt="">`:'<span class="inventory-compact-thumb"></span>'}<span><span class="inventory-compact-title">${escapeHtml(i.title||'Untitled')}</span><span class="inventory-compact-meta">${escapeHtml(new Date(i.createdAt||Date.now()).toLocaleString())}<br>${escapeHtml(i.status||'Draft')} · ${escapeHtml(i.storage||'No storage location')}</span>${needsReview?`<span class="sync-review-note">Google Sync: Needs review · ${escapeHtml(readiness.blockers.join(', '))}</span>`:''}</span>`;
         list.appendChild(card)
       });
       list.querySelectorAll('.inventory-compact-item').forEach(c=>c.onclick=()=>{loadItem(c.dataset.id);if(picker)picker.open=false});
+      renderWorkstation()
     }
+    let workstationItemId='';
+    function workstationFilteredItems(){
+      const q=String($('workstationSearch')?.value||'').toLowerCase().trim(),status=$('workstationStatusFilter')?.value||'needs-listing';
+      return getItems().filter(item=>{const itemStatus=item.status||'Draft',statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):itemStatus===status);return statusMatch&&(!q||itemSearchBlob(item).includes(q))}).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))
+    }
+    function workstationBundle(item){return `Title: ${item.fbTitle||item.title||''}\nPrice: ${item.fbPrice||moneyText(item.price)||''}\n\nDescription:\n${item.fbDescription||''}\n\nPickup Notes:\n${item.fbPickup||''}${normalizePricingResearch(item).summary?`\n\nPricing Research:\n${normalizePricingResearch(item).summary}`:''}`}
+    function renderWorkstation(){
+      const list=$('workstationList');if(!list)return;
+      const items=workstationFilteredItems();if(workstationItemId&&!getItems().some(item=>item.id===workstationItemId))workstationItemId='';
+      if(!workstationItemId&&items[0])workstationItemId=items[0].id;
+      $('workstationCount').textContent=`${items.length} matching item${items.length===1?'':'s'}`;
+      list.innerHTML=items.length?'':'<div class="empty-state">No workstation items match this search and status filter.</div>';
+      items.forEach(item=>{const first=photoDisplayDataUrl(item.photos?.[0]),button=document.createElement('button'),all=getItems(),readiness=googleSyncItemReadiness(item,all.findIndex(i=>i.id===item.id)),needsReview=!readiness.readyForFutureSync;button.type='button';button.className='workstation-item'+(item.id===workstationItemId?' active':'')+(needsReview?' needs-review':'');button.dataset.workstationItem=item.id;button.innerHTML=`${first?`<img class="workstation-thumb" src="${first}" alt="">`:'<span class="workstation-thumb"></span>'}<span><strong>${escapeHtml(item.title||'Untitled')}</strong><span class="note">${escapeHtml(item.status||'Draft')} · ${escapeHtml(item.storage||'No storage location')}<br>Updated ${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())}</span>${needsReview?`<span class="sync-review-note">Google Sync: Needs review · ${escapeHtml(readiness.blockers.join(', '))}</span>`:''}</span>`;list.appendChild(button)});
+      list.querySelectorAll('[data-workstation-item]').forEach(button=>button.onclick=()=>{workstationItemId=button.dataset.workstationItem;renderWorkstation()});
+      renderWorkstationDetail()
+    }
+    function renderWorkstationDetail(){
+      const item=getItems().find(i=>i.id===workstationItemId),empty=$('workstationEmpty'),detail=$('workstationDetail');if(!empty||!detail)return;
+      if(!item){empty.style.display='block';detail.style.display='none';return}
+      empty.style.display='none';detail.style.display='block';$('workstationTitle').textContent=item.title||'Untitled item';
+      const photo=photoDisplayDataUrl(item.photos?.[0]),img=$('workstationPhoto');img.src=photo||'';img.style.display=photo?'block':'none';
+      const all=getItems(),readiness=googleSyncItemReadiness(item,all.findIndex(i=>i.id===item.id));$('workstationMeta').innerHTML=`<div><b>Status:</b> ${escapeHtml(item.status||'Draft')} · <b>Condition:</b> ${escapeHtml(item.condition||'')}</div><div><b>Storage:</b> ${escapeHtml(item.storage||'No storage location')}</div><div><b>Item:</b> ${escapeHtml(joinParts([item.brand,item.model,item.itemType,item.color], ' · ')||'No structured details saved')}</div><div><b>Photos:</b> ${(item.photos||[]).length} · <b>Comparables:</b> ${normalizePricingResearch(item).comparables.length}</div><div><b>Google Sync:</b> ${escapeHtml(readiness.status)}${readiness.blockers.length?` · ${escapeHtml(readiness.blockers.join(', '))}`:''}</div>`;
+      $('workstationItemStatus').value=item.status||'Draft';$('workstationFbTitle').value=item.fbTitle||item.title||'';$('workstationFbPrice').value=item.fbPrice||moneyText(item.price);$('workstationFbDescription').value=item.fbDescription||'';$('workstationFbPickup').value=item.fbPickup||'';$('workstationPricingSummary').value=normalizePricingResearch(item).summary||''
+    }
+    async function copyWorkstationField(idv){const el=$(idv),text=el?.value||'';if(!text){alert('There is no text to copy yet.');return}try{await navigator.clipboard.writeText(text);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser Copy command.')}}
+    async function copyWorkstationBundle(){const item=getItems().find(i=>i.id===workstationItemId);if(!item)return;try{await navigator.clipboard.writeText(workstationBundle(item));alert('Full listing bundle copied.')}catch{alert('Could not copy automatically. Use the individual workstation copy buttons.')}}
+    function openWorkstationItemEditor(){if(!workstationItemId)return;loadItem(workstationItemId);showScreen('inventory')}
+    function updateWorkstationItemStatus(){if(!workstationItemId)return;quickUpdateStatus(workstationItemId,$('workstationItemStatus').value);renderWorkstationDetail()}
     function quickUpdateStatus(itemId,status){
       let items=getItems(),item=items.find(i=>i.id===itemId);if(!item)return;
       item.status=status;item.updatedAt=new Date().toISOString();
       if(setItems(items)){
         if(selectedItemId===itemId){$('itemStatus').value=status;}
-        renderInventory();refreshBackupViews();
+        renderInventory();renderWorkstation();refreshBackupViews();
       }
     }
     function loadItem(idv){
@@ -2274,6 +2340,7 @@
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i)))loadItem(item.id)} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
     on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('saveAiUsageSettingsBtn','onclick',saveAiUsageSettings);on('clearAiUsageBtn','onclick',clearAiUsage);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('choosePricingComparableScreenshotBtn','onclick',choosePricingComparableScreenshot);on('pricingComparableScreenshotFile','onchange',handlePricingComparableScreenshotFile);on('analyzePricingComparableScreenshotBtn','onclick',analyzePricingComparableScreenshot);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('copyPricingResearchSummaryBtn','onclick',copyPricingResearchSummary);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
+    on('workstationSearch','oninput',renderWorkstation);on('workstationStatusFilter','onchange',renderWorkstation);on('workstationOpenEditorBtn','onclick',openWorkstationItemEditor);on('workstationCopyBundleBtn','onclick',copyWorkstationBundle);on('workstationItemStatus','onchange',updateWorkstationItemStatus);document.querySelectorAll('[data-workstation-copy]').forEach(b=>b.onclick=()=>copyWorkstationField(b.dataset.workstationCopy));
 
     // Backup
     function download(name,text,type='application/json'){let blob=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500)}

@@ -5,13 +5,14 @@
 - Phone-first item capture, calibration, storage presets, storage-location photos, and recoverable watermarks.
 - Compact mobile inventory browser with item editing and draft history.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
+- Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Save-time Google sync and local capture cleanup for ready inventory items.
 - Secure OpenAI relay for photo recognition, structured listing suggestions, and listing-draft assistance.
 - Pricing research workspace with marketplace search shortcuts, public URL lookup, manually saved comparables, screenshot batch recognition, and quick-sale / fair-market / high-end calculations.
 
 ## Current Work
 
-- Stage 9 pricing research follow-through.
+- Stage 10 desktop workstation mode.
 
 ## Next Roadmap Stops
 
@@ -24,7 +25,7 @@
 
 ### Stage 10 - Desktop Workstation Mode
 
-- Desktop browser workstation while the phone remains mounted as a camera station.
+- Desktop browser workstation for inventory review, draft preview, status updates, and Facebook Marketplace copy controls. Foundation implemented.
 - QR pairing and a shared item/session view.
 - Easier copy and paste into Facebook Marketplace from a laptop.
 
