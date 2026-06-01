@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0110</title>
+  <title>Item Posting Assistant v0.26.06.01.0120</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -422,7 +422,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0110 · Visible PWA install control</p>
+      <p class="eyebrow">v0.26.06.01.0120 · Synced remote photo previews</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -932,7 +932,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0110';
+    const VERSION='v0.26.06.01.0120';
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -2572,13 +2572,15 @@
       if(!createRes.ok)throw new Error(folder.error?.message||createRes.statusText);
       return {...folder,action:'created'};
     }
-    function sharedWorkspacePhotoRecord(photo){if(!photo||typeof photo!=='object')return null;return {label:photo.label||'',takenAt:photo.takenAt||'',watermark:photo.watermark||null}}
+    function sharedWorkspacePhotoPreview(photo){return photoDisplayDataUrl(photo)||''}
+    function sharedWorkspacePhotoRecord(photo){if(!photo||typeof photo!=='object')return null;const dataUrl=sharedWorkspacePhotoPreview(photo);return {label:photo.label||'',takenAt:photo.takenAt||'',watermark:photo.watermark||null,dataUrl,thumbnailDataUrl:dataUrl,remoteWorkspacePreview:!!dataUrl}}
+    function workspacePhotosHavePreview(photos){return (photos||[]).some(photo=>!!photoDisplayDataUrl(photo))}
     function sharedWorkspaceItemRecord(item){return {...item,photos:(item.photos||[]).map(sharedWorkspacePhotoRecord).filter(Boolean),storagePhoto:sharedWorkspacePhotoRecord(item.storagePhoto)}}
     function buildGoogleWorkspacePayload(){return {schemaVersion:'google-workspace-v1',appVersion:VERSION,updatedAt:new Date().toISOString(),items:getItems().map(sharedWorkspaceItemRecord),storagePresets:getStoragePresets(),googleSyncSettings:getGoogleSyncSettings()}}
     function workspaceTimestamp(value){let n=Date.parse(value||'');return Number.isFinite(n)?n:0}
     function mergeWorkspaceItems(localItems,remoteItems){
       const merged=new Map((localItems||[]).filter(i=>i?.id).map(item=>[item.id,item]));
-      (remoteItems||[]).filter(i=>i?.id).forEach(remote=>{const local=merged.get(remote.id);if(!local){merged.set(remote.id,remote);return}if(workspaceTimestamp(remote.updatedAt)>workspaceTimestamp(local.updatedAt)){merged.set(remote.id,{...local,...remote,photos:(local.photos||[]).length?local.photos:(remote.photos||[]),storagePhoto:local.storagePhoto||remote.storagePhoto})}});
+      (remoteItems||[]).filter(i=>i?.id).forEach(remote=>{const local=merged.get(remote.id);if(!local){merged.set(remote.id,remote);return}const remoteNewer=workspaceTimestamp(remote.updatedAt)>workspaceTimestamp(local.updatedAt),localHasPhotoPreview=workspacePhotosHavePreview(local.photos),remoteAddsPhotoPreview=!localHasPhotoPreview&&workspacePhotosHavePreview(remote.photos),localHasStoragePreview=!!photoDisplayDataUrl(local.storagePhoto),remoteAddsStoragePreview=!localHasStoragePreview&&!!photoDisplayDataUrl(remote.storagePhoto);if(remoteNewer||remoteAddsPhotoPreview||remoteAddsStoragePreview){merged.set(remote.id,{...local,...(remoteNewer?remote:{}),photos:localHasPhotoPreview?local.photos:(remote.photos||local.photos||[]),storagePhoto:localHasStoragePreview?local.storagePhoto:(remote.storagePhoto||local.storagePhoto||null)})}});
       return [...merged.values()]
     }
     async function findGoogleWorkspaceFile(rootId){
