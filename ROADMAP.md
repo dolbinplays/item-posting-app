@@ -61,6 +61,7 @@
 - QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
 - Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup.
 - User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter.
+- Reusable seller/store display-name preference for watermarking. Allow the user to save, edit, and clear the name, prefill it when applying watermarks, and include it in safe second-device setup handoff. Store display text only, never marketplace credentials or account tokens.
 - Sold and shipped workflow with profit, fee, and shipping tracking.
 
 ## Architecture Principles
