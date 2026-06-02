@@ -46,7 +46,7 @@
 - Conservative packaging path chosen: installable PWA first, then an Android Trusted Web Activity wrapper after phone testing and Android tooling setup.
 - Installable PWA foundation with app name, icon, manifest, offline shell, and an in-app install control. Implemented; phone test pending.
 - Android APK wrapper with Bubblewrap, production PNG icons, signing key, and hosted Digital Asset Links association.
-- Better native storage, camera permissions, media permissions, and offline reliability.
+- Better native storage, camera permissions, media permissions, and offline reliability. A Trusted Web Activity wrapper alone does not remove browser storage constraints; evaluate a Capacitor/native Android storage layer with a local database and app-managed media files before treating the APK as the long-term inventory client.
 - Evaluate a Play Store distribution path.
 
 ### Stage 12 - Multi-Camera Capture
@@ -66,5 +66,6 @@
 - Google Sheets is the inventory and listing index.
 - Google Drive is the long-term photo and video backup.
 - Browser-local media is temporary working storage and should remain optimized for phone reliability.
+- Saved browser inventory records keep only one small embedded display preview per photo. Full-resolution originals and watermarked exports belong in IndexedDB temporarily and Google Drive durably. Implemented.
 - Low-storage warnings open an in-context recovery dialog, pause automatic workspace writes for the session, and offer least-disruptive cleanup actions first: old capture sessions, selected-item draft checkpoints, current temporary captures, emergency thumbnail optimization with full copies retained in IndexedDB, then the full Backup cleanup tools. Implemented.
 - Paid AI calls must be explicit, visible to the user, and routed through the secure relay. Local tools and public URL lookup should remain free.

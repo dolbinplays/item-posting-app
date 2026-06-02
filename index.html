@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0210</title>
+  <title>Item Posting Assistant v0.26.06.01.0220</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0210 · Non-blocking save feedback</p>
+      <p class="eyebrow">v0.26.06.01.0220 · Aggressive local preview slimming</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -976,7 +976,8 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0210';
+    const VERSION='v0.26.06.01.0220';
+    const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
     const on=(id,event,handler)=>{const el=$(id); if(el)el[event]=handler;};
@@ -1193,8 +1194,9 @@
             if(p?.dataUrl && p.mediaId && !p.optimizedToThumbnail){
               p.fullPhotoMediaId=p.mediaId;
               p.originalBytesApprox=bytesOfString(p.dataUrl);
-              p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,360,270,.68);
+              p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
               p.dataUrl=p.thumbnailDataUrl;
+              delete p.thumbnailDataUrl;
               p.optimizedToThumbnail=true;
               p.optimizedAt=new Date().toISOString();
               optimized++; changed=true;
@@ -1204,8 +1206,9 @@
             let p=item.storagePhoto;
             p.fullPhotoMediaId=p.mediaId;
             p.originalBytesApprox=bytesOfString(p.dataUrl);
-            p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,360,270,.68);
+            p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
             p.dataUrl=p.thumbnailDataUrl;
+            delete p.thumbnailDataUrl;
             p.optimizedToThumbnail=true;
             p.optimizedAt=new Date().toISOString();
             optimized++; changed=true;
@@ -1218,8 +1221,9 @@
           if(p?.dataUrl && p.mediaId && !p.optimizedToThumbnail){
             p.fullPhotoMediaId=p.mediaId;
             p.originalBytesApprox=bytesOfString(p.dataUrl);
-            p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,360,270,.68);
+            p.thumbnailDataUrl=await makeThumbnailDataUrl(p.dataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
             p.dataUrl=p.thumbnailDataUrl;
+            delete p.thumbnailDataUrl;
             p.optimizedToThumbnail=true;
             p.optimizedAt=new Date().toISOString();
             optimized++; changed=true;
@@ -1402,7 +1406,7 @@
       if(!photo||typeof photo!=='object')return photo;
       const next={...photo};
       delete next.originalDataUrl;
-      if(next.thumbnailDataUrl===next.dataUrl)delete next.thumbnailDataUrl;
+      if(next.dataUrl)delete next.thumbnailDataUrl;
       return next
     }
     function getShots(){return read(K.shots,[])} function setShots(s){if(safeWrite(K.shots,(s||[]).map(lightweightPhotoRecord))){renderShots();refreshBackupViews();return true}return false}
@@ -1456,7 +1460,7 @@
         img.src=dataUrl;
       });
     }
-    async function compactShots(shots,maxW=640,maxH=480,quality=.58){
+    async function compactShots(shots,maxW=LOCAL_PREVIEW_MAX_W,maxH=LOCAL_PREVIEW_MAX_H,quality=LOCAL_PREVIEW_QUALITY){
       let out=[];
       for(const s of (shots||[])){
         out.push(lightweightPhotoRecord({...s,dataUrl:await compressDataUrl(s.dataUrl,maxW,maxH,quality),compressedForInventory:true,optimized:true}));
@@ -1469,11 +1473,11 @@
       let sessions=read(K.sessions,[]);
       let name=$('sessionName').value.trim()||'Untitled session';
       $('captureStatus').textContent='Compressing and saving capture session...';
-      let photos=await compactShots(shots,640,480,.56);
+      let photos=await compactShots(shots);
       let newSession={id:id('session'),name,createdAt:new Date().toISOString(),photos,preset:getSelectedPreset()?.name||'',optimized:true};
       sessions.push(newSession);
       if(!safeWrite(K.sessions,sessions)){
-        photos=await compactShots(shots,480,360,.45);
+        photos=await compactShots(shots,180,135,.42);
         newSession={...newSession,photos,optimized:true,extraCompressed:true};
         sessions=read(K.sessions,[]);
         sessions.push(newSession);
@@ -2208,7 +2212,7 @@
       if(button)button.disabled=true;
       try{
         const original=await originalPhotoDataUrlFromMedia(photo), rotatedOriginal=await rotateDataUrlRight(original||photo.dataUrl), preview=await compressDataUrl(rotatedOriginal,720,540,.62);
-        photo.dataUrl=preview;photo.thumbnailDataUrl=preview;photo.optimizedToThumbnail=true;photo.highQualityOriginalAvailable=true;
+        photo.dataUrl=await compressDataUrl(preview,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);delete photo.thumbnailDataUrl;photo.optimizedToThumbnail=true;photo.highQualityOriginalAvailable=true;
         const mediaId=photo.fullPhotoMediaId||photo.mediaId;
         if(mediaId){
           const rec=await mediaGet(mediaId);
@@ -2323,13 +2327,19 @@
         for(const p of item.photos||[]){
           let source=await originalPhotoDataUrlFromMedia(p);
           if(!source){missing++;continue}
+          if(!(p.fullPhotoMediaId||p.mediaId))await attachOriginalPhotoMedia(p,dataUrlToBlob(source),{sourceKey:`watermark-source:${item.id}:${p.captureId||applied}:${Date.now()}`,kind:'best-available-pre-watermark-source',label:p.label,itemId:item.id,itemTitle:item.title});
           let marked=await watermarkDataUrl(source,settings);
           const previousWatermarkedMediaId=p.watermarkedMediaId;
           const watermarkMediaId=previousWatermarkedMediaId||id('watermark');
           const watermarkBlob=dataUrlToBlob(marked);
           await mediaPut({id:watermarkMediaId,sourceKey:`watermark:${item.id}:${p.captureId||p.mediaId||applied}:${Date.now()}`,itemId:item.id,itemTitle:item.title||'',kind:'listing-watermark',label:p.label||`Photo ${applied+1}`,bytes:watermarkBlob.size,type:watermarkBlob.type,createdAt:new Date().toISOString(),blob:watermarkBlob});
           p.watermarkedMediaId=watermarkMediaId;
-          p.watermarkedPreviewDataUrl=await compressDataUrl(marked,480,360,.66);
+          p.watermarkedPreviewDataUrl=await compressDataUrl(marked,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
+          if(p.dataUrl){
+            p.dataUrl=await compressDataUrl(p.dataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
+            delete p.thumbnailDataUrl;
+            p.optimizedToThumbnail=true;
+          }
           delete p.watermarkedDataUrl;
           p.watermark={...settings,appliedAt:new Date().toISOString()};
           p.watermarkedAt=p.watermark.appliedAt;
@@ -2357,8 +2367,9 @@
             try{const rec=await mediaGet(p.fullPhotoMediaId||p.mediaId); if(rec?.blob)source=await blobToDataUrl(rec.blob)}catch{}
           }
           if(source){
-            if(p.originalDataUrl || !p.dataUrl)p.dataUrl=source;
+            if(p.originalDataUrl || !p.dataUrl)p.dataUrl=await compressDataUrl(source,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
             delete p.originalDataUrl;
+            delete p.thumbnailDataUrl;
             delete p.watermarkedDataUrl; delete p.watermarkedPreviewDataUrl; delete p.watermarkedMediaId; delete p.watermark; delete p.watermarkedAt;
             restored++;
           }else if(p.watermarkedDataUrl||p.watermarkedPreviewDataUrl||p.watermarkedMediaId||p.watermark){missing++}
@@ -2397,7 +2408,7 @@
     }
     async function imageFileToStoragePhoto(file){
       if(!file)throw new Error('No file selected');
-      const previewDataUrl=await makeBlobThumbnailDataUrl(file,900,675,.74);
+      const previewDataUrl=await makeBlobThumbnailDataUrl(file,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
       const photo={captureId:id('storage'),label:'Storage location photo',dataUrl:previewDataUrl,takenAt:new Date().toISOString(),source:'device camera/gallery',optimized:true,optimizedToThumbnail:true,highQualityOriginalAvailable:true};
       return attachOriginalPhotoMedia(photo,file,{sourceKey:`storage-file:${photo.captureId}:${file.name||''}:${file.size||0}`,kind:'storage-high-quality-original',label:photo.label});
     }
@@ -2691,7 +2702,7 @@
       return {...folder,action:'created'};
     }
     function sharedWorkspacePhotoPreview(photo){return photoDisplayDataUrl(photo)||''}
-    function sharedWorkspacePhotoRecord(photo){if(!photo||typeof photo!=='object')return null;const dataUrl=sharedWorkspacePhotoPreview(photo);return {label:photo.label||'',takenAt:photo.takenAt||'',watermark:photo.watermark||null,dataUrl,thumbnailDataUrl:dataUrl,remoteWorkspacePreview:!!dataUrl}}
+    function sharedWorkspacePhotoRecord(photo){if(!photo||typeof photo!=='object')return null;const dataUrl=sharedWorkspacePhotoPreview(photo);return {label:photo.label||'',takenAt:photo.takenAt||'',watermark:photo.watermark||null,dataUrl,remoteWorkspacePreview:!!dataUrl}}
     function workspacePhotosHavePreview(photos){return (photos||[]).some(photo=>!!photoDisplayDataUrl(photo))}
     function sharedWorkspaceItemRecord(item){return {...item,photos:(item.photos||[]).map(sharedWorkspacePhotoRecord).filter(Boolean),storagePhoto:sharedWorkspacePhotoRecord(getEffectiveStoragePhoto(item))}}
     function buildGoogleWorkspacePayload(){return {schemaVersion:'google-workspace-v1',appVersion:VERSION,updatedAt:new Date().toISOString(),items:getItems().map(sharedWorkspaceItemRecord),storagePresets:getStoragePresets(),googleSyncSettings:getGoogleSyncSettings()}}
@@ -3700,8 +3711,8 @@
       if(!confirm('Compress existing inventory and storage photos to save browser storage? Export a backup first if you want to preserve the current larger local copies.'))return;
       let items=getItems();
       for(const item of items){
-        if(item.photos?.length)item.photos=await compactShots(item.photos,640,480,.56);
-        if(item.storagePhoto?.dataUrl)item.storagePhoto={...item.storagePhoto,dataUrl:await compressDataUrl(item.storagePhoto.dataUrl,640,480,.56),optimized:true};
+        if(item.photos?.length)item.photos=await compactShots(item.photos);
+        if(item.storagePhoto?.dataUrl)item.storagePhoto={...item.storagePhoto,dataUrl:await compressDataUrl(item.storagePhoto.dataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY),optimized:true,optimizedToThumbnail:true};
       }
       if(setItems(items)){if(selectedItemId)loadItem(selectedItemId);renderInventory();await renderStorageUsage();alert('Existing inventory photos compressed.');}
     }
@@ -3758,14 +3769,14 @@
           const fullId=photo.mediaId||await storePhotoInMediaLibrary({...photo,dataUrl:original},{...meta,sourceKey:`${meta.sourceKey}:full:${original.length}`});
           photo.mediaId=fullId;photo.fullPhotoMediaId=fullId;
         }
-        const thumbnail=await makeThumbnailDataUrl(original,360,270,.62);
-        photo.dataUrl=thumbnail;photo.thumbnailDataUrl=thumbnail;photo.optimizedToThumbnail=true;photo.optimizedAt=new Date().toISOString();
+        const thumbnail=await makeThumbnailDataUrl(original,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
+        photo.dataUrl=thumbnail;delete photo.thumbnailDataUrl;photo.optimizedToThumbnail=true;photo.optimizedAt=new Date().toISOString();
         delete photo.originalDataUrl;changed=true;
       }
       const marked=photo.watermarkedDataUrl||photo.watermarkedPreviewDataUrl||'';
       if(marked){
         if(!photo.watermarkedMediaId)photo.watermarkedMediaId=await storePhotoInMediaLibrary({dataUrl:marked,label:photo.label||'Watermarked photo'},{...meta,kind:'watermarked-photo',sourceKey:`${meta.sourceKey}:watermarked:${marked.length}`});
-        photo.watermarkedPreviewDataUrl=await makeThumbnailDataUrl(marked,360,270,.62);
+        photo.watermarkedPreviewDataUrl=await makeThumbnailDataUrl(marked,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
         delete photo.watermarkedDataUrl;changed=true;
       }
       return changed
