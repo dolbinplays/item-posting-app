@@ -13,6 +13,8 @@
 - Inventory rendering remains read-only: opening an item no longer attempts optional shared storage-photo cache writes.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
+- Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
+- Reusable seller/store display-name preference for watermarking, including safe second-device setup handoff and JSON backup restore. Implemented.
 - Save-time Google sync and local capture cleanup for ready inventory items.
 - Optional silent Google reconnect preference that reacquires an in-memory token when Google allows it without storing access tokens.
 - Secure OpenAI relay for photo recognition, structured listing suggestions, and listing-draft assistance.
@@ -59,9 +61,9 @@
 
 - Storage-location management screen.
 - QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
-- Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup.
-- User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter.
-- Reusable seller/store display-name preference for watermarking. Allow the user to save, edit, and clear the name, prefill it when applying watermarks, and include it in safe second-device setup handoff. Store display text only, never marketplace credentials or account tokens.
+- Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup. Implemented.
+- User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter. Implemented.
+- Reusable seller/store display-name preference for watermarking. Allow the user to save, edit, and clear the name, prefill it when applying watermarks, and include it in safe second-device setup handoff. Store display text only, never marketplace credentials or account tokens. Implemented.
 - Sold and shipped workflow with profit, fee, and shipping tracking.
 
 ## Architecture Principles
