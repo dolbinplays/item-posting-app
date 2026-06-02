@@ -87,6 +87,35 @@ The first APK test should verify:
 5. Closing and reopening the app preserves browser-local working data.
 6. The offline shell opens when the phone temporarily has no network connection.
 
+## First Signed Build
+
+The first signed Android wrapper build completed successfully on June 1, 2026.
+
+Public release metadata:
+
+```text
+Android package: io.github.dolbinplays.itemposting
+Signing certificate SHA-256:
+C8:5F:15:89:10:09:5B:77:B6:00:58:F8:85:FB:CD:12:BB:C3:9B:17:43:0B:08:2B:B7:4D:50:2A:05:65:01:6C
+```
+
+Generated local test outputs:
+
+```text
+android/twa-project/app-release-signed.apk
+android/twa-project/app-release-bundle.aab
+```
+
+The generated wrapper project and outputs remain ignored by Git. The signing keystore remains outside the repository at:
+
+```text
+H:\.bubblewrap\item-posting-assistant.keystore
+```
+
+Keep that keystore and its password backed up securely. Future Android updates must use the same signing key.
+
+`android/assetlinks.json` is the completed public association file for this signing key. Publish it as `.well-known/assetlinks.json` in the domain-root GitHub Pages repository before testing verified full-screen Trusted Web Activity mode.
+
 ## Storage Reality Check
 
 A Trusted Web Activity is an installable Android shell around the hosted PWA. It does not move photos into a native Android database or app-managed files. It is useful for installation and a cleaner launch experience, but it does not remove browser storage limits.

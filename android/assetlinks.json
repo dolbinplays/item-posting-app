@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.dolbinplays.itemposting",
+      "sha256_cert_fingerprints": [
+        "C8:5F:15:89:10:09:5B:77:B6:00:58:F8:85:FB:CD:12:BB:C3:9B:17:43:0B:08:2B:B7:4D:50:2A:05:65:01:6C"
+      ]
+    }
+  }
+]
