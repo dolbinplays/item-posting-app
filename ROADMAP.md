@@ -7,6 +7,7 @@
 - Guided inventory accordion with saved checkpoints for photos, details, pricing, storage, and marketplace draft assembly.
 - Item-level saved draft-history cleanup and cross-device compressed storage-location previews.
 - After `Save Item`, offer to remove older draft-history checkpoints while preserving the current saved item fields and final marketplace draft. Recommend cleanup for items marked `Ready to Post`, `Listed`, or `Sold`. Implemented.
+- Final `Save Item` completion feedback stays in the inventory status panel instead of showing a blocking browser alert. Implemented.
 - Device roles for full app, photo capture station, and desktop workstation layouts. Capture-station mode hides laptop-only workstation navigation while keeping inventory and backup available.
 - Guided workflow checkpoint saves retry without adding another history snapshot when browser storage is tight.
 - Inventory rendering remains read-only: opening an item no longer attempts optional shared storage-photo cache writes.
