@@ -59,6 +59,8 @@
 
 - Storage-location management screen.
 - QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
+- Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup.
+- User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter.
 - Sold and shipped workflow with profit, fee, and shipping tracking.
 
 ## Architecture Principles
