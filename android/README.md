@@ -116,6 +116,14 @@ Keep that keystore and its password backed up securely. Future Android updates m
 
 `android/assetlinks.json` is the completed public association file for this signing key. Publish it as `.well-known/assetlinks.json` in the domain-root GitHub Pages repository before testing verified full-screen Trusted Web Activity mode.
 
+The domain-root association was published and verified on June 2, 2026:
+
+```text
+https://dolbinplays.github.io/.well-known/assetlinks.json
+```
+
+GitHub Pages requires a root `.nojekyll` marker so the `.well-known` directory is served verbatim.
+
 ## Storage Reality Check
 
 A Trusted Web Activity is an installable Android shell around the hosted PWA. It does not move photos into a native Android database or app-managed files. It is useful for installation and a cleaner launch experience, but it does not remove browser storage limits.

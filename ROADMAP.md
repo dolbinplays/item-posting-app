@@ -47,7 +47,7 @@
 
 - Conservative packaging path chosen: installable PWA first, then an Android Trusted Web Activity wrapper after phone testing and Android tooling setup.
 - Installable PWA foundation with app name, icon, manifest, offline shell, and an in-app install control. Implemented; phone test pending.
-- Android APK wrapper with Bubblewrap, production PNG icons, signing key, and ready-to-publish Digital Asset Links association. First signed APK and App Bundle generated locally; domain-root association hosting and phone test remain.
+- Android APK wrapper with Bubblewrap, production PNG icons, signing key, and hosted Digital Asset Links association. First signed APK and App Bundle generated locally; domain-root association verified live. Phone test remains.
 - Repository-side Bubblewrap setup guide, generated-wrapper ignore rule, Digital Asset Links template, and GitHub Pages domain-root hosting constraint documentation. Implemented.
 - Better native storage, camera permissions, media permissions, and offline reliability. A Trusted Web Activity wrapper alone does not remove browser storage constraints; evaluate a Capacitor/native Android storage layer with a local database and app-managed media files before treating the APK as the long-term inventory client.
 - Evaluate a Play Store distribution path.
