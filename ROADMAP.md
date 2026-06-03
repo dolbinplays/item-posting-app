@@ -13,6 +13,7 @@
 - Inventory rendering remains read-only: opening an item no longer attempts optional shared storage-photo cache writes.
 - IndexedDB inventory safety checkpoints mirror item-list saves outside regular app settings storage and can restore the local inventory list if browser quota blocks normal saves. Implemented.
 - Safe storage housekeeping trims older guided workflow checkpoints and old saved capture sessions while preserving manual draft versions, inventory items, item photos, and the IndexedDB safety checkpoint. Implemented.
+- Storage architecture readiness report classifies the current data shape as healthy/watch/at-risk, summarizes local storage, media-library records, checkpoint freshness, photo readiness, and Google sync review needs, and exports a JSON diagnostic for future native-storage migration planning. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
@@ -55,6 +56,7 @@
 - Better native storage, camera permissions, media permissions, and offline reliability. A Trusted Web Activity wrapper alone does not remove browser storage constraints; evaluate a Capacitor/native Android storage layer with a local database and app-managed media files before treating the APK as the long-term inventory client.
 - Browser-native storage bridge: item records now mirror to IndexedDB as an inventory safety checkpoint while the app keeps the compatible localStorage live path. Use this as the measured stepping stone toward Capacitor/native database storage. Implemented.
 - Safe storage housekeeping and storage-health reporting added before a full native database migration so phone limits are visible and low-impact cleanup happens automatically. Implemented.
+- Storage architecture readiness report added as a measurable gate before a Capacitor/native database migration. It should show whether inventory records, media-library photos, Google Drive backups, and recovery checkpoints are healthy enough to move storage responsibility out of regular browser app data. Implemented.
 - Evaluate a Play Store distribution path.
 
 ### Stage 12 - Multi-Camera Capture
@@ -79,4 +81,5 @@
 - Browser-local media is temporary working storage and should remain optimized for phone reliability.
 - Saved browser inventory records keep only one small embedded display preview per photo. Full-resolution originals and watermarked exports belong in IndexedDB temporarily and Google Drive durably. Implemented.
 - Low-storage warnings open an in-context recovery dialog, pause automatic workspace writes for the session, and offer least-disruptive cleanup actions first: old capture sessions, selected-item draft checkpoints, current temporary captures, emergency thumbnail optimization with full copies retained in IndexedDB, then the full Backup cleanup tools. Implemented.
+- Native-storage migration should be gated by a readable architecture report, not guesswork: item records must have a fresh IndexedDB safety checkpoint, photos should be media-backed or uploaded to Drive, and Google sync review holds should be visible before moving to Capacitor/local database storage.
 - Paid AI calls must be explicit, visible to the user, and routed through the secure relay. Local tools and public URL lookup should remain free.

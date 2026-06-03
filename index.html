@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0260</title>
+  <title>Item Posting Assistant v0.26.06.01.0270</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0260 · Safe storage housekeeping</p>
+      <p class="eyebrow">v0.26.06.01.0270 · Storage architecture readiness</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -929,6 +929,13 @@
               <button id="createInventoryCheckpointBtn" class="success" type="button">Create Inventory Safety Checkpoint</button>
               <button id="restoreInventoryCheckpointBtn" class="secondary" type="button">Restore Inventory from Checkpoint</button>
             </div>
+            <h3 style="margin-top:16px">Storage Architecture Readiness</h3>
+            <p class="note">Checks whether item records, media-library photos, Google backup progress, and the IndexedDB safety checkpoint are ready for the next storage step. This report does not change or delete data.</p>
+            <div id="storageArchitectureStatus" class="note">Storage architecture report has not been checked yet.</div>
+            <div class="media-db-actions">
+              <button id="refreshStorageArchitectureBtn" class="secondary" type="button">Refresh Architecture Report</button>
+              <button id="exportStorageArchitectureBtn" class="secondary" type="button">Export Architecture JSON</button>
+            </div>
           </div>
           </details>
           <details class="backup-list">
@@ -998,7 +1005,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0260';
+    const VERSION='v0.26.06.01.0270';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -3657,6 +3664,87 @@
       const rows=items.map((item,index)=>googleSyncItemReadiness(item,index));
       return {version:VERSION,schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,generatedAt:new Date().toISOString(),summary:{itemsScanned:rows.length,readyForFutureSync:rows.filter(r=>r.readyForFutureSync).length,needsReview:rows.filter(r=>!r.readyForFutureSync).length,mediaBackedPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.mediaBacked,0),thumbnailOnlyPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.thumbnailOnly,0),localOnlyPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.localOnly,0),missingPhotos:rows.reduce((sum,r)=>sum+r.mediaStatus.missing,0)},items:rows};
     }
+    async function buildStorageArchitectureReport(){
+      const items=getItems(), sessions=read(K.sessions,[]), shots=getShots(), storagePhotos=getStorageLocationPhotos();
+      const est=await storageEstimate();
+      const localBytes=approxLocalStorageBytes();
+      const usage=Number(est.usage)||localBytes;
+      const quota=Number(est.quota)||0;
+      const quotaPercent=quota?Math.round((usage/quota)*1000)/10:null;
+      let checkpoint=null, checkpointError='';
+      try{checkpoint=await inventoryCheckpointGet()}catch(e){checkpointError=String(e?.message||e)}
+      let mediaRecords=[], mediaError='';
+      try{mediaRecords=await mediaGetAll()}catch(e){mediaError=String(e?.message||e)}
+      const refs=collectReferencedMediaIds();
+      const orphanRecords=mediaRecords.filter(r=>!refs.has(r.id));
+      const mediaBytes=mediaRecords.reduce((sum,r)=>sum+(Number(r.bytes)||0),0);
+      const itemSummaries=items.map(itemMediaStatusSummary);
+      const storageStatuses=items.map(storagePhotoMediaStatus);
+      Object.values(storagePhotos).forEach(p=>storageStatuses.push(photoMediaStatus(p)));
+      const itemPhotoTotal=itemSummaries.reduce((sum,s)=>sum+s.photoCount,0);
+      const mediaBacked=itemSummaries.reduce((sum,s)=>sum+s.mediaBacked,0);
+      const thumbnailOnly=itemSummaries.reduce((sum,s)=>sum+s.thumbnailOnly,0);
+      const localOnly=itemSummaries.reduce((sum,s)=>sum+s.localOnly,0);
+      const missing=itemSummaries.reduce((sum,s)=>sum+s.missing,0);
+      const storagePhotoTotal=storageStatuses.filter(s=>!s.missing).length;
+      const storagePhotoMediaBacked=storageStatuses.filter(s=>s.mediaBacked).length;
+      const sessionPhotos=sessions.reduce((sum,s)=>sum+(s.photos?.length||0),0);
+      const draftHistoryTotal=items.reduce((sum,i)=>sum+(i.draftHistory?.length||0),0);
+      const guidedCheckpoints=items.reduce((sum,i)=>sum+(i.draftHistory||[]).filter(d=>/checkpoint/i.test(String(d?.label||''))).length,0);
+      const googleGate=buildGoogleSyncReadinessGate(items);
+      const issues=[], warnings=[], recommendations=[];
+      if(items.length&&!checkpoint)issues.push('No IndexedDB inventory safety checkpoint is available yet.');
+      if(checkpoint&&Number(checkpoint.itemCount)!==items.length)issues.push(`Inventory checkpoint has ${Number(checkpoint.itemCount)||0} items but local inventory has ${items.length}.`);
+      if(checkpointError)issues.push('Inventory checkpoint could not be read: '+checkpointError);
+      if(mediaError)issues.push('IndexedDB media library could not be read: '+mediaError);
+      if(quotaPercent!==null&&quotaPercent>=85)issues.push(`Browser storage is high at ${quotaPercent}%.`);
+      if(missing)issues.push(`${missing} listing photo record${missing===1?' is':'s are'} missing usable photo data.`);
+      if(items.length&&itemPhotoTotal&&!mediaRecords.length)warnings.push('Inventory has listing photos but no media-library records yet.');
+      if(localOnly)warnings.push(`${localOnly} listing photo${localOnly===1?' is':'s are'} still embedded only in regular app data.`);
+      if(thumbnailOnly)warnings.push(`${thumbnailOnly} listing photo${thumbnailOnly===1?' is':'s are'} thumbnail-only and should be backed by Drive or full media records.`);
+      if(storagePhotoTotal&&storagePhotoMediaBacked<storagePhotoTotal)warnings.push(`${storagePhotoTotal-storagePhotoMediaBacked} storage-location photo${storagePhotoTotal-storagePhotoMediaBacked===1?' is':'s are'} not media-backed yet.`);
+      if(sessions.length>MAX_SAVED_CAPTURE_SESSIONS)warnings.push(`Saved capture sessions exceed the safe target (${sessions.length}/${MAX_SAVED_CAPTURE_SESSIONS}).`);
+      if(orphanRecords.length)warnings.push(`${orphanRecords.length} orphan media record${orphanRecords.length===1?'':'s'} can be cleaned after backups are confirmed.`);
+      if(googleGate.summary.needsReview)warnings.push(`${googleGate.summary.needsReview} item${googleGate.summary.needsReview===1?'':'s'} still need Google sync review before fully automated backup.`);
+      if(!issues.length&&!warnings.length)recommendations.push('Current storage shape is healthy. Keep using safe housekeeping and periodic media-aware backups.');
+      if(!checkpoint&&items.length)recommendations.push('Create an inventory safety checkpoint before large edits, APK testing, or browser cleanup.');
+      if(localOnly||(!mediaRecords.length&&itemPhotoTotal))recommendations.push('Copy existing photos to the IndexedDB media library, then optimize inventory previews to thumbnails.');
+      if(thumbnailOnly)recommendations.push('Run a media-aware HTML backup or restore full media before relying on thumbnail-only records.');
+      if(googleGate.summary.needsReview)recommendations.push('Use the Google Sync review highlights to complete Drive folders, photo uploads, and Sheet rows.');
+      if(orphanRecords.length)recommendations.push('Clean orphan media after confirming current items still show their photos.');
+      if(quotaPercent!==null&&quotaPercent>=70)recommendations.push('Run Safe Storage Housekeeping and export a media-aware rebuild backup before adding more items.');
+      const status=issues.length?'at-risk':warnings.length?'watch':'healthy';
+      return {
+        version:VERSION,
+        generatedAt:new Date().toISOString(),
+        status,
+        localStorage:{usageBytes:usage,localStorageApproxBytes:localBytes,quotaBytes:quota,quotaPercent},
+        browserInventory:{items:items.length,currentTemporaryCaptures:shots.length,savedSessions:sessions.length,savedSessionPhotos:sessionPhotos,draftHistoryTotal,guidedWorkflowCheckpoints:guidedCheckpoints},
+        inventoryCheckpoint:checkpoint?{exists:true,itemCount:Number(checkpoint.itemCount)||0,bytes:Number(checkpoint.bytes)||0,createdAt:checkpoint.createdAt||'',reason:checkpoint.reason||'',matchesCurrentInventory:Number(checkpoint.itemCount)===items.length}:{exists:false,error:checkpointError},
+        mediaLibrary:{recordCount:mediaRecords.length,estimatedBytes:mediaBytes,referencedIds:refs.size,orphanRecords:orphanRecords.length,error:mediaError},
+        photoReadiness:{listingPhotos:itemPhotoTotal,mediaBacked,localOnly,thumbnailOnly,missing,storagePhotos:storagePhotoTotal,storagePhotosMediaBacked:storagePhotoMediaBacked},
+        googleSync:googleGate.summary,
+        issues,
+        warnings,
+        recommendations
+      };
+    }
+    function architectureStatusLabel(status){return status==='at-risk'?'At Risk':status==='watch'?'Watch':'Healthy'}
+    async function renderStorageArchitectureStatus(){
+      const el=$('storageArchitectureStatus');if(!el)return;
+      try{
+        const r=await buildStorageArchitectureReport();
+        const problemList=[...r.issues,...r.warnings].slice(0,6).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
+        const recList=r.recommendations.slice(0,5).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
+        el.innerHTML=`<p><b>Status:</b> ${escapeHtml(architectureStatusLabel(r.status))}<br>Local storage: <b>${fmtBytes(r.localStorage.usageBytes)}</b>${r.localStorage.quotaBytes?` of ${fmtBytes(r.localStorage.quotaBytes)} (${r.localStorage.quotaPercent}%)`:''}<br>Items: <b>${r.browserInventory.items}</b> · Listing photos: <b>${r.photoReadiness.listingPhotos}</b> · Media-backed: <b>${r.photoReadiness.mediaBacked}</b> · Local-only: <b>${r.photoReadiness.localOnly}</b> · Thumbnail-only: <b>${r.photoReadiness.thumbnailOnly}</b><br>Media library: <b>${r.mediaLibrary.recordCount}</b> records · ${fmtBytes(r.mediaLibrary.estimatedBytes)} · Orphans: <b>${r.mediaLibrary.orphanRecords}</b><br>Inventory checkpoint: <b>${r.inventoryCheckpoint.exists?(r.inventoryCheckpoint.matchesCurrentInventory?'current':'needs refresh'):'missing'}</b></p>${problemList?`<p><b>Watch list:</b></p><ul>${problemList}</ul>`:''}${recList?`<p><b>Next safest actions:</b></p><ul>${recList}</ul>`:''}`;
+      }catch(e){el.innerHTML=`<p>Storage architecture report failed: ${escapeHtml(e?.message||e)}</p>`}
+    }
+    async function exportStorageArchitectureReport(){
+      try{
+        const report=await buildStorageArchitectureReport();
+        download(`item-posting-storage-architecture-${VERSION}.json`,JSON.stringify(report,null,2),'application/json');
+      }catch(e){alert('Could not export storage architecture report: '+(e?.message||e))}
+    }
     function buildGoogleSyncActionQueue(items=getItems()){
       const settings=getGoogleSyncSettings(), queue={version:VERSION,schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,generatedAt:new Date().toISOString(),mode:'planned-actions-no-google-api-calls',targetSheetName:settings.sheetName,targetDriveRootFolder:settings.driveRootFolder,summary:{itemsScanned:items.length,readyItems:0,heldItems:0,totalActions:0,driveFolderCreates:0,mediaUploads:0,sheetRowUpserts:0,sheetLinkUpdates:0},items:[]};
       items.forEach((item,index)=>{
@@ -3898,6 +3986,8 @@
     on('compressInventoryBtn','onclick',compressExistingInventoryPhotos);
     on('runStorageHousekeepingBtn','onclick',runSafeStorageHousekeeping);
     on('refreshStorageStatsBtn','onclick',()=>{renderStorageUsage();renderMediaDbStats();refreshBackupViews();});
+    on('refreshStorageArchitectureBtn','onclick',renderStorageArchitectureStatus);
+    on('exportStorageArchitectureBtn','onclick',exportStorageArchitectureReport);
     on('storageRecoveryClearSessionsBtn','onclick',clearSavedSessionsFromRecovery);
     on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
     on('storageRecoveryClearShotsBtn','onclick',clearTemporaryCapturesFromRecovery);
@@ -4077,7 +4167,7 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Storage uploads are written into <b>Storage Location Photo Link</b>.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus();if($('backup')?.classList.contains('active'))renderStorageArchitectureStatus()}catch(e){}}
 
     // Init
     updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); renderDeviceRole(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderListingPreferences(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)&&document.querySelector(`.tab[data-screen="${last}"]`)?.style.display!=='none') showScreen(last);trySilentGoogleReconnect();
