@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0240</title>
+  <title>Item Posting Assistant v0.26.06.01.0250</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0240 · Offline Google auth guard</p>
+      <p class="eyebrow">v0.26.06.01.0250 · IndexedDB inventory checkpoint</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -921,6 +921,13 @@
               <button id="clearMediaDbBtn" class="danger" type="button">Clear Media Library</button>
             </div>
             <p class="note">Copy first, then optimize. Optimize keeps smaller thumbnail previews in inventory records while full-size copies live in IndexedDB media storage.</p><div class="media-migration-note"><b>Safety note:</b> This is still a local-browser storage system. Use <b>Restore Selected Item Photos</b> or <b>Export Selected Item Full Backup</b> when possible. Restoring ALL photos can quickly fill browser storage again.</div>
+            <h3 style="margin-top:16px">Inventory Safety Checkpoint</h3>
+            <p class="note">Mirrors the inventory item list into IndexedDB, which has more room than regular app settings storage. This is a bridge toward a future native database and a recovery path if item saves hit browser quota.</p>
+            <div id="inventoryCheckpointStatus" class="note">Inventory checkpoint has not been checked yet.</div>
+            <div class="media-db-actions">
+              <button id="createInventoryCheckpointBtn" class="success" type="button">Create Inventory Safety Checkpoint</button>
+              <button id="restoreInventoryCheckpointBtn" class="secondary" type="button">Restore Inventory from Checkpoint</button>
+            </div>
           </div>
           </details>
           <details class="backup-list">
@@ -980,6 +987,7 @@
         <button id="storageRecoveryClearDraftHistoryBtn" class="secondary" type="button">Clear Selected Item Draft History<span class="storage-recovery-hint">Keeps the selected item's current fields and current listing draft. Removes only its older restore checkpoints.</span></button>
         <button id="storageRecoveryClearShotsBtn" class="secondary" type="button">Clear Current Temporary Captures<span class="storage-recovery-hint">Use only after creating the inventory item or if you are willing to retake the current capture photos.</span></button>
         <button id="storageRecoveryOptimizeBtn" class="success" type="button">Optimize Inventory Previews Safely<span class="storage-recovery-hint">Best next step when the counters above are already zero. Copies full inventory photos to the browser media library, then keeps small previews in the main app records.</span></button>
+        <button id="storageRecoveryRestoreInventoryBtn" class="secondary" type="button">Restore Inventory from Safety Checkpoint<span class="storage-recovery-hint">Uses the latest IndexedDB inventory checkpoint if regular browser storage got wedged. Does not delete photos or Google Drive backups.</span></button>
         <button id="storageRecoveryOpenBackupBtn" class="primary" type="button">Open More Backup Cleanup Tools<span class="storage-recovery-hint">Jump directly to storage cleanup, backup exports, and deliberate inventory-photo optimization.</span></button>
         <button id="storageRecoveryCloseBtn" class="secondary" type="button">Close Warning · Keep Auto Sync Paused</button>
       </div>
@@ -989,7 +997,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0240';
+    const VERSION='v0.26.06.01.0250';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1027,6 +1035,8 @@
     async function storageEstimate(){if(navigator.storage?.estimate){try{return await navigator.storage.estimate()}catch{}}return {usage:approxLocalStorageBytes(),quota:null}}
     const MEDIA_DB_NAME='ipa_media_library_v1';
     const MEDIA_STORE='media';
+    const INVENTORY_CHECKPOINT_STORE='inventoryCheckpoints';
+    const INVENTORY_CHECKPOINT_ID='latest';
     function dataUrlToBlob(dataUrl){
       const parts=String(dataUrl||'').split(',');
       const meta=parts[0]||''; const b64=parts[1]||'';
@@ -1038,8 +1048,12 @@
     function openMediaDb(){
       return new Promise((resolve,reject)=>{
         if(!('indexedDB' in window)){reject(new Error('IndexedDB is not available in this browser.'));return}
-        const req=indexedDB.open(MEDIA_DB_NAME,1);
-        req.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(MEDIA_STORE)){const store=db.createObjectStore(MEDIA_STORE,{keyPath:'id'});store.createIndex('sourceKey','sourceKey',{unique:false});store.createIndex('itemId','itemId',{unique:false});store.createIndex('kind','kind',{unique:false});}};
+        const req=indexedDB.open(MEDIA_DB_NAME,2);
+        req.onupgradeneeded=e=>{
+          const db=e.target.result;
+          if(!db.objectStoreNames.contains(MEDIA_STORE)){const store=db.createObjectStore(MEDIA_STORE,{keyPath:'id'});store.createIndex('sourceKey','sourceKey',{unique:false});store.createIndex('itemId','itemId',{unique:false});store.createIndex('kind','kind',{unique:false});}
+          if(!db.objectStoreNames.contains(INVENTORY_CHECKPOINT_STORE)){const store=db.createObjectStore(INVENTORY_CHECKPOINT_STORE,{keyPath:'id'});store.createIndex('createdAt','createdAt',{unique:false});}
+        };
         req.onsuccess=()=>resolve(req.result);
         req.onerror=()=>reject(req.error||new Error('Could not open IndexedDB media library.'));
       });
@@ -1113,6 +1127,61 @@
         tx.oncomplete=()=>{db.close();resolve(true)};
         tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not clear media library.'))};
       });
+    }
+    function inventoryCheckpointRecord(items,reason='manual checkpoint'){
+      const safeItems=Array.isArray(items)?items:[];
+      const text=JSON.stringify(safeItems);
+      return {id:INVENTORY_CHECKPOINT_ID,items:safeItems,itemCount:safeItems.length,bytes:bytesOfString(text),reason,appVersion:VERSION,createdAt:new Date().toISOString()}
+    }
+    async function inventoryCheckpointPut(items=getItems(),reason='manual checkpoint'){
+      const db=await openMediaDb(),record=inventoryCheckpointRecord(items,reason);
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(INVENTORY_CHECKPOINT_STORE,'readwrite');
+        tx.objectStore(INVENTORY_CHECKPOINT_STORE).put(record);
+        tx.oncomplete=()=>{db.close();resolve(record)};
+        tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not write inventory checkpoint.'))};
+      });
+    }
+    async function inventoryCheckpointGet(){
+      const db=await openMediaDb();
+      return new Promise((resolve,reject)=>{
+        const tx=db.transaction(INVENTORY_CHECKPOINT_STORE,'readonly');
+        const req=tx.objectStore(INVENTORY_CHECKPOINT_STORE).get(INVENTORY_CHECKPOINT_ID);
+        req.onsuccess=()=>{db.close();resolve(req.result||null)};
+        req.onerror=()=>{db.close();reject(req.error||new Error('Could not read inventory checkpoint.'))};
+      });
+    }
+    function mirrorInventoryCheckpoint(items,reason){
+      inventoryCheckpointPut(items,reason).then(renderInventoryCheckpointStatus).catch(e=>console.warn('Inventory checkpoint mirror failed',e));
+    }
+    async function renderInventoryCheckpointStatus(){
+      const el=$('inventoryCheckpointStatus');if(!el)return;
+      try{
+        const rec=await inventoryCheckpointGet();
+        if(!rec){el.innerHTML='<p>No IndexedDB inventory safety checkpoint has been created yet.</p>';return}
+        el.innerHTML=`<p>Latest checkpoint: <b>${escapeHtml(new Date(rec.createdAt||Date.now()).toLocaleString())}</b><br>Items: <b>${Number(rec.itemCount)||0}</b> · Size: <b>${fmtBytes(Number(rec.bytes)||0)}</b> · Reason: <b>${escapeHtml(rec.reason||'checkpoint')}</b></p>`;
+      }catch(e){el.innerHTML=`<p>Inventory checkpoint check failed: ${escapeHtml(e?.message||e)}</p>`}
+    }
+    async function createInventoryCheckpointFromButton(){
+      try{
+        const rec=await inventoryCheckpointPut(getItems(),'manual backup tools checkpoint');
+        await renderInventoryCheckpointStatus();
+        alert(`Inventory safety checkpoint saved for ${rec.itemCount} item${rec.itemCount===1?'':'s'}.`);
+      }catch(e){alert('Could not create inventory checkpoint: '+(e?.message||e))}
+    }
+    async function restoreInventoryCheckpoint({fromRecovery=false}={}){
+      try{
+        const rec=await inventoryCheckpointGet();
+        if(!rec?.items?.length){const msg='No inventory safety checkpoint was found.';if(fromRecovery)updateStorageRecoveryDialog(msg);else alert(msg);return false}
+        if(!fromRecovery&&!confirm(`Restore ${rec.itemCount||rec.items.length} item${(rec.itemCount||rec.items.length)===1?'':'s'} from the latest IndexedDB checkpoint? This replaces the current local inventory item list only.`))return false;
+        if(!safeWrite(K.items,rec.items))return false;
+        selectedItemId=selectedItemId&&rec.items.some(i=>i.id===selectedItemId)?selectedItemId:null;
+        normalizeInventoryItems({silent:true});renderInventory();if(selectedItemId)loadItem(selectedItemId);else{$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none'}
+        refreshBackupViews();await renderStorageUsage();await renderInventoryCheckpointStatus();
+        const msg=`Inventory restored from safety checkpoint saved ${new Date(rec.createdAt||Date.now()).toLocaleString()}.`;
+        if(fromRecovery)updateStorageRecoveryDialog(msg+' Retry your save when ready.');else alert(msg);
+        return true;
+      }catch(e){const msg='Could not restore inventory checkpoint: '+(e?.message||e);if(fromRecovery)updateStorageRecoveryDialog(msg);else alert(msg);return false}
     }
     function collectReferencedMediaIds(){
       const ids=new Set();
@@ -1540,7 +1609,7 @@
     function renderSessions(){let sessions=read(K.sessions,[]),el=$('sessionsList');el.innerHTML=sessions.length?'':'<div class="empty-state">No saved sessions yet.</div>';sessions.slice().reverse().forEach(s=>{let d=document.createElement('div');d.className='result-box';d.innerHTML=`<strong>${s.name}</strong><p class="note">${s.photos?.length||0} photos · ${new Date(s.createdAt).toLocaleString()}</p><div class="actions"><button class="secondary" data-load-session="${s.id}">Load Photos</button><button class="primary" data-item-session="${s.id}">Create Item</button></div>`;el.appendChild(d)});el.querySelectorAll('[data-load-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.loadSession);if(!s)return;setShots(cloneShots(s.photos));$('sessionName').value=s.name||'';$('captureStatus').textContent=`Loaded saved session: ${s.name}`});el.querySelectorAll('[data-item-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.itemSession);if(!s)return;createItemFromShots(cloneShots(s.photos),s.name||'Saved session item')})}
 
     // Inventory
-    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
+    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{mirrorInventoryCheckpoint(v,'inventory save attempt');if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
     function saveItemObject(item){if(!item?.id)return false;let items=getItems(),index=items.findIndex(i=>i.id===item.id);if(index<0)return false;items[index]=item;let saved=setItems(items);if(saved)scheduleGoogleWorkspacePush('saved item update');return saved}
     const ITEM_WORKFLOW_STAGES=[['photos','1. Photos & Watermark'],['details','2. Item Details & AI'],['pricing','3. Pricing Research'],['storage','4. Storage Location'],['draft','5. Marketplace Draft']];
     let itemWorkflowOpenStage='';
@@ -3737,7 +3806,7 @@
     $('exportSheetsDriveCsvBtn').onclick=()=>download(`item-posting-media-aware-sheets-drive-index-${VERSION}.csv`,toCsv(buildSheetsDriveRows()),'text/csv');
     $('exportManifestBtn').onclick=()=>download(`item-posting-media-aware-manifest-${VERSION}.json`,JSON.stringify(buildMediaManifest(),null,2));
     $('exportRebuildHtmlBtn').onclick=async()=>{try{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=true; if($('mediaDbStatus'))$('mediaDbStatus').textContent='Building media-aware rebuild backup from IndexedDB/full-photo sources...'; const html=await buildRebuildHtmlMediaAware(); download(`item-posting-media-aware-rebuild-backup-${VERSION}.html`,html,'text/html'); if($('mediaDbStatus'))$('mediaDbStatus').textContent='Media-aware rebuild backup exported.';}catch(e){alert('Could not export media-aware rebuild backup: '+(e?.message||e)); console.error(e)}finally{const btn=$('exportRebuildHtmlBtn'); if(btn)btn.disabled=false;}};
-    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.assistantRelaySettings,b.assistantRelaySettings||defaultAssistantRelaySettings()))return;if(!safeWrite(K.aiUsageLog,b.aiUsageLog||[]))return;if(!safeWrite(K.aiUsageSettings,b.aiUsageSettings||defaultAiUsageSettings()))return;if(!safeWrite(K.listingPreferences,b.listingPreferences||defaultListingPreferences()))return;if(!safeWrite(K.listingReviewRules,b.listingReviewRules||defaultListingReviewRules()))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleWorkspaceState,b.googleWorkspaceState||{}))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderAssistantRelaySettings();renderAiUsage();renderListingPreferences();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
+    $('importJsonBtn').onclick=()=>{let f=$('importFile').files?.[0];if(!f){alert('Choose a JSON backup first.');return}let reader=new FileReader();reader.onload=()=>{try{let b=JSON.parse(reader.result);if(!confirm('Import backup and replace local prototype data?'))return;if(!safeWrite(K.presets,b.presets||[]))return;if(!safeWrite(K.shots,b.shots||[]))return;if(!safeWrite(K.sessions,b.sessions||[]))return;if(!safeWrite(K.items,b.items||[]))return;mirrorInventoryCheckpoint(b.items||[],'JSON backup import');if(!safeWrite(K.storagePresets,b.storagePresets||[]))return;if(!safeWrite(K.storageLocationPhotos,b.storageLocationPhotos||{}))return;if(!safeWrite(K.assistantRelaySettings,b.assistantRelaySettings||defaultAssistantRelaySettings()))return;if(!safeWrite(K.aiUsageLog,b.aiUsageLog||[]))return;if(!safeWrite(K.aiUsageSettings,b.aiUsageSettings||defaultAiUsageSettings()))return;if(!safeWrite(K.listingPreferences,b.listingPreferences||defaultListingPreferences()))return;if(!safeWrite(K.listingReviewRules,b.listingReviewRules||defaultListingReviewRules()))return;if(!safeWrite(K.googleSyncSettings,b.googleSyncSettings||defaultGoogleSyncSettings()))return;if(!safeWrite(K.googleWorkspaceState,b.googleWorkspaceState||{}))return;if(!safeWrite(K.googleApiSetup,b.googleApiSetup||defaultGoogleApiSetup()))return;if(!safeWrite(K.googleSyncHistory,b.googleSyncHistory||[]))return;if(!safeWrite(K.googleSyncRunLog,b.googleSyncRunLog||[]))return;renderPresets();renderShots();renderSessions();renderStoragePresets();renderAssistantRelaySettings();renderAiUsage();renderListingPreferences();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderInventory();refreshBackupViews();alert('Backup imported.')}catch(e){alert('Could not import backup: '+e.message)}};reader.readAsText(f)};
     if($('migrateMediaBtn'))$('migrateMediaBtn').onclick=migrateExistingMediaToIndexedDb;
     if($('optimizeMediaRefsBtn'))$('optimizeMediaRefsBtn').onclick=optimizeInventoryPhotosToThumbnails;
     if($('restoreSelectedMediaBtn'))$('restoreSelectedMediaBtn').onclick=restoreSelectedItemFullPhotosFromMediaLibrary;
@@ -3746,6 +3815,8 @@
     if($('scanMediaBtn'))$('scanMediaBtn').onclick=renderMediaDbStats;
     if($('cleanupOrphanMediaBtn'))$('cleanupOrphanMediaBtn').onclick=cleanupOrphanMedia;
     if($('clearMediaDbBtn'))$('clearMediaDbBtn').onclick=clearMediaLibrary;
+    on('createInventoryCheckpointBtn','onclick',createInventoryCheckpointFromButton);
+    on('restoreInventoryCheckpointBtn','onclick',()=>restoreInventoryCheckpoint());
     on('saveGoogleSyncSettingsBtn','onclick',saveGoogleSyncSettingsFromForm);
     on('saveGoogleApiSetupBtn','onclick',saveGoogleApiSetupFromForm);
     on('copyGoogleDeviceSetupBtn','onclick',copyGoogleDeviceSetupCode);
@@ -3793,6 +3864,7 @@
     on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
     on('storageRecoveryClearShotsBtn','onclick',clearTemporaryCapturesFromRecovery);
     on('storageRecoveryOptimizeBtn','onclick',optimizeInventoryPreviewsFromRecovery);
+    on('storageRecoveryRestoreInventoryBtn','onclick',()=>restoreInventoryCheckpoint({fromRecovery:true}));
     on('storageRecoveryOpenBackupBtn','onclick',openStorageCleanupFromRecovery);
     on('storageRecoveryCloseBtn','onclick',hideStorageRecoveryDialog);
 
@@ -3963,7 +4035,7 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Storage uploads are written into <b>Storage Location Photo Link</b>.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist()}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus()}catch(e){}}
 
     // Init
     updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); renderDeviceRole(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderListingPreferences(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)&&document.querySelector(`.tab[data-screen="${last}"]`)?.style.display!=='none') showScreen(last);trySilentGoogleReconnect();

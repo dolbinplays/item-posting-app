@@ -135,3 +135,5 @@ For a durable larger inventory, the next architecture evaluation should compare 
 - Google Drive as durable photo backup.
 - Google Sheets as the listing index.
 - The existing hosted web app as the laptop workstation.
+
+Current bridge toward that path: the hosted app mirrors inventory item-list saves into an IndexedDB safety checkpoint. This does not make the TWA a fully native storage app, but it provides a larger-storage recovery path and a practical test of database-backed inventory records before a Capacitor/native rewrite.

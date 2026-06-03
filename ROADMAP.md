@@ -11,6 +11,7 @@
 - Device roles for full app, photo capture station, and desktop workstation layouts. Capture-station mode hides laptop-only workstation navigation while keeping inventory and backup available.
 - Guided workflow checkpoint saves retry without adding another history snapshot when browser storage is tight.
 - Inventory rendering remains read-only: opening an item no longer attempts optional shared storage-photo cache writes.
+- IndexedDB inventory safety checkpoints mirror item-list saves outside regular app settings storage and can restore the local inventory list if browser quota blocks normal saves. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
@@ -51,6 +52,7 @@
 - Android APK wrapper with Bubblewrap, production PNG icons, signing key, and hosted Digital Asset Links association. First signed APK and App Bundle generated locally; domain-root association verified live. Phone test remains.
 - Repository-side Bubblewrap setup guide, generated-wrapper ignore rule, Digital Asset Links template, and GitHub Pages domain-root hosting constraint documentation. Implemented.
 - Better native storage, camera permissions, media permissions, and offline reliability. A Trusted Web Activity wrapper alone does not remove browser storage constraints; evaluate a Capacitor/native Android storage layer with a local database and app-managed media files before treating the APK as the long-term inventory client.
+- Browser-native storage bridge: item records now mirror to IndexedDB as an inventory safety checkpoint while the app keeps the compatible localStorage live path. Use this as the measured stepping stone toward Capacitor/native database storage. Implemented.
 - Evaluate a Play Store distribution path.
 
 ### Stage 12 - Multi-Camera Capture
