@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0250</title>
+  <title>Item Posting Assistant v0.26.06.01.0260</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0250 · IndexedDB inventory checkpoint</p>
+      <p class="eyebrow">v0.26.06.01.0260 · Safe storage housekeeping</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -900,6 +900,7 @@
             <button id="clearTempCapturesBtn" class="secondary" type="button">Clear Temporary Captures</button>
             <button id="clearSavedSessionsBtn" class="secondary" type="button">Clear Saved Capture Sessions</button>
             <button id="compressInventoryBtn" class="secondary" type="button">Compress Existing Inventory Photos</button>
+            <button id="runStorageHousekeepingBtn" class="success" type="button">Run Safe Storage Housekeeping</button>
             <button id="refreshStorageStatsBtn" class="secondary" type="button">Refresh Storage Stats</button>
           </div>
           <div class="media-db-panel">
@@ -997,7 +998,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0250';
+    const VERSION='v0.26.06.01.0260';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1602,14 +1603,50 @@
           return;
         }
       }
+      const pruned=pruneSavedSessionsForStorage();
       renderSessions();refreshBackupViews();await renderStorageUsage();
-      $('captureStatus').textContent=`Saved compressed session: ${name}`;
-      alert('Capture session saved using compressed photos. It should now appear under Saved Sessions.');
+      $('captureStatus').textContent=`Saved compressed session: ${name}${pruned?`; ${pruned} older saved session${pruned===1?'':'s'} trimmed`:''}.`;
+      alert(`Capture session saved using compressed photos. It should now appear under Saved Sessions.${pruned?`\n\nSafe housekeeping also trimmed ${pruned} older saved session${pruned===1?'':'s'} to protect phone storage.`:''}`);
     } $('saveSessionBtn').onclick=saveSession;
     function renderSessions(){let sessions=read(K.sessions,[]),el=$('sessionsList');el.innerHTML=sessions.length?'':'<div class="empty-state">No saved sessions yet.</div>';sessions.slice().reverse().forEach(s=>{let d=document.createElement('div');d.className='result-box';d.innerHTML=`<strong>${s.name}</strong><p class="note">${s.photos?.length||0} photos · ${new Date(s.createdAt).toLocaleString()}</p><div class="actions"><button class="secondary" data-load-session="${s.id}">Load Photos</button><button class="primary" data-item-session="${s.id}">Create Item</button></div>`;el.appendChild(d)});el.querySelectorAll('[data-load-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.loadSession);if(!s)return;setShots(cloneShots(s.photos));$('sessionName').value=s.name||'';$('captureStatus').textContent=`Loaded saved session: ${s.name}`});el.querySelectorAll('[data-item-session]').forEach(b=>b.onclick=()=>{let s=read(K.sessions,[]).find(x=>x.id===b.dataset.itemSession);if(!s)return;createItemFromShots(cloneShots(s.photos),s.name||'Saved session item')})}
 
     // Inventory
-    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{mirrorInventoryCheckpoint(v,'inventory save attempt');if(safeWrite(K.items,v)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
+    const MAX_AUTO_WORKFLOW_CHECKPOINTS_PER_ITEM=5;
+    const MAX_SAVED_CAPTURE_SESSIONS=8;
+    let lastStorageHousekeeping={draftCheckpoints:0,sessions:0,updatedAt:''};
+    function pruneItemDraftHistoryForStorage(item){
+      if(!item||!Array.isArray(item.draftHistory))return 0;
+      const manual=[],checkpoints=[];
+      item.draftHistory.forEach(entry=>/checkpoint/i.test(String(entry?.label||''))?checkpoints.push(entry):manual.push(entry));
+      if(checkpoints.length<=MAX_AUTO_WORKFLOW_CHECKPOINTS_PER_ITEM)return 0;
+      checkpoints.sort((a,b)=>String(b.savedAt||'').localeCompare(String(a.savedAt||'')));
+      const keptCheckpoints=checkpoints.slice(0,MAX_AUTO_WORKFLOW_CHECKPOINTS_PER_ITEM);
+      item.draftHistory=[...manual,...keptCheckpoints].sort((a,b)=>String(a.savedAt||'').localeCompare(String(b.savedAt||'')));
+      item.updatedAt=item.updatedAt||new Date().toISOString();
+      return checkpoints.length-keptCheckpoints.length;
+    }
+    function pruneInventoryDraftHistoriesForStorage(items){
+      let removed=0;(items||[]).forEach(item=>removed+=pruneItemDraftHistoryForStorage(item));
+      if(removed)lastStorageHousekeeping={...lastStorageHousekeeping,draftCheckpoints:removed,updatedAt:new Date().toISOString()};
+      return removed
+    }
+    function pruneSavedSessionsForStorage(){
+      const sessions=read(K.sessions,[]);
+      if(!Array.isArray(sessions)||sessions.length<=MAX_SAVED_CAPTURE_SESSIONS)return 0;
+      const kept=sessions.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,MAX_SAVED_CAPTURE_SESSIONS).sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+      const removed=sessions.length-kept.length;
+      if(removed&&safeWrite(K.sessions,kept)){lastStorageHousekeeping={...lastStorageHousekeeping,sessions:removed,updatedAt:new Date().toISOString()};renderSessions();return removed}
+      return 0
+    }
+    async function runSafeStorageHousekeeping(){
+      const items=getItems();
+      const draftRemoved=pruneInventoryDraftHistoriesForStorage(items);
+      const sessionsRemoved=pruneSavedSessionsForStorage();
+      if(draftRemoved&&!setItems(items))return;
+      renderInventory();if(selectedItemId)loadItem(selectedItemId);refreshBackupViews();await renderStorageUsage();await renderInventoryCheckpointStatus();
+      alert(`Safe housekeeping complete.\n\nGuided workflow checkpoints removed: ${draftRemoved}\nOld saved capture sessions removed: ${sessionsRemoved}\n\nManual saved draft versions, inventory items, and item photos were kept.`);
+    }
+    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{let next=Array.isArray(v)?v:[];pruneInventoryDraftHistoriesForStorage(next);mirrorInventoryCheckpoint(next,'inventory save attempt');if(safeWrite(K.items,next)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
     function saveItemObject(item){if(!item?.id)return false;let items=getItems(),index=items.findIndex(i=>i.id===item.id);if(index<0)return false;items[index]=item;let saved=setItems(items);if(saved)scheduleGoogleWorkspacePush('saved item update');return saved}
     const ITEM_WORKFLOW_STAGES=[['photos','1. Photos & Watermark'],['details','2. Item Details & AI'],['pricing','3. Pricing Research'],['storage','4. Storage Location'],['draft','5. Marketplace Draft']];
     let itemWorkflowOpenStage='';
@@ -3859,6 +3896,7 @@
     on('clearTempCapturesBtn','onclick',clearTemporaryCaptures);
     on('clearSavedSessionsBtn','onclick',clearSavedSessions);
     on('compressInventoryBtn','onclick',compressExistingInventoryPhotos);
+    on('runStorageHousekeepingBtn','onclick',runSafeStorageHousekeeping);
     on('refreshStorageStatsBtn','onclick',()=>{renderStorageUsage();renderMediaDbStats();refreshBackupViews();});
     on('storageRecoveryClearSessionsBtn','onclick',clearSavedSessionsFromRecovery);
     on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
@@ -3877,7 +3915,11 @@
       const sessions=read(K.sessions,[]), shots=getShots(), items=getItems();
       const sessionPhotos=sessions.reduce((n,s)=>n+(s.photos?.length||0),0);
       const itemPhotos=items.reduce((n,i)=>n+(i.photos?.length||0)+(i.storagePhoto?.dataUrl?1:0),0);
-      if($('storageUsageBox')) $('storageUsageBox').innerHTML=`Approx local app storage: <b>${fmtBytes(usage)}</b>${quota?` of ${fmtBytes(quota)} (${pct}%)`:''}<br>Temporary captures: <b>${shots.length}</b> · Saved session photos: <b>${sessionPhotos}</b> · Inventory/storage photos: <b>${itemPhotos}</b><br><span class="note">Tip: export a Rebuildable HTML Backup before clearing saved sessions or compressing existing photos.</span>`;
+      const draftCheckpoints=items.reduce((n,i)=>n+(i.draftHistory||[]).filter(d=>/checkpoint/i.test(String(d?.label||''))).length,0);
+      let checkpointText='Inventory safety checkpoint: not checked yet.';
+      try{const rec=await inventoryCheckpointGet();checkpointText=rec?`Inventory safety checkpoint: ${Number(rec.itemCount)||0} item${Number(rec.itemCount)===1?'':'s'} · ${fmtBytes(Number(rec.bytes)||0)} · ${new Date(rec.createdAt||Date.now()).toLocaleString()}`:'Inventory safety checkpoint: none yet.'}catch{}
+      const lastNote=lastStorageHousekeeping.updatedAt?`<br>Last safe housekeeping: ${new Date(lastStorageHousekeeping.updatedAt).toLocaleString()} · Draft checkpoints trimmed: ${lastStorageHousekeeping.draftCheckpoints||0} · Saved sessions trimmed: ${lastStorageHousekeeping.sessions||0}`:'';
+      if($('storageUsageBox')) $('storageUsageBox').innerHTML=`Approx local app storage: <b>${fmtBytes(usage)}</b>${quota?` of ${fmtBytes(quota)} (${pct}%)`:''}<br>Temporary captures: <b>${shots.length}</b> · Saved session photos: <b>${sessionPhotos}</b> · Saved sessions: <b>${sessions.length}/${MAX_SAVED_CAPTURE_SESSIONS}</b> · Inventory/storage photos: <b>${itemPhotos}</b><br>Guided workflow checkpoints: <b>${draftCheckpoints}</b> · ${escapeHtml(checkpointText)}${lastNote}<br><span class="note">Safe housekeeping trims older guided workflow checkpoints and older saved capture sessions. Manual saved draft versions, inventory items, and item photos are kept.</span>`;
     }
     async function compressExistingInventoryPhotos(){
       if(!confirm('Compress existing inventory and storage photos to save browser storage? Export a backup first if you want to preserve the current larger local copies.'))return;
