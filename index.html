@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0230</title>
+  <title>Item Posting Assistant v0.26.06.01.0240</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0230 · Configurable listing review rules</p>
+      <p class="eyebrow">v0.26.06.01.0240 · Offline Google auth guard</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -989,7 +989,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0230';
+    const VERSION='v0.26.06.01.0240';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -2616,13 +2616,16 @@
     function clearGoogleApiSetup(){if(!confirm('Clear saved Google API setup details?'))return;if(safeWrite(K.googleApiSetup,defaultGoogleApiSetup())){renderGoogleApiSetup();refreshBackupViews()}}
     let googleTokenClient=null, googleAccessTokenInfo=null;
     function googleSyncScopes(){return googleAuthorizationRequirements().scopes.map(s=>s.scope).join(' ')}
+    function isAppOffline(){return navigator.onLine===false}
+    function offlineGoogleMessage(){return 'Offline mode: Google sign-in, Drive, and Sheets sync are paused. Inventory already stored on this device remains available.'}
     function renderGoogleSignInStatus(message=''){
       const el=$('googleSignInStatus'); if(!el)return;
       const setup=getGoogleApiSetup(), gisReady=!!(window.google&&google.accounts&&google.accounts.oauth2);
       const tokenReady=!!googleAccessTokenInfo;
-      el.innerHTML=`<p>Client ID: <b>${setup.oauthClientId?'Saved':'Missing'}</b> · Google Identity: <b>${gisReady?'Loaded':'Not loaded'}</b> · Access token: <b>${tokenReady?'In memory':'None'}</b>${message?`<br>${escapeHtml(message)}`:''}</p><p>Scopes: <code>${escapeHtml(googleSyncScopes())}</code></p>`;
-      if($('requestGoogleAccessBtn'))$('requestGoogleAccessBtn').disabled=!setup.oauthClientId;
-      if($('dashboardGoogleAccessBtn'))$('dashboardGoogleAccessBtn').disabled=!setup.oauthClientId;
+      const offline=isAppOffline();
+      el.innerHTML=`<p>Client ID: <b>${setup.oauthClientId?'Saved':'Missing'}</b> · Google Identity: <b>${gisReady?'Loaded':'Not loaded'}</b> · Access token: <b>${tokenReady?'In memory':'None'}</b> · Network: <b>${offline?'Offline':'Online'}</b>${message?`<br>${escapeHtml(message)}`:''}</p><p>Scopes: <code>${escapeHtml(googleSyncScopes())}</code></p>`;
+      if($('requestGoogleAccessBtn'))$('requestGoogleAccessBtn').disabled=!setup.oauthClientId||offline;
+      if($('dashboardGoogleAccessBtn'))$('dashboardGoogleAccessBtn').disabled=!setup.oauthClientId||offline;
       if($('runGoogleApiProbeBtn'))$('runGoogleApiProbeBtn').disabled=!tokenReady;
       if($('connectGoogleDriveRootBtn'))$('connectGoogleDriveRootBtn').disabled=!tokenReady;
       if($('connectGoogleDriveItemFoldersBtn'))$('connectGoogleDriveItemFoldersBtn').disabled=!tokenReady;
@@ -2694,6 +2697,7 @@
     }
     function loadGoogleIdentity(){
       return new Promise((resolve,reject)=>{
+        if(isAppOffline()){const msg=offlineGoogleMessage();renderGoogleSignInStatus(msg);reject(new Error(msg));return}
         if(window.google&&google.accounts&&google.accounts.oauth2){renderGoogleSignInStatus('Google Identity already loaded.');resolve();return}
         let existing=document.querySelector('script[data-google-identity]');
         if(existing){existing.addEventListener('load',()=>{renderGoogleSignInStatus('Google Identity loaded.');resolve()},{once:true});existing.addEventListener('error',()=>reject(new Error('Google Identity failed to load.')),{once:true});return}
@@ -2707,6 +2711,13 @@
     async function requestGoogleAccess({silent=false}={}){
       const setup=getGoogleApiSetup();
       if(!setup.oauthClientId){alert('Save a Google OAuth Client ID first.');return}
+      if(isAppOffline()){
+        googleAccessTokenInfo=null;
+        stopGoogleWorkspaceAutoSync();
+        renderGoogleSignInStatus(offlineGoogleMessage());
+        if(!silent)alert('You are offline. Google sign-in and sync will be available again when this device is online.');
+        return
+      }
       try{
         await loadGoogleIdentity();
         googleTokenClient=google.accounts.oauth2.initTokenClient({client_id:setup.oauthClientId,scope:googleSyncScopes(),callback:(response)=>{
@@ -2719,8 +2730,21 @@
         googleTokenClient.requestAccessToken({prompt:silent?'':'consent'});
       }catch(e){if(silent)renderGoogleSignInStatus('Silent Google reconnect was not available. Tap Sign In to Google when you are ready.');else alert('Could not start Google sign-in: '+(e?.message||e))}
     }
-    function trySilentGoogleReconnect(){if(localStorage.getItem(K.googleReconnectPreference)==='yes'&&getGoogleApiSetup().oauthClientId)requestGoogleAccess({silent:true})}
+    function trySilentGoogleReconnect(){if(isAppOffline()){renderGoogleSignInStatus(offlineGoogleMessage());return}if(localStorage.getItem(K.googleReconnectPreference)==='yes'&&getGoogleApiSetup().oauthClientId)requestGoogleAccess({silent:true})}
     function forgetGoogleAccess(){googleAccessTokenInfo=null;rememberGoogleReconnect(false);stopGoogleWorkspaceAutoSync();renderGoogleSignInStatus('Temporary access token forgotten. Automatic Google reconnect disabled on this device.')}
+    function handleConnectivityChange(){
+      if(isAppOffline()){
+        googleAccessTokenInfo=null;
+        stopGoogleWorkspaceAutoSync();
+        renderGoogleSignInStatus(offlineGoogleMessage());
+        renderGoogleWorkspaceStatus('<p><b>Offline mode:</b> shared workspace checks are paused until this device is online again.</p>');
+      }else{
+        renderGoogleSignInStatus('Back online. Tap Sign In to Google when you are ready to resume Drive and Sheets sync.');
+        renderGoogleWorkspaceStatus();
+      }
+    }
+    window.addEventListener('offline',handleConnectivityChange);
+    window.addEventListener('online',handleConnectivityChange);
     async function runGoogleApiProbe(){
       if(!googleAccessTokenInfo?.accessToken){alert('Request test access first.');return}
       renderGoogleApiProbeStatus('<p>Running read-only Drive API probe...</p>');

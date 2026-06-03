@@ -85,7 +85,7 @@ The first APK test should verify:
 3. Google sign-in still works.
 4. Drive and Sheets sync still work.
 5. Closing and reopening the app preserves browser-local working data.
-6. The offline shell opens when the phone temporarily has no network connection.
+6. The offline shell opens when the phone temporarily has no network connection, and it does not attempt Google reconnect or navigate to `accounts.google.com` until the device is online again.
 
 ## First Signed Build
 
