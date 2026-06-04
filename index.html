@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0290</title>
+  <title>Item Posting Assistant v0.26.06.01.0300</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0290 · Risk-to-editor links</p>
+      <p class="eyebrow">v0.26.06.01.0300 · Risk repair focus</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -1005,7 +1005,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0290';
+    const VERSION='v0.26.06.01.0300';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -3675,7 +3675,12 @@
         if(!storageStatus.mediaBacked&&!storageStatus.missing)reasons.push('storage photo not media-backed');
         if(google?.blockers?.length)reasons.push(...google.blockers);
         const score=(summary.missing*8)+(summary.thumbnailOnly*4)+(summary.localOnly*3)+(storageStatus.missing?2:0)+(!storageStatus.mediaBacked&&!storageStatus.missing?1:0)+((google?.blockers?.length||0)*2);
-        return {itemId:item.id||'',title:item.title||'Untitled item',createdAt:item.createdAt||'',updatedAt:item.updatedAt||'',status:item.status||'Draft',storageLocation:item.storage||'',score,photoCount:summary.photoCount,mediaBacked:summary.mediaBacked,localOnly:summary.localOnly,thumbnailOnly:summary.thumbnailOnly,missing:summary.missing,storagePhotoStatus:storageStatus.label,googleSyncStatus:google?.status||'',googleSyncBlockers:google?.blockers||[],reasons};
+        let repairStage='photos';
+        if(storageStatus.missing||(!storageStatus.mediaBacked&&!storageStatus.missing))repairStage='storage';
+        if(!summary.missing&&!summary.thumbnailOnly&&!summary.localOnly&&google?.blockers?.some(x=>/sheet|drive|folder|upload|link/i.test(x)))repairStage='storage';
+        if(!summary.missing&&!summary.thumbnailOnly&&!summary.localOnly&&!google?.blockers?.length)repairStage=item.listingWorkflowStage||'photos';
+        const repairLabel=ITEM_WORKFLOW_STAGES.find(([key])=>key===repairStage)?.[1]||'Item editor';
+        return {itemId:item.id||'',title:item.title||'Untitled item',createdAt:item.createdAt||'',updatedAt:item.updatedAt||'',status:item.status||'Draft',storageLocation:item.storage||'',score,repairStage,repairLabel,photoCount:summary.photoCount,mediaBacked:summary.mediaBacked,localOnly:summary.localOnly,thumbnailOnly:summary.thumbnailOnly,missing:summary.missing,storagePhotoStatus:storageStatus.label,googleSyncStatus:google?.status||'',googleSyncBlockers:google?.blockers||[],reasons};
       }).filter(r=>r.score>0||r.reasons.length).sort((a,b)=>b.score-a.score||String(b.updatedAt||b.createdAt).localeCompare(String(a.updatedAt||a.createdAt)));
     }
     async function buildStorageArchitectureReport(){
@@ -3746,11 +3751,12 @@
       };
     }
     function architectureStatusLabel(status){return status==='at-risk'?'At Risk':status==='watch'?'Watch':'Healthy'}
-    function openStorageRiskItem(itemId){
+    function openStorageRiskItem(itemId,stage=''){
       if(!itemId)return;
       const item=getItems().find(i=>i.id===itemId);
       if(!item){alert('This item is no longer in local inventory. Refresh the architecture report and try again.');return}
       loadItem(itemId);
+      if(stage)openItemWorkflowStage(stage);
       showScreen('inventory');
       const form=$('itemDetailForm');
       if(form?.scrollIntoView)setTimeout(()=>form.scrollIntoView({behavior:'smooth',block:'start'}),60);
@@ -3761,9 +3767,9 @@
         const r=await buildStorageArchitectureReport();
         const problemList=[...r.issues,...r.warnings].slice(0,6).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
         const recList=r.recommendations.slice(0,5).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
-        const itemRiskList=(r.itemRisks.topItems||[]).slice(0,8).map(item=>`<li><b>${escapeHtml(item.title)}</b> - ${escapeHtml(item.status)}${item.storageLocation?` / ${escapeHtml(item.storageLocation)}`:''}<br><span class="note">${escapeHtml(item.reasons.slice(0,4).join('; ')||'Needs review')}</span><br><button class="secondary" type="button" data-storage-risk-item="${escapeHtml(item.itemId)}">Open Item</button></li>`).join('');
+        const itemRiskList=(r.itemRisks.topItems||[]).slice(0,8).map(item=>`<li><b>${escapeHtml(item.title)}</b> - ${escapeHtml(item.status)}${item.storageLocation?` / ${escapeHtml(item.storageLocation)}`:''}<br><span class="note">${escapeHtml(item.reasons.slice(0,4).join('; ')||'Needs review')}</span><br><button class="secondary" type="button" data-storage-risk-item="${escapeHtml(item.itemId)}" data-storage-risk-stage="${escapeHtml(item.repairStage||'')}">Open ${escapeHtml(item.repairLabel||'Item')}</button></li>`).join('');
         el.innerHTML=`<p><b>Status:</b> ${escapeHtml(architectureStatusLabel(r.status))}<br>Local storage: <b>${fmtBytes(r.localStorage.usageBytes)}</b>${r.localStorage.quotaBytes?` of ${fmtBytes(r.localStorage.quotaBytes)} (${r.localStorage.quotaPercent}%)`:''}<br>Items: <b>${r.browserInventory.items}</b> · Listing photos: <b>${r.photoReadiness.listingPhotos}</b> · Media-backed: <b>${r.photoReadiness.mediaBacked}</b> · Local-only: <b>${r.photoReadiness.localOnly}</b> · Thumbnail-only: <b>${r.photoReadiness.thumbnailOnly}</b><br>Media library: <b>${r.mediaLibrary.recordCount}</b> records · ${fmtBytes(r.mediaLibrary.estimatedBytes)} · Orphans: <b>${r.mediaLibrary.orphanRecords}</b><br>Inventory checkpoint: <b>${r.inventoryCheckpoint.exists?(r.inventoryCheckpoint.matchesCurrentInventory?'current':'needs refresh'):'missing'}</b></p>${problemList?`<p><b>Watch list:</b></p><ul>${problemList}</ul>`:''}${itemRiskList?`<p><b>Top item risks (${r.itemRisks.count} total):</b></p><ul>${itemRiskList}</ul>`:''}${recList?`<p><b>Next safest actions:</b></p><ul>${recList}</ul>`:''}`;
-        el.querySelectorAll('[data-storage-risk-item]').forEach(btn=>btn.onclick=()=>openStorageRiskItem(btn.dataset.storageRiskItem));
+        el.querySelectorAll('[data-storage-risk-item]').forEach(btn=>btn.onclick=()=>openStorageRiskItem(btn.dataset.storageRiskItem,btn.dataset.storageRiskStage));
       }catch(e){el.innerHTML=`<p>Storage architecture report failed: ${escapeHtml(e?.message||e)}</p>`}
     }
     async function exportStorageArchitectureReport(){
