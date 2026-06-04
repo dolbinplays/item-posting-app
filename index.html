@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0300</title>
+  <title>Item Posting Assistant v0.26.06.01.0310</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0300 · Risk repair focus</p>
+      <p class="eyebrow">v0.26.06.01.0310 · Repair context note</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -599,6 +599,7 @@
             <p class="note">Work through one collapsible section at a time. Save Draft &amp; Continue preserves the entire item, records a draft-history checkpoint, and opens the next section.</p>
             <div id="itemWorkflowNav" class="item-workflow-nav"></div>
             <p id="itemWorkflowStatus" class="item-workflow-status"></p>
+            <div id="itemRepairContext" class="note" style="display:none"></div>
             <div id="itemListingQualityStatus" class="save-workflow-status"></div>
             <span data-workflow-start="photos"></span>
             <div id="itemDetailImages" class="photo-manage-grid"></div><p class="photo-manage-note">Photo order is the listing order. Marking a photo as primary moves it to the first position. Labels are used for backup filenames and listing organization.</p>
@@ -1005,7 +1006,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0300';
+    const VERSION='v0.26.06.01.0310';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1653,7 +1654,7 @@
       renderInventory();if(selectedItemId)loadItem(selectedItemId);refreshBackupViews();await renderStorageUsage();await renderInventoryCheckpointStatus();
       alert(`Safe housekeeping complete.\n\nGuided workflow checkpoints removed: ${draftRemoved}\nOld saved capture sessions removed: ${sessionsRemoved}\n\nManual saved draft versions, inventory items, and item photos were kept.`);
     }
-    let selectedItemId=null; const getItems=()=>read(K.items,[]), setItems=v=>{let next=Array.isArray(v)?v:[];pruneInventoryDraftHistoriesForStorage(next);mirrorInventoryCheckpoint(next,'inventory save attempt');if(safeWrite(K.items,next)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
+    let selectedItemId=null, activeRepairContext=null; const getItems=()=>read(K.items,[]), setItems=v=>{let next=Array.isArray(v)?v:[];pruneInventoryDraftHistoriesForStorage(next);mirrorInventoryCheckpoint(next,'inventory save attempt');if(safeWrite(K.items,next)){refreshBackupViews();return true}return false}, getField=idv=>$(idv).value.trim();
     function saveItemObject(item){if(!item?.id)return false;let items=getItems(),index=items.findIndex(i=>i.id===item.id);if(index<0)return false;items[index]=item;let saved=setItems(items);if(saved)scheduleGoogleWorkspacePush('saved item update');return saved}
     const ITEM_WORKFLOW_STAGES=[['photos','1. Photos & Watermark'],['details','2. Item Details & AI'],['pricing','3. Pricing Research'],['storage','4. Storage Location'],['draft','5. Marketplace Draft']];
     let itemWorkflowOpenStage='';
@@ -1683,6 +1684,12 @@
       nav.innerHTML=ITEM_WORKFLOW_STAGES.map(([key,label])=>`<button type="button" class="item-workflow-tab${key===current?' active':''}${completed.includes(key)?' done':''}" data-workflow-open="${key}">${completed.includes(key)?'&#10003; ':''}${escapeHtml(label)}</button>`).join('');
       nav.querySelectorAll('[data-workflow-open]').forEach(button=>button.onclick=()=>openItemWorkflowStage(button.dataset.workflowOpen));
       status.textContent=`Guided listing progress: ${completed.length} of ${ITEM_WORKFLOW_STAGES.length} sections saved.`;
+      const repair=$('itemRepairContext');
+      if(repair){
+        const ctx=activeRepairContext?.itemId===item.id?activeRepairContext:null;
+        repair.style.display=ctx?'block':'none';
+        repair.innerHTML=ctx?`<b>Repair focus:</b> ${escapeHtml(ctx.label||'Review this section')}<br>${escapeHtml(ctx.reasons||'This item was opened from the storage architecture report.')}`:'';
+      }
       document.querySelectorAll('.item-workflow-stage').forEach(el=>el.open=el.dataset.workflowStage===current)
     }
     function saveItemWorkflowStage(key){
@@ -2048,10 +2055,11 @@
         renderInventory();renderWorkstation();refreshBackupViews();
       }
     }
-    function loadItem(idv){
+    function loadItem(idv,opts={}){
       normalizeInventoryItems({silent:true});
       let item=getItems().find(i=>i.id===idv);
       if(!item){alert('This inventory item could not be opened. Run Scan / Repair Inventory, then try again.');return;}
+      activeRepairContext=opts.repairContext||null;
       selectedItemId=idv;
       itemWorkflowOpenStage=item.listingWorkflowStage||'photos';
       item.driveSync=normalizeDriveSync(item);
@@ -3751,11 +3759,12 @@
       };
     }
     function architectureStatusLabel(status){return status==='at-risk'?'At Risk':status==='watch'?'Watch':'Healthy'}
-    function openStorageRiskItem(itemId,stage=''){
+    function openStorageRiskItem(itemId,stage='',reasons=''){
       if(!itemId)return;
       const item=getItems().find(i=>i.id===itemId);
       if(!item){alert('This item is no longer in local inventory. Refresh the architecture report and try again.');return}
-      loadItem(itemId);
+      const label=ITEM_WORKFLOW_STAGES.find(([key])=>key===stage)?.[1]||'Item editor';
+      loadItem(itemId,{repairContext:{itemId,stage,label,reasons}});
       if(stage)openItemWorkflowStage(stage);
       showScreen('inventory');
       const form=$('itemDetailForm');
@@ -3767,9 +3776,9 @@
         const r=await buildStorageArchitectureReport();
         const problemList=[...r.issues,...r.warnings].slice(0,6).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
         const recList=r.recommendations.slice(0,5).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
-        const itemRiskList=(r.itemRisks.topItems||[]).slice(0,8).map(item=>`<li><b>${escapeHtml(item.title)}</b> - ${escapeHtml(item.status)}${item.storageLocation?` / ${escapeHtml(item.storageLocation)}`:''}<br><span class="note">${escapeHtml(item.reasons.slice(0,4).join('; ')||'Needs review')}</span><br><button class="secondary" type="button" data-storage-risk-item="${escapeHtml(item.itemId)}" data-storage-risk-stage="${escapeHtml(item.repairStage||'')}">Open ${escapeHtml(item.repairLabel||'Item')}</button></li>`).join('');
+        const itemRiskList=(r.itemRisks.topItems||[]).slice(0,8).map(item=>`<li><b>${escapeHtml(item.title)}</b> - ${escapeHtml(item.status)}${item.storageLocation?` / ${escapeHtml(item.storageLocation)}`:''}<br><span class="note">${escapeHtml(item.reasons.slice(0,4).join('; ')||'Needs review')}</span><br><button class="secondary" type="button" data-storage-risk-item="${escapeHtml(item.itemId)}" data-storage-risk-stage="${escapeHtml(item.repairStage||'')}" data-storage-risk-reasons="${escapeHtml(item.reasons.slice(0,4).join('; ')||'Needs review')}">Open ${escapeHtml(item.repairLabel||'Item')}</button></li>`).join('');
         el.innerHTML=`<p><b>Status:</b> ${escapeHtml(architectureStatusLabel(r.status))}<br>Local storage: <b>${fmtBytes(r.localStorage.usageBytes)}</b>${r.localStorage.quotaBytes?` of ${fmtBytes(r.localStorage.quotaBytes)} (${r.localStorage.quotaPercent}%)`:''}<br>Items: <b>${r.browserInventory.items}</b> · Listing photos: <b>${r.photoReadiness.listingPhotos}</b> · Media-backed: <b>${r.photoReadiness.mediaBacked}</b> · Local-only: <b>${r.photoReadiness.localOnly}</b> · Thumbnail-only: <b>${r.photoReadiness.thumbnailOnly}</b><br>Media library: <b>${r.mediaLibrary.recordCount}</b> records · ${fmtBytes(r.mediaLibrary.estimatedBytes)} · Orphans: <b>${r.mediaLibrary.orphanRecords}</b><br>Inventory checkpoint: <b>${r.inventoryCheckpoint.exists?(r.inventoryCheckpoint.matchesCurrentInventory?'current':'needs refresh'):'missing'}</b></p>${problemList?`<p><b>Watch list:</b></p><ul>${problemList}</ul>`:''}${itemRiskList?`<p><b>Top item risks (${r.itemRisks.count} total):</b></p><ul>${itemRiskList}</ul>`:''}${recList?`<p><b>Next safest actions:</b></p><ul>${recList}</ul>`:''}`;
-        el.querySelectorAll('[data-storage-risk-item]').forEach(btn=>btn.onclick=()=>openStorageRiskItem(btn.dataset.storageRiskItem,btn.dataset.storageRiskStage));
+        el.querySelectorAll('[data-storage-risk-item]').forEach(btn=>btn.onclick=()=>openStorageRiskItem(btn.dataset.storageRiskItem,btn.dataset.storageRiskStage,btn.dataset.storageRiskReasons));
       }catch(e){el.innerHTML=`<p>Storage architecture report failed: ${escapeHtml(e?.message||e)}</p>`}
     }
     async function exportStorageArchitectureReport(){
