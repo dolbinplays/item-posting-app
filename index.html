@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0330</title>
+  <title>Item Posting Assistant v0.26.06.01.0340</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0330 · Archive blocker drilldown</p>
+      <p class="eyebrow">v0.26.06.01.0340 · Archive dry-run plan</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -936,6 +936,7 @@
             <div class="media-db-actions">
               <button id="refreshStorageArchitectureBtn" class="secondary" type="button">Refresh Architecture Report</button>
               <button id="exportStorageArchitectureBtn" class="secondary" type="button">Export Architecture JSON</button>
+              <button id="exportArchiveDryRunBtn" class="secondary" type="button">Export Archive Dry Run</button>
             </div>
           </div>
           </details>
@@ -1006,7 +1007,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0330';
+    const VERSION='v0.26.06.01.0340';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -3813,6 +3814,38 @@
         download(`item-posting-storage-architecture-${VERSION}.json`,JSON.stringify(report,null,2),'application/json');
       }catch(e){alert('Could not export storage architecture report: '+(e?.message||e))}
     }
+    async function buildArchiveDryRunPlan(){
+      const report=await buildStorageArchitectureReport();
+      const items=getItems();
+      const readyIds=new Set((report.archiveReadiness.topReadyItems||[]).map(i=>i.itemId));
+      const rows=items.map((item,index)=>{
+        const ready=readyIds.has(item.id), sync=normalizeDriveSync(item), plan=itemDrivePlan(item,index), photoCount=(item.photos||[]).length;
+        const notReady=(report.archiveReadiness.topNotReadyItems||[]).find(r=>r.itemId===item.id);
+        return {
+          itemId:item.id||'',
+          title:item.title||'Untitled item',
+          status:item.status||'Draft',
+          storageLocation:item.storage||'',
+          archiveReady:ready,
+          action:ready?'future_compact_local_media_after_user_confirmation':'hold',
+          wouldKeep:['Item identity, title, pricing, listing text, notes, storage location, Drive folder link, Drive photo links, Sheet sync metadata, small display thumbnails'],
+          wouldRemoveOrShrink:ready?['Heavy embedded listing-photo data URLs from regular app records','Heavy embedded storage-photo data URLs from regular app records','Older automatic guided workflow checkpoints beyond the safe retention window']:[],
+          blockers:ready?[]:(notReady?.missing||['Archive coverage incomplete']),
+          driveFolderLink:sync.driveFolderLink||'',
+          listingPhotoLinks:Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks.filter(Boolean):[],
+          storagePhotoLink:sync.storagePhotoLink||'',
+          expectedListingPhotos:photoCount,
+          suggestedDriveFolder:plan.drivePath
+        };
+      });
+      return {version:VERSION,generatedAt:new Date().toISOString(),mode:'dry-run-no-data-changes',warning:'This report does not delete, compact, archive, or modify any local item data. It is a review plan for a future user-confirmed storage slimming feature.',summary:{itemsScanned:rows.length,archiveReadyItems:rows.filter(r=>r.archiveReady).length,heldItems:rows.filter(r=>!r.archiveReady).length},storageArchitecture:report,items:rows};
+    }
+    async function exportArchiveDryRunPlan(){
+      try{
+        const plan=await buildArchiveDryRunPlan();
+        download(`item-posting-archive-dry-run-${VERSION}.json`,JSON.stringify(plan,null,2),'application/json');
+      }catch(e){alert('Could not export archive dry run: '+(e?.message||e))}
+    }
     function buildGoogleSyncActionQueue(items=getItems()){
       const settings=getGoogleSyncSettings(), queue={version:VERSION,schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,generatedAt:new Date().toISOString(),mode:'planned-actions-no-google-api-calls',targetSheetName:settings.sheetName,targetDriveRootFolder:settings.driveRootFolder,summary:{itemsScanned:items.length,readyItems:0,heldItems:0,totalActions:0,driveFolderCreates:0,mediaUploads:0,sheetRowUpserts:0,sheetLinkUpdates:0},items:[]};
       items.forEach((item,index)=>{
@@ -4056,6 +4089,7 @@
     on('refreshStorageStatsBtn','onclick',()=>{renderStorageUsage();renderMediaDbStats();refreshBackupViews();});
     on('refreshStorageArchitectureBtn','onclick',renderStorageArchitectureStatus);
     on('exportStorageArchitectureBtn','onclick',exportStorageArchitectureReport);
+    on('exportArchiveDryRunBtn','onclick',exportArchiveDryRunPlan);
     on('storageRecoveryClearSessionsBtn','onclick',clearSavedSessionsFromRecovery);
     on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
     on('storageRecoveryClearShotsBtn','onclick',clearTemporaryCapturesFromRecovery);
