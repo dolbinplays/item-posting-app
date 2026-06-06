@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0360</title>
+  <title>Item Posting Assistant v0.26.06.01.0370</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0360 · Archive safety checklist</p>
+      <p class="eyebrow">v0.26.06.01.0370 · Guarded archive compaction</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -940,11 +940,13 @@
             </div>
             <div id="archiveDryRunSummary" class="note">Archive dry-run summary has not been checked yet.</div>
             <div id="archiveSafetyChecklist" class="note">
-              <p><b>Future archive safety checklist</b></p>
-              <label class="check-item"><input type="checkbox" disabled><span class="box">&#10003;</span><span><strong>Media-aware backup reviewed</strong><br><span class="note">Confirm a recent rebuildable backup or Drive backup exists before local media is compacted.</span></span></label>
-              <label class="check-item"><input type="checkbox" disabled><span class="box">&#10003;</span><span><strong>Archive dry run reviewed</strong><br><span class="note">Confirm which items would be compacted and which items would be held.</span></span></label>
-              <label class="check-item"><input type="checkbox" disabled><span class="box">&#10003;</span><span><strong>User confirmation required</strong><br><span class="note">Future archive actions must be explicit and reversible through Drive/HTML backups.</span></span></label>
-              <button class="danger" type="button" disabled>Archive Local Media - Not Enabled Yet</button>
+              <p><b>Guarded archive compaction</b></p>
+              <p>This trims heavy embedded local photo data only for archive-ready items. It keeps item records, thumbnails, Drive links, Sheet sync metadata, and media-library references.</p>
+              <label class="check-item"><input id="archiveConfirmBackup" type="checkbox"><span class="box">&#10003;</span><span><strong>Media-aware backup reviewed</strong><br><span class="note">Confirm a recent rebuildable HTML backup or Google Drive backup exists before local media is compacted.</span></span></label>
+              <label class="check-item"><input id="archiveConfirmDryRun" type="checkbox"><span class="box">&#10003;</span><span><strong>Archive dry run reviewed</strong><br><span class="note">Confirm which items will be compacted and which items will be held.</span></span></label>
+              <label class="check-item"><input id="archiveConfirmUser" type="checkbox"><span class="box">&#10003;</span><span><strong>I understand this changes local records</strong><br><span class="note">Drive/Sheet backups and thumbnails remain, but heavy embedded browser copies are removed or shrunk for ready items.</span></span></label>
+              <button id="runArchiveCompactionBtn" class="danger" type="button" disabled>Archive Local Media for Ready Items</button>
+              <div id="archiveCompactionStatus" class="note">Check all three safeguards to enable archive compaction.</div>
             </div>
           </div>
           </details>
@@ -1015,7 +1017,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0360';
+    const VERSION='v0.26.06.01.0370';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -3825,28 +3827,36 @@
     async function buildArchiveDryRunPlan(){
       const report=await buildStorageArchitectureReport();
       const items=getItems();
-      const readyIds=new Set((report.archiveReadiness.topReadyItems||[]).map(i=>i.itemId));
+      const googleGate=buildGoogleSyncReadinessGate(items);
+      const fullReadiness=storageArchiveReadiness(items,googleGate.items);
+      const readyIds=new Set(fullReadiness.items.filter(i=>i.archiveReady).map(i=>i.itemId));
       const rows=items.map((item,index)=>{
         const ready=readyIds.has(item.id), sync=normalizeDriveSync(item), plan=itemDrivePlan(item,index), photoCount=(item.photos||[]).length;
-        const notReady=(report.archiveReadiness.topNotReadyItems||[]).find(r=>r.itemId===item.id);
+        const notReady=fullReadiness.items.find(r=>r.itemId===item.id&&!r.archiveReady);
+        const photos=[...(item.photos||[]),getEffectiveStoragePhoto(item)].filter(Boolean);
+        const embeddedBytes=photos.reduce((sum,p)=>sum+bytesOfString(p?.dataUrl||'')+bytesOfString(p?.watermarkedDataUrl||'')+bytesOfString(p?.originalDataUrl||''),0);
+        const embeddedPhotoRecords=photos.filter(p=>p?.dataUrl||p?.watermarkedDataUrl||p?.originalDataUrl).length;
         return {
           itemId:item.id||'',
           title:item.title||'Untitled item',
           status:item.status||'Draft',
           storageLocation:item.storage||'',
           archiveReady:ready,
-          action:ready?'future_compact_local_media_after_user_confirmation':'hold',
+          action:ready?'compact_local_media_after_user_confirmation':'hold',
           wouldKeep:['Item identity, title, pricing, listing text, notes, storage location, Drive folder link, Drive photo links, Sheet sync metadata, small display thumbnails'],
-          wouldRemoveOrShrink:ready?['Heavy embedded listing-photo data URLs from regular app records','Heavy embedded storage-photo data URLs from regular app records','Older automatic guided workflow checkpoints beyond the safe retention window']:[],
+          wouldRemoveOrShrink:ready?['Heavy embedded listing-photo data URLs from regular app records','Heavy embedded storage-photo data URLs from regular app records','Heavy embedded watermarked/original backup data URLs when thumbnail or Drive recovery exists']:[],
           blockers:ready?[]:(notReady?.missing||['Archive coverage incomplete']),
           driveFolderLink:sync.driveFolderLink||'',
           listingPhotoLinks:Array.isArray(sync.listingPhotoLinks)?sync.listingPhotoLinks.filter(Boolean):[],
           storagePhotoLink:sync.storagePhotoLink||'',
           expectedListingPhotos:photoCount,
+          embeddedPhotoRecords,
+          estimatedEmbeddedBytesToReview:embeddedBytes,
           suggestedDriveFolder:plan.drivePath
         };
       });
-      return {version:VERSION,generatedAt:new Date().toISOString(),mode:'dry-run-no-data-changes',warning:'This report does not delete, compact, archive, or modify any local item data. It is a review plan for a future user-confirmed storage slimming feature.',summary:{itemsScanned:rows.length,archiveReadyItems:rows.filter(r=>r.archiveReady).length,heldItems:rows.filter(r=>!r.archiveReady).length},storageArchitecture:report,items:rows};
+      const readyRows=rows.filter(r=>r.archiveReady);
+      return {version:VERSION,generatedAt:new Date().toISOString(),mode:'dry-run-no-data-changes',warning:'This report does not delete, compact, archive, or modify any local item data. It previews the user-confirmed storage slimming action.',summary:{itemsScanned:rows.length,archiveReadyItems:readyRows.length,heldItems:rows.filter(r=>!r.archiveReady).length,eligiblePhotoRecords:readyRows.reduce((sum,r)=>sum+r.embeddedPhotoRecords,0),estimatedEmbeddedBytesToReview:readyRows.reduce((sum,r)=>sum+r.estimatedEmbeddedBytesToReview,0)},storageArchitecture:report,fullArchiveReadiness:fullReadiness.summary,items:rows};
     }
     async function exportArchiveDryRunPlan(){
       try{
@@ -3860,8 +3870,102 @@
         const plan=await buildArchiveDryRunPlan();
         const ready=plan.items.filter(i=>i.archiveReady).slice(0,5).map(i=>escapeHtml(i.title)).join(', ');
         const held=plan.items.filter(i=>!i.archiveReady).slice(0,5).map(i=>`<li><b>${escapeHtml(i.title)}</b>: ${escapeHtml((i.blockers||[]).slice(0,3).join('; ')||'Archive coverage incomplete')}</li>`).join('');
-        el.innerHTML=`<p><b>Archive dry run:</b> ${plan.summary.archiveReadyItems} ready · ${plan.summary.heldItems} held · ${plan.summary.itemsScanned} total.<br><span class="note">No local data changes happen from this summary or export.</span>${ready?`<br>First ready: ${ready}`:''}</p>${held?`<p><b>Held examples:</b></p><ul>${held}</ul>`:''}`;
+        el.innerHTML=`<p><b>Archive dry run:</b> ${plan.summary.archiveReadyItems} ready · ${plan.summary.heldItems} held · ${plan.summary.itemsScanned} total.<br>Eligible embedded photo records: <b>${plan.summary.eligiblePhotoRecords||0}</b> · Review bytes: <b>${fmtBytes(plan.summary.estimatedEmbeddedBytesToReview||0)}</b><br><span class="note">No local data changes happen from this summary or export.</span>${ready?`<br>First ready: ${ready}`:''}</p>${held?`<p><b>Held examples:</b></p><ul>${held}</ul>`:''}`;
       }catch(e){el.innerHTML=`<p>Archive dry-run summary failed: ${escapeHtml(e?.message||e)}</p>`}
+    }
+    function archiveChecklistReady(){
+      return !!($('archiveConfirmBackup')?.checked&&$('archiveConfirmDryRun')?.checked&&$('archiveConfirmUser')?.checked)
+    }
+    async function renderArchiveSafetyChecklist(){
+      const btn=$('runArchiveCompactionBtn'),status=$('archiveCompactionStatus');
+      if(!btn&&!status)return;
+      const checked=archiveChecklistReady();
+      let plan=null;
+      try{plan=await buildArchiveDryRunPlan()}catch(e){}
+      const ready=plan?.summary?.archiveReadyItems||0,held=plan?.summary?.heldItems||0,records=plan?.summary?.eligiblePhotoRecords||0,bytes=plan?.summary?.estimatedEmbeddedBytesToReview||0;
+      if(btn)btn.disabled=!checked||!ready||!records;
+      if(status){
+        if(!plan)status.textContent='Archive compaction status could not be calculated. Refresh the architecture report and try again.';
+        else if(!checked)status.innerHTML=`Check all three safeguards to enable compaction. Dry run currently shows <b>${ready}</b> ready item${ready===1?'':'s'}, <b>${held}</b> held, and <b>${records}</b> embedded photo record${records===1?'':'s'} to review.`;
+        else if(!ready)status.textContent='No archive-ready items are available yet. Complete Drive/Sheet backup steps first.';
+        else if(!records)status.textContent='Archive-ready items do not currently have heavy embedded local media fields to compact.';
+        else status.innerHTML=`Ready to compact <b>${records}</b> embedded photo record${records===1?'':'s'} across <b>${ready}</b> archive-ready item${ready===1?'':'s'} after final confirmation. Estimated review bytes: <b>${fmtBytes(bytes)}</b>.`;
+      }
+    }
+    async function archivePhotoRecord(photo,meta={}){
+      if(!photo||typeof photo!=='object')return {changed:false,bytesBefore:0,bytesAfter:0};
+      const bytesBefore=bytesOfString(photo.dataUrl||'')+bytesOfString(photo.watermarkedDataUrl||'')+bytesOfString(photo.originalDataUrl||'');
+      let changed=false;
+      if(photo.dataUrl){
+        if(!photo.originalBytesApprox)photo.originalBytesApprox=bytesOfString(photo.dataUrl);
+        const thumb=await makeThumbnailDataUrl(photo.dataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
+        photo.dataUrl=thumb;
+        delete photo.thumbnailDataUrl;
+        photo.optimized=true;
+        photo.optimizedToThumbnail=true;
+        photo.optimizedAt=new Date().toISOString();
+        changed=true;
+      }else if(photo.thumbnailDataUrl){
+        photo.dataUrl=photo.thumbnailDataUrl;
+        delete photo.thumbnailDataUrl;
+        photo.optimizedToThumbnail=true;
+        changed=true;
+      }
+      if(photo.watermarkedDataUrl){
+        photo.watermarkedPreviewDataUrl=await makeThumbnailDataUrl(photo.watermarkedDataUrl,LOCAL_PREVIEW_MAX_W,LOCAL_PREVIEW_MAX_H,LOCAL_PREVIEW_QUALITY);
+        delete photo.watermarkedDataUrl;
+        changed=true;
+      }
+      if(photo.originalDataUrl){delete photo.originalDataUrl;changed=true}
+      if(changed){
+        photo.localMediaArchived=true;
+        photo.archivedLocalMediaAt=new Date().toISOString();
+        photo.archiveSource=meta.source||'google-drive-archive-ready-v1';
+      }
+      const bytesAfter=bytesOfString(photo.dataUrl||'')+bytesOfString(photo.watermarkedPreviewDataUrl||'');
+      return {changed,bytesBefore,bytesAfter};
+    }
+    async function runArchiveLocalMediaCompaction(){
+      if(!archiveChecklistReady()){alert('Check all three archive safeguards first.');return}
+      const plan=await buildArchiveDryRunPlan();
+      const readyRows=plan.items.filter(i=>i.archiveReady);
+      const readyIds=new Set(readyRows.map(i=>i.itemId));
+      const records=plan.summary.eligiblePhotoRecords||0;
+      if(!readyRows.length){alert('No archive-ready items are available yet. Complete the Drive/Sheet backup steps first.');return}
+      if(!records){alert('Archive-ready items do not have heavy embedded local media fields to compact.');return}
+      if(!confirm(`Archive local media for ${readyRows.length} ready item${readyRows.length===1?'':'s'}?\n\nThis keeps item records, small thumbnails, Drive links, Sheet metadata, and media-library references. It removes or shrinks heavy embedded browser photo fields only for archive-ready items.\n\nHeld items will not be changed.`))return;
+      const btn=$('runArchiveCompactionBtn');if(btn)btn.disabled=true;
+      if($('archiveCompactionStatus'))$('archiveCompactionStatus').textContent='Compacting archive-ready local media. Keep the app open until this finishes...';
+      try{
+        const items=getItems();let itemsChanged=0,photoRecordsChanged=0,bytesBefore=0,bytesAfter=0;
+        const archivedAt=new Date().toISOString();
+        for(const item of items){
+          if(!readyIds.has(item.id))continue;
+          let itemChanged=false,itemPhotoRecordsChanged=0;
+          for(let i=0;i<(item.photos||[]).length;i++){
+            const result=await archivePhotoRecord(item.photos[i],{source:'archive-ready-listing-photo'});
+            bytesBefore+=result.bytesBefore;bytesAfter+=result.bytesAfter;
+            if(result.changed){photoRecordsChanged++;itemPhotoRecordsChanged++;itemChanged=true}
+          }
+          const storageResult=await archivePhotoRecord(item.storagePhoto,{source:'archive-ready-storage-photo'});
+          bytesBefore+=storageResult.bytesBefore;bytesAfter+=storageResult.bytesAfter;
+          if(storageResult.changed){photoRecordsChanged++;itemPhotoRecordsChanged++;itemChanged=true}
+          if(itemChanged){
+            item.localMediaArchive={version:'local-media-archive-v1',archivedAt,photoRecordsChanged:itemPhotoRecordsChanged};
+            item.updatedAt=archivedAt;
+            itemsChanged++;
+          }
+        }
+        if(!setItems(items))return;
+        if(selectedItemId)loadItem(selectedItemId);
+        renderInventory();refreshBackupViews();await renderStorageUsage();await renderMediaDbStats();await renderArchiveSafetyChecklist();
+        const saved=Math.max(0,bytesBefore-bytesAfter);
+        const msg=`Archive compaction complete. ${itemsChanged} item${itemsChanged===1?'':'s'} updated, ${photoRecordsChanged} photo record${photoRecordsChanged===1?'':'s'} compacted, about ${fmtBytes(saved)} trimmed from embedded browser records.`;
+        if($('archiveCompactionStatus'))$('archiveCompactionStatus').textContent=msg;
+        alert(msg);
+      }catch(e){
+        console.error(e);alert('Archive compaction failed: '+(e?.message||e));
+      }finally{await renderArchiveSafetyChecklist()}
     }
     function buildGoogleSyncActionQueue(items=getItems()){
       const settings=getGoogleSyncSettings(), queue={version:VERSION,schemaVersion:GOOGLE_SYNC_SCHEMA_VERSION,generatedAt:new Date().toISOString(),mode:'planned-actions-no-google-api-calls',targetSheetName:settings.sheetName,targetDriveRootFolder:settings.driveRootFolder,summary:{itemsScanned:items.length,readyItems:0,heldItems:0,totalActions:0,driveFolderCreates:0,mediaUploads:0,sheetRowUpserts:0,sheetLinkUpdates:0},items:[]};
@@ -4104,9 +4208,13 @@
     on('compressInventoryBtn','onclick',compressExistingInventoryPhotos);
     on('runStorageHousekeepingBtn','onclick',runSafeStorageHousekeeping);
     on('refreshStorageStatsBtn','onclick',()=>{renderStorageUsage();renderMediaDbStats();refreshBackupViews();});
-    on('refreshStorageArchitectureBtn','onclick',()=>{renderStorageArchitectureStatus();renderArchiveDryRunSummary();});
+    on('refreshStorageArchitectureBtn','onclick',()=>{renderStorageArchitectureStatus();renderArchiveDryRunSummary();renderArchiveSafetyChecklist();});
     on('exportStorageArchitectureBtn','onclick',exportStorageArchitectureReport);
     on('exportArchiveDryRunBtn','onclick',()=>{renderArchiveDryRunSummary();exportArchiveDryRunPlan();});
+    on('archiveConfirmBackup','onchange',renderArchiveSafetyChecklist);
+    on('archiveConfirmDryRun','onchange',renderArchiveSafetyChecklist);
+    on('archiveConfirmUser','onchange',renderArchiveSafetyChecklist);
+    on('runArchiveCompactionBtn','onclick',runArchiveLocalMediaCompaction);
     on('storageRecoveryClearSessionsBtn','onclick',clearSavedSessionsFromRecovery);
     on('storageRecoveryClearDraftHistoryBtn','onclick',clearSelectedDraftHistoryFromRecovery);
     on('storageRecoveryClearShotsBtn','onclick',clearTemporaryCapturesFromRecovery);
@@ -4286,7 +4394,7 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Storage uploads are written into <b>Storage Location Photo Link</b>.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus();if($('backup')?.classList.contains('active')){renderStorageArchitectureStatus();renderArchiveDryRunSummary()}}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus();if($('backup')?.classList.contains('active')){renderStorageArchitectureStatus();renderArchiveDryRunSummary();renderArchiveSafetyChecklist()}}catch(e){}}
 
     // Init
     updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); renderDeviceRole(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderListingPreferences(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)&&document.querySelector(`.tab[data-screen="${last}"]`)?.style.display!=='none') showScreen(last);trySilentGoogleReconnect();
