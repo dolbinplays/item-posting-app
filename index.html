@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0400</title>
+  <title>Item Posting Assistant v0.26.06.01.0410</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0400 · Bulk storage moves</p>
+      <p class="eyebrow">v0.26.06.01.0410 · Printable storage labels</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -983,6 +983,7 @@
           <h3 style="margin-top:16px">Storage Location Manager</h3>
           <p class="note">Review bins, shelves, totes, and rooms from one place. Use Focus Inventory to jump to every item in a location.</p>
           <div id="storageLocationManager" class="note">Storage locations have not been scanned yet.</div>
+          <div class="actions"><button id="exportStorageLabelsBtn" class="secondary" type="button">Export Printable Storage Labels</button></div>
           </details>
           <details class="backup-list">
           <summary>Sheets and Drive preview</summary>
@@ -1030,7 +1031,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0400';
+    const VERSION='v0.26.06.01.0410';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1976,6 +1977,15 @@
       const statuses=Object.entries(row.statusCounts).filter(([,n])=>n).map(([status,n])=>`${n} ${status}`).join(' · ')||'No items yet';
       return `${row.itemCount} item${row.itemCount===1?'':'s'} · ${statuses}`;
     }
+    function storageLocationCode(label){
+      const text=String(label||'storage').trim().toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'STORAGE';
+      let hash=2166136261;
+      for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619)}
+      return `IPA-${(hash>>>0).toString(36).toUpperCase().slice(0,5).padStart(5,'0')}`;
+    }
+    function storageLabelRows(){
+      return storageLocationRows().filter(row=>row.key!=='__unassigned__'&&String(row.label||'').trim()).map(row=>({...row,code:storageLocationCode(row.label)}));
+    }
     function focusInventoryStorageLocation(locationValue,label=''){
       const filter=$('inventoryStorageFilter'),key=String(locationValue||''),display=label||key;
       if(filter){
@@ -2025,11 +2035,19 @@
       if(!rows.length){el.innerHTML='<div class="empty-state">No storage locations yet. Add storage text to an item to build this list.</div>';return}
       el.innerHTML=`<div class="drive-plan-summary">${rows.map(row=>{
         const isPreset=getStoragePresets().includes(row.label),photo=row.sharedPhoto||row.items.map(getEffectiveStoragePhoto).find(hasPhotoRef),photoHtml=photoDisplayDataUrl(photo)?`<img class="workstation-thumb" src="${photoDisplayDataUrl(photo)}" alt="">`:'<span class="workstation-thumb"></span>';
-        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${row.itemCount?`<button class="secondary" type="button" data-move-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-move-storage-label="${escapeAttr(row.label)}">Move Items</button>`:''}${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
+        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}${row.key!=='__unassigned__'?`<br>Label code: ${escapeHtml(storageLocationCode(row.label))}`:''}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${row.itemCount?`<button class="secondary" type="button" data-move-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-move-storage-label="${escapeAttr(row.label)}">Move Items</button>`:''}${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
       }).join('')}</div>`;
       el.querySelectorAll('[data-focus-storage-location]').forEach(btn=>btn.onclick=()=>focusInventoryStorageLocation(btn.dataset.focusStorageLocation,btn.dataset.focusStorageLabel));
       el.querySelectorAll('[data-move-storage-location]').forEach(btn=>btn.onclick=()=>moveStorageLocationItems(btn.dataset.moveStorageLocation,btn.dataset.moveStorageLabel));
       el.querySelectorAll('[data-save-storage-preset]').forEach(btn=>btn.onclick=()=>saveStorageLocationPresetFromManager(btn.dataset.saveStoragePreset));
+    }
+    function exportStorageLabels(){
+      const rows=storageLabelRows();
+      if(!rows.length){alert('No named storage locations are available for printable labels yet.');return}
+      const exportedAt=new Date().toISOString();
+      const labels=rows.map(row=>`<section class="label"><div class="brand">Item Posting Assistant</div><div class="code">${escapeHtml(row.code)}</div><h2>${escapeHtml(row.label)}</h2><p>${escapeHtml(storageLocationSummaryText(row))}</p><p class="small">Write this code on the bin/tote. Future scan lookup can use the same code to open this storage location.</p></section>`).join('');
+      const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Storage Labels ${VERSION}</title><style>body{font-family:Arial,system-ui,sans-serif;margin:24px;color:#0f172a}.sheet{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.label{border:2px solid #0f172a;border-radius:14px;padding:18px;min-height:190px;break-inside:avoid;display:flex;flex-direction:column;justify-content:center}.brand{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#475569}.code{font-size:42px;font-weight:900;letter-spacing:.08em;margin:10px 0}.label h2{font-size:28px;margin:0 0 8px}.label p{margin:4px 0}.small{font-size:12px;color:#475569}@media print{body{margin:10mm}.sheet{grid-template-columns:repeat(2,1fr)}.label{page-break-inside:avoid}}</style></head><body><h1>Storage Labels</h1><p>Version: ${escapeHtml(VERSION)} · Exported: ${escapeHtml(exportedAt)} · Labels: ${rows.length}</p><div class="sheet">${labels}</div></body></html>`;
+      download(`item-posting-storage-labels-${VERSION}.html`,html,'text/html');
     }
     function getEffectiveStoragePhoto(item){
       if(!item)return null;
@@ -4353,6 +4371,7 @@
     on('copyGoogleDeviceSetupBtn','onclick',copyGoogleDeviceSetupCode);
     on('applyGoogleDeviceSetupBtn','onclick',applyGoogleDeviceSetupCode);
     on('clearGoogleApiSetupBtn','onclick',clearGoogleApiSetup);
+    on('exportStorageLabelsBtn','onclick',exportStorageLabels);
     on('loadGoogleIdentityBtn','onclick',()=>loadGoogleIdentity().catch(e=>alert(e.message||e)));
     on('requestGoogleAccessBtn','onclick',()=>requestGoogleAccess());
     on('dashboardGoogleAccessBtn','onclick',()=>requestGoogleAccess());

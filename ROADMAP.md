@@ -21,6 +21,7 @@
 - IndexedDB item-record store mirrors each inventory item as its own browser database record, reports parity against the current local inventory, restores from those records, and includes the store in the storage architecture readiness report. This is the next measurable bridge toward a native/Capacitor database. Implemented.
 - Storage-location manager summarizes bins, shelves, totes, and unassigned items with item counts, status mix, storage-photo coverage, review counts, quick preset saving, and Focus Inventory actions. Implemented.
 - Bulk storage-location moves let the user move every item from one location to another after preview/confirmation, save the new destination as a preset, queue workspace sync, and preserve each item's prior location in move history. Implemented.
+- Printable storage labels assign stable short label codes to named storage locations and export a printer-friendly HTML label sheet as the foundation for future QR/barcode scanning. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
@@ -78,6 +79,7 @@
 - Storage-location management screen. Foundation implemented in Backup/Restore review tools with location summaries and quick inventory focus.
 - Bulk move items between storage locations from the storage-location manager. Implemented.
 - QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
+- Printable storage label foundation with stable per-location codes. Implemented. Future scan lookup can attach QR/barcode capture to these codes.
 - Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup. Implemented.
 - User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter. Implemented.
 - Reusable seller/store display-name preference for watermarking. Allow the user to save, edit, and clear the name, prefill it when applying watermarks, and include it in safe second-device setup handoff. Store display text only, never marketplace credentials or account tokens. Implemented.
