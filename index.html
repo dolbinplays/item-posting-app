@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0380</title>
+  <title>Item Posting Assistant v0.26.06.01.0390</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0380 · IndexedDB item records</p>
+      <p class="eyebrow">v0.26.06.01.0390 · Storage location manager</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -979,6 +979,12 @@
           <div id="storagePresetList" class="preset-list"></div>
           </details>
           <details class="backup-list">
+          <summary>Storage location manager</summary>
+          <h3 style="margin-top:16px">Storage Location Manager</h3>
+          <p class="note">Review bins, shelves, totes, and rooms from one place. Use Focus Inventory to jump to every item in a location.</p>
+          <div id="storageLocationManager" class="note">Storage locations have not been scanned yet.</div>
+          </details>
+          <details class="backup-list">
           <summary>Sheets and Drive preview</summary>
           <h3 style="margin-top:16px">Sheets/Drive Preview</h3>
           <p class="note">This preview shows what to upload, where to put it in Drive, and which records are ready, thumbnail-only, local-only, or missing before you export.</p>
@@ -1024,7 +1030,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0380';
+    const VERSION='v0.26.06.01.0390';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1921,7 +1927,7 @@
       alert(`Deleted ${doomed.length} incomplete draft item${doomed.length===1?'':'s'}.`);
     }
 
-    const getStoragePresets=()=>read(K.storagePresets,[]), setStoragePresets=v=>{if(safeWrite(K.storagePresets,[...new Set((v||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)))){renderStoragePresets();renderInventory();refreshBackupViews();return true}return false};
+    const getStoragePresets=()=>read(K.storagePresets,[]), setStoragePresets=v=>{if(safeWrite(K.storagePresets,[...new Set((v||[]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)))){renderStoragePresets();renderStorageLocationManager();renderInventory();refreshBackupViews();return true}return false};
     const normalizeStorageLocation=v=>String(v||'').trim().toLowerCase();
     const hasPhotoRef=p=>!!(p?.dataUrl||p?.thumbnailDataUrl||p?.mediaId||p?.fullPhotoMediaId);
     const getStorageLocationPhotos=()=>read(K.storageLocationPhotos,{});
@@ -1946,6 +1952,60 @@
       const map=getStorageLocationPhotos();
       map[key]={...photo,sharedLocation:location,savedAt:new Date().toISOString(),source:(photo.source||'storage photo')+' · shared for this storage location'};
       setStorageLocationPhotos(map);
+    }
+    function storageLocationRows(){
+      const items=getItems(),shared=getStorageLocationPhotos(),byKey=new Map();
+      const ensure=(label,keyOverride='')=>{
+        const raw=String(label||'').trim(),key=keyOverride||normalizeStorageLocation(raw)||'__unassigned__';
+        if(!byKey.has(key))byKey.set(key,{key,label:raw||'No storage location',itemCount:0,statusCounts:{},needsReview:0,photoRefs:0,sharedPhoto:hasPhotoRef(shared[key])?shared[key]:null,items:[]});
+        return byKey.get(key);
+      };
+      items.forEach((item,index)=>{
+        const row=ensure(item.storage);
+        row.itemCount++;
+        row.items.push(item);
+        row.statusCounts[item.status||'Draft']=(row.statusCounts[item.status||'Draft']||0)+1;
+        if(combinedItemReview(item,index).needsReview)row.needsReview++;
+        if(hasPhotoRef(getEffectiveStoragePhoto(item)))row.photoRefs++;
+      });
+      Object.entries(shared).forEach(([key,photo])=>{if(hasPhotoRef(photo)){const row=ensure(photo.sharedLocation||photo.storageLocation||key,key);row.sharedPhoto=row.sharedPhoto||photo}});
+      getStoragePresets().forEach(label=>ensure(label));
+      return [...byKey.values()].sort((a,b)=>String(a.label).localeCompare(String(b.label)));
+    }
+    function storageLocationSummaryText(row){
+      const statuses=Object.entries(row.statusCounts).filter(([,n])=>n).map(([status,n])=>`${n} ${status}`).join(' · ')||'No items yet';
+      return `${row.itemCount} item${row.itemCount===1?'':'s'} · ${statuses}`;
+    }
+    function focusInventoryStorageLocation(locationValue,label=''){
+      const filter=$('inventoryStorageFilter'),key=String(locationValue||''),display=label||key;
+      if(filter){
+        if(![...filter.options].some(option=>option.value===key))filter.appendChild(new Option(display||key,key));
+        filter.value=key;
+      }
+      if($('inventorySearch'))$('inventorySearch').value='';
+      if($('inventoryStatusFilter'))$('inventoryStatusFilter').value='all';
+      showScreen('inventory');
+      renderInventory();
+      setTimeout(()=>$('inventoryPicker')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
+    }
+    function saveStorageLocationPresetFromManager(location){
+      const value=String(location||'').trim();
+      if(!value){alert('No storage location text is available for this row.');return}
+      if(value==='No storage location'){alert('Add storage text to an item before saving it as a preset.');return}
+      const presets=getStoragePresets();
+      if(presets.includes(value)){alert('That storage location is already saved as a preset.');return}
+      if(setStoragePresets([...presets,value])){renderStorageLocationManager();alert(`Saved "${value}" as a storage preset.`)}
+    }
+    function renderStorageLocationManager(){
+      const el=$('storageLocationManager');if(!el)return;
+      const rows=storageLocationRows();
+      if(!rows.length){el.innerHTML='<div class="empty-state">No storage locations yet. Add storage text to an item to build this list.</div>';return}
+      el.innerHTML=`<div class="drive-plan-summary">${rows.map(row=>{
+        const isPreset=getStoragePresets().includes(row.label),photo=row.sharedPhoto||row.items.map(getEffectiveStoragePhoto).find(hasPhotoRef),photoHtml=photoDisplayDataUrl(photo)?`<img class="workstation-thumb" src="${photoDisplayDataUrl(photo)}" alt="">`:'<span class="workstation-thumb"></span>';
+        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
+      }).join('')}</div>`;
+      el.querySelectorAll('[data-focus-storage-location]').forEach(btn=>btn.onclick=()=>focusInventoryStorageLocation(btn.dataset.focusStorageLocation,btn.dataset.focusStorageLabel));
+      el.querySelectorAll('[data-save-storage-preset]').forEach(btn=>btn.onclick=()=>saveStorageLocationPresetFromManager(btn.dataset.saveStoragePreset));
     }
     function getEffectiveStoragePhoto(item){
       if(!item)return null;
@@ -2065,7 +2125,7 @@
         let itemStatus=item.status||'Draft';
         let statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):status==='needs-review'?combinedItemReview(item,items.findIndex(i=>i.id===item.id)).needsReview:itemStatus===status);
         let searchMatch=!q||itemSearchBlob(item).includes(q);
-        let storageMatch=storageFilter==='all'||String(item.storage||'')===storageFilter;
+        let storageMatch=storageFilter==='all'||(storageFilter==='__unassigned__'?isBlankValue(item.storage):String(item.storage||'')===storageFilter);
         return statusMatch&&searchMatch&&storageMatch;
       });
       filtered.sort((a,b)=>{
@@ -2088,7 +2148,7 @@
       let status=($('inventoryStatusFilter')?.value||'all');
       let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let q=($('inventorySearch')?.value||'').trim();
-      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':status==='needs-review'?' · Needs Review view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter}`:'');
+      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':status==='needs-review'?' · Needs Review view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter==='__unassigned__'?'No storage location':storageFilter}`:'');
       if(!filtered.length){if(summary)summary.textContent='No matching inventory items';list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';renderWorkstation();return}
       const selected=items.find(i=>i.id===selectedItemId);
       if(summary)summary.textContent=selected?`${selected.title||'Untitled'} · ${new Date(selected.createdAt||Date.now()).toLocaleString()}`:'Choose an inventory item';
@@ -4494,7 +4554,7 @@
       el.innerHTML=`<div class="drive-checklist"><div class="drive-check-card"><strong>${escapeHtml(item.title||'Untitled item')}</strong><span class="note">${escapeHtml(plan.action)}<br>Media: ${plan.summary.mediaBacked} - Thumbnail-only: ${plan.summary.thumbnailOnly} - Local-only: ${plan.summary.localOnly} - Missing: ${plan.summary.missing}<br>${escapeHtml(syncStatus.label)} (${syncStatus.done}/${syncStatus.total})</span><div class="drive-sync-steps">${syncSteps}</div></div><div class="drive-check-card"><strong>1. Create this Drive folder</strong>${folderLine}</div><div class="drive-check-card"><strong>2. Upload listing photos with these filenames</strong><ol class="drive-path-list">${photoList}</ol></div><div class="drive-check-card"><strong>3. Upload storage photo</strong><code>${storageLine}</code></div><div class="drive-check-card"><strong>4. Paste links back into the CSV</strong><ol class="drive-path-list"><li>Paste the folder URL into <b>Drive Folder Link</b>.</li><li>Paste photo URLs into <b>Front/Right/Back/Left Photo Link</b>, then <b>Extra Photo Links</b> if needed.</li><li>Storage uploads are written into <b>Storage Location Photo Link</b>.</li></ol></div></div>`;
       el.querySelectorAll('[data-drive-sync-step]').forEach(box=>box.onchange=()=>updateSelectedDriveSyncStep(box.dataset.driveSyncStep,box.checked));
     }
-    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus();if($('backup')?.classList.contains('active')){renderInventoryItemStoreStatus();renderStorageArchitectureStatus();renderArchiveDryRunSummary();renderArchiveSafetyChecklist()}}catch(e){}}
+    function refreshBackupViews(){try{renderCounts();renderGoogleSyncSettings();renderGoogleWorkspaceStatus();renderGoogleApiSetup();renderGoogleDrivePhotoUploadStatus();renderGoogleSyncNextBatchStatus();renderGoogleSyncCompletionReport();renderGoogleSyncHealthCheck();renderGoogleSyncDashboard();renderGoogleSyncDryRun();renderGoogleSyncGate();renderGoogleSyncActionQueue();renderGoogleSyncHistory();renderGoogleSyncPreflight();renderGoogleSyncSimulation();renderGoogleAuthRequirements();renderBackupPreview();renderBackupReadiness();renderSelectedDriveChecklist();renderInventoryCheckpointStatus();renderStorageLocationManager();if($('backup')?.classList.contains('active')){renderInventoryItemStoreStatus();renderStorageArchitectureStatus();renderArchiveDryRunSummary();renderArchiveSafetyChecklist()}}catch(e){}}
 
     // Init
     updateDiag(); initializeItemWorkflow(); renderPwaInstallStatus(); renderDeviceRole(); normalizeInventoryItems({silent:true}); renderPresets(); renderStoragePresets(); renderAssistantRelaySettings(); renderAiUsage(); renderListingPreferences(); renderGoogleSyncSettings(); renderGoogleWorkspaceStatus(); renderGoogleApiSetup(); renderShots(); renderSessions(); renderInventory(); refreshBackupViews(); renderMediaDbStats(); renderInventoryItemStoreStatus(); renderStorageUsage(); let last=localStorage.getItem(K.lastTab); if(last&&$(last)&&document.querySelector(`.tab[data-screen="${last}"]`)?.style.display!=='none') showScreen(last);trySilentGoogleReconnect();

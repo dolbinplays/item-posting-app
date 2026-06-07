@@ -19,6 +19,7 @@
 - Future archive safety checklist documents required safeguards and keeps the archive-local-media action visibly disabled until the backup, dry-run review, and explicit-confirmation workflow is ready. Implemented.
 - Guarded archive-local-media compaction trims heavy embedded browser photo fields only for archive-ready items after the user checks backup review, dry-run review, and explicit local-record confirmation. It keeps item records, thumbnails, Drive/Sheet links, and media-library references while holding not-ready items unchanged. Implemented.
 - IndexedDB item-record store mirrors each inventory item as its own browser database record, reports parity against the current local inventory, restores from those records, and includes the store in the storage architecture readiness report. This is the next measurable bridge toward a native/Capacitor database. Implemented.
+- Storage-location manager summarizes bins, shelves, totes, and unassigned items with item counts, status mix, storage-photo coverage, review counts, quick preset saving, and Focus Inventory actions. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
@@ -73,7 +74,7 @@
 
 ### Stage 13 - Advanced Inventory Tools
 
-- Storage-location management screen.
+- Storage-location management screen. Foundation implemented in Backup/Restore review tools with location summaries and quick inventory focus.
 - QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
 - Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup. Implemented.
 - User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter. Implemented.
