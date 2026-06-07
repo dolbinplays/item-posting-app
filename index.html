@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0390</title>
+  <title>Item Posting Assistant v0.26.06.01.0400</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0390 · Storage location manager</p>
+      <p class="eyebrow">v0.26.06.01.0400 · Bulk storage moves</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -1030,7 +1030,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0390';
+    const VERSION='v0.26.06.01.0400';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1996,15 +1996,39 @@
       if(presets.includes(value)){alert('That storage location is already saved as a preset.');return}
       if(setStoragePresets([...presets,value])){renderStorageLocationManager();alert(`Saved "${value}" as a storage preset.`)}
     }
+    function moveStorageLocationItems(locationValue,label=''){
+      const key=String(locationValue||''),fromLabel=label||key;
+      const items=getItems(),matches=items.filter(item=>key==='__unassigned__'?isBlankValue(item.storage):String(item.storage||'')===fromLabel);
+      if(!matches.length){alert('No items are currently assigned to that storage location.');return}
+      const destination=prompt(`Move ${matches.length} item${matches.length===1?'':'s'} from "${fromLabel}" to which storage location?`,fromLabel==='No storage location'?'':fromLabel);
+      const to=String(destination||'').trim();
+      if(!to||to===fromLabel){return}
+      const preview=matches.slice(0,8).map(item=>'• '+(item.title||'Untitled item')).join('\n')+(matches.length>8?`\n...plus ${matches.length-8} more`: '');
+      if(!confirm(`Move ${matches.length} item${matches.length===1?'':'s'} from "${fromLabel}" to "${to}"?\n\n${preview}\n\nThis changes each item's storage text and records the previous location in its move history.`))return;
+      const ids=new Set(matches.map(item=>item.id));
+      const movedAt=new Date().toISOString();
+      const next=items.map(item=>{
+        if(!ids.has(item.id))return item;
+        const from=item.storage||'';
+        const history=Array.isArray(item.storageMoveHistory)?item.storageMoveHistory:[];
+        return {...item,storage:to,updatedAt:movedAt,storageMoveHistory:[{from,to,movedAt,source:'storage-location-manager'},...history].slice(0,20)};
+      });
+      if(!setItems(next))return;
+      if(!getStoragePresets().includes(to)&&confirm(`Save "${to}" as a reusable storage preset?`))setStoragePresets([...getStoragePresets(),to]);
+      renderStorageLocationManager();renderInventory();renderWorkstation();refreshBackupViews();
+      scheduleGoogleWorkspacePush('bulk storage location move');
+      alert(`Moved ${matches.length} item${matches.length===1?'':'s'} to "${to}".`);
+    }
     function renderStorageLocationManager(){
       const el=$('storageLocationManager');if(!el)return;
       const rows=storageLocationRows();
       if(!rows.length){el.innerHTML='<div class="empty-state">No storage locations yet. Add storage text to an item to build this list.</div>';return}
       el.innerHTML=`<div class="drive-plan-summary">${rows.map(row=>{
         const isPreset=getStoragePresets().includes(row.label),photo=row.sharedPhoto||row.items.map(getEffectiveStoragePhoto).find(hasPhotoRef),photoHtml=photoDisplayDataUrl(photo)?`<img class="workstation-thumb" src="${photoDisplayDataUrl(photo)}" alt="">`:'<span class="workstation-thumb"></span>';
-        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
+        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${row.itemCount?`<button class="secondary" type="button" data-move-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-move-storage-label="${escapeAttr(row.label)}">Move Items</button>`:''}${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
       }).join('')}</div>`;
       el.querySelectorAll('[data-focus-storage-location]').forEach(btn=>btn.onclick=()=>focusInventoryStorageLocation(btn.dataset.focusStorageLocation,btn.dataset.focusStorageLabel));
+      el.querySelectorAll('[data-move-storage-location]').forEach(btn=>btn.onclick=()=>moveStorageLocationItems(btn.dataset.moveStorageLocation,btn.dataset.moveStorageLabel));
       el.querySelectorAll('[data-save-storage-preset]').forEach(btn=>btn.onclick=()=>saveStorageLocationPresetFromManager(btn.dataset.saveStoragePreset));
     }
     function getEffectiveStoragePhoto(item){
