@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0430</title>
+  <title>Item Posting Assistant v0.26.06.01.0440</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0430 · Sheet storage label codes</p>
+      <p class="eyebrow">v0.26.06.01.0440 · Printable storage map</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -983,7 +983,7 @@
           <h3 style="margin-top:16px">Storage Location Manager</h3>
           <p class="note">Review bins, shelves, totes, and rooms from one place. Use Focus Inventory to jump to every item in a location.</p>
           <div id="storageLocationManager" class="note">Storage locations have not been scanned yet.</div>
-          <div class="actions"><button id="exportStorageLabelsBtn" class="secondary" type="button">Export Printable Storage Labels</button></div>
+          <div class="actions"><button id="exportStorageLabelsBtn" class="secondary" type="button">Export Printable Storage Labels</button><button id="exportStorageMapBtn" class="secondary" type="button">Export Storage Map</button></div>
           </details>
           <details class="backup-list">
           <summary>Sheets and Drive preview</summary>
@@ -1031,7 +1031,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0430';
+    const VERSION='v0.26.06.01.0440';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -2064,6 +2064,21 @@
       const labels=rows.map(row=>`<section class="label"><div class="brand">Item Posting Assistant</div><div class="code">${escapeHtml(row.code)}</div><h2>${escapeHtml(row.label)}</h2><p>${escapeHtml(storageLocationSummaryText(row))}</p><p class="small">Write this code on the bin/tote. Future scan lookup can use the same code to open this storage location.</p></section>`).join('');
       const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Storage Labels ${VERSION}</title><style>body{font-family:Arial,system-ui,sans-serif;margin:24px;color:#0f172a}.sheet{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.label{border:2px solid #0f172a;border-radius:14px;padding:18px;min-height:190px;break-inside:avoid;display:flex;flex-direction:column;justify-content:center}.brand{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#475569}.code{font-size:42px;font-weight:900;letter-spacing:.08em;margin:10px 0}.label h2{font-size:28px;margin:0 0 8px}.label p{margin:4px 0}.small{font-size:12px;color:#475569}@media print{body{margin:10mm}.sheet{grid-template-columns:repeat(2,1fr)}.label{page-break-inside:avoid}}</style></head><body><h1>Storage Labels</h1><p>Version: ${escapeHtml(VERSION)} · Exported: ${escapeHtml(exportedAt)} · Labels: ${rows.length}</p><div class="sheet">${labels}</div></body></html>`;
       download(`item-posting-storage-labels-${VERSION}.html`,html,'text/html');
+    }
+    function exportStorageMap(){
+      const rows=storageLocationRows();
+      if(!rows.length){alert('No storage locations are available yet.');return}
+      const exportedAt=new Date().toISOString();
+      const sections=rows.map(row=>{
+        const code=row.key==='__unassigned__'?'Needs storage text':storageLocationCode(row.label);
+        const items=row.items.slice().sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''))).map(item=>{
+          const review=combinedItemReview(item,getItems().findIndex(i=>i.id===item.id));
+          return `<li><b>${escapeHtml(item.title||'Untitled item')}</b><br><span>${escapeHtml(item.status||'Draft')} · Updated ${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())} · Photos ${(item.photos||[]).length}</span>${review.missing.length?`<br><span>Needs review: ${escapeHtml(review.missing.join('; '))}</span>`:''}</li>`;
+        }).join('')||'<li>No items assigned.</li>';
+        return `<section><h2>${escapeHtml(row.label)}</h2><p><b>Label code:</b> ${escapeHtml(code)}<br><b>Summary:</b> ${escapeHtml(storageLocationSummaryText(row))}<br><b>Storage photos:</b> ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}<br><b>Needs review:</b> ${row.needsReview}</p><ol>${items}</ol></section>`;
+      }).join('');
+      const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Item Posting Storage Map ${VERSION}</title><style>body{font-family:Arial,system-ui,sans-serif;margin:24px;color:#0f172a}section{border:1px solid #cbd5e1;border-radius:14px;padding:16px;margin:0 0 14px;break-inside:avoid}h1{margin-bottom:4px}h2{margin:0 0 8px}.meta,span{color:#475569}ol{padding-left:22px}li{margin:0 0 10px}@media print{body{margin:10mm}section{page-break-inside:avoid}}</style></head><body><h1>Storage Map</h1><p class="meta">Version: ${escapeHtml(VERSION)} · Exported: ${escapeHtml(exportedAt)} · Locations: ${rows.length} · Items: ${rows.reduce((n,row)=>n+row.itemCount,0)}</p>${sections}</body></html>`;
+      download(`item-posting-storage-map-${VERSION}.html`,html,'text/html');
     }
     function getEffectiveStoragePhoto(item){
       if(!item)return null;
@@ -4390,6 +4405,7 @@
     on('applyGoogleDeviceSetupBtn','onclick',applyGoogleDeviceSetupCode);
     on('clearGoogleApiSetupBtn','onclick',clearGoogleApiSetup);
     on('exportStorageLabelsBtn','onclick',exportStorageLabels);
+    on('exportStorageMapBtn','onclick',exportStorageMap);
     on('loadGoogleIdentityBtn','onclick',()=>loadGoogleIdentity().catch(e=>alert(e.message||e)));
     on('requestGoogleAccessBtn','onclick',()=>requestGoogleAccess());
     on('dashboardGoogleAccessBtn','onclick',()=>requestGoogleAccess());
