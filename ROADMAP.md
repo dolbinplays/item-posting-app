@@ -23,6 +23,7 @@
 - Bulk storage-location moves let the user move every item from one location to another after preview/confirmation, save the new destination as a preset, queue workspace sync, and preserve each item's prior location in move history. Implemented.
 - Printable storage labels assign stable short label codes to named storage locations and export a printer-friendly HTML label sheet as the foundation for future QR/barcode scanning. Implemented.
 - Printable missing-item check sheets export per storage location with expected item counts, Found/Missing columns, last-updated data, and app review notes for physical inventory audits. Implemented.
+- Google Sheets/CSV exports include each item's stable storage label code so the Sheet index, printable labels, and future scan lookup use the same storage identifier. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
@@ -81,6 +82,7 @@
 - Bulk move items between storage locations from the storage-location manager. Implemented.
 - QR or barcode storage labels, bulk item moves, storage maps, and missing-item checks.
 - Printable storage label foundation with stable per-location codes. Implemented. Future scan lookup can attach QR/barcode capture to these codes.
+- Storage label codes now flow into Google Sheets/CSV and media manifest exports. Implemented.
 - Missing-item check sheet foundation exports physical audit worksheets from each storage-location card. Implemented. Future scan lookup can mark items found or missing directly in the app.
 - Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup. Implemented.
 - User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter. Implemented.
