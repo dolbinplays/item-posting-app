@@ -1,4 +1,4 @@
-const CACHE_NAME = 'item-posting-assistant-shell-v0.26.06.01.0520';
+const CACHE_NAME = 'item-posting-assistant-shell-v0.26.06.01.0530';
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icons/app-icon.svg', './icons/app-icon-192.png', './icons/app-icon-512.png'];
 
 self.addEventListener('install', event => {
