@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0480</title>
+  <title>Item Posting Assistant v0.26.06.01.0490</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0480 · Sales profit dashboard</p>
+      <p class="eyebrow">v0.26.06.01.0490 · Needs fulfillment filter</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -560,6 +560,7 @@
                 <option value="all">All statuses</option>
                 <option value="needs-listing">Needs Listing: Draft + Ready to Post</option>
                 <option value="needs-review">Needs Review: Missing Required Steps</option>
+                <option value="needs-fulfillment">Needs Fulfillment: Sold + not complete</option>
                 <option value="Draft">Draft</option>
                 <option value="Ready to Post">Ready to Post</option>
                 <option value="Listed">Listed</option>
@@ -762,7 +763,7 @@
           <h3 style="margin-top:0">Inventory Queue</h3>
           <input id="workstationSearch" placeholder="Search workstation inventory...">
           <label class="small">Status filter</label>
-          <select id="workstationStatusFilter"><option value="needs-listing">Needs Listing: Draft + Ready to Post</option><option value="needs-review">Needs Review: Missing Required Steps</option><option value="all">All statuses</option><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select>
+          <select id="workstationStatusFilter"><option value="needs-listing">Needs Listing: Draft + Ready to Post</option><option value="needs-review">Needs Review: Missing Required Steps</option><option value="needs-fulfillment">Needs Fulfillment: Sold + not complete</option><option value="all">All statuses</option><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select>
           <div id="workstationCount" class="inventory-count">0 items</div>
           <div id="workstationList" class="workstation-list"></div>
         </div>
@@ -1053,7 +1054,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0480';
+    const VERSION='v0.26.06.01.0490';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -2205,6 +2206,10 @@
       const quality=listingQualityReview(item),google=googleSyncItemReadiness(item,index),missing=[...quality.missing,...google.blockers.map(blocker=>`Google: ${blocker}`)];
       return {needsReview:quality.needsReview||!google.readyForFutureSync,missing,quality,google}
     }
+    function itemNeedsFulfillment(item){
+      const sale=normalizeSaleTracking(item),status=item?.status||'Draft';
+      return (status==='Sold'||pricingNumber(sale.soldPrice)>0)&&!['Pickup complete','Shipped','Delivered'].includes(sale.fulfillmentStatus||'')
+    }
     function renderItemListingQualityStatus(item){
       const el=$('itemListingQualityStatus');if(!el||!item)return;
       const review=listingQualityReview(item);
@@ -2218,7 +2223,7 @@
       let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let filtered=items.filter(item=>{
         let itemStatus=item.status||'Draft';
-        let statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):status==='needs-review'?combinedItemReview(item,items.findIndex(i=>i.id===item.id)).needsReview:itemStatus===status);
+        let statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):status==='needs-review'?combinedItemReview(item,items.findIndex(i=>i.id===item.id)).needsReview:status==='needs-fulfillment'?itemNeedsFulfillment(item):itemStatus===status);
         let searchMatch=!q||itemSearchBlob(item).includes(q);
         let storageMatch=storageFilter==='all'||(storageFilter==='__unassigned__'?isBlankValue(item.storage):String(item.storage||'')===storageFilter);
         return statusMatch&&searchMatch&&storageMatch;
@@ -2243,14 +2248,14 @@
       let status=($('inventoryStatusFilter')?.value||'all');
       let storageFilter=($('inventoryStorageFilter')?.value||'all');
       let q=($('inventorySearch')?.value||'').trim();
-      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':status==='needs-review'?' · Needs Review view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter==='__unassigned__'?'No storage location':storageFilter}`:'');
+      $('inventoryCount').textContent=`Showing ${filtered.length} of ${items.length} item${items.length===1?'':'s'}`+(q?` · search: "${q}"`:'')+(status==='needs-listing'?' · Needs Listing view':status==='needs-review'?' · Needs Review view':status==='needs-fulfillment'?' · Needs Fulfillment view':(status!=='all'?` · ${status}`:''))+(storageFilter!=='all'?` · Storage: ${storageFilter==='__unassigned__'?'No storage location':storageFilter}`:'');
       if(!filtered.length){if(summary)summary.textContent='No matching inventory items';list.innerHTML='<div class="empty-state">No inventory items match the current search/filter. Clear filters or create a new item from current captures.</div>';renderWorkstation();return}
       const selected=items.find(i=>i.id===selectedItemId);
       if(summary)summary.textContent=selected?`${selected.title||'Untitled'} · ${new Date(selected.createdAt||Date.now()).toLocaleString()}`:'Choose an inventory item';
       filtered.forEach(i=>{
-        let first=photoDisplayDataUrl(i.photos?.[0]),card=document.createElement('button'),review=combinedItemReview(i,items.findIndex(item=>item.id===i.id)),needsReview=review.needsReview;
+        let first=photoDisplayDataUrl(i.photos?.[0]),card=document.createElement('button'),review=combinedItemReview(i,items.findIndex(item=>item.id===i.id)),needsReview=review.needsReview,needsFulfillment=itemNeedsFulfillment(i),sale=normalizeSaleTracking(i);
         card.type='button';card.className='inventory-compact-item'+(i.id===selectedItemId?' active':'')+(needsReview?' needs-review':'');card.dataset.id=i.id;
-        card.innerHTML=`${first?`<img class="inventory-compact-thumb" src="${first}" alt="">`:'<span class="inventory-compact-thumb"></span>'}<span><span class="inventory-compact-title">${escapeHtml(i.title||'Untitled')}</span><span class="inventory-compact-meta">${escapeHtml(new Date(i.createdAt||Date.now()).toLocaleString())}<br>${escapeHtml(i.status||'Draft')} · ${escapeHtml(i.storage||'No storage location')}</span>${needsReview?`<span class="sync-review-note">Needs review · ${escapeHtml(review.missing.join(', '))}</span>`:''}</span>`;
+        card.innerHTML=`${first?`<img class="inventory-compact-thumb" src="${first}" alt="">`:'<span class="inventory-compact-thumb"></span>'}<span><span class="inventory-compact-title">${escapeHtml(i.title||'Untitled')}</span><span class="inventory-compact-meta">${escapeHtml(new Date(i.createdAt||Date.now()).toLocaleString())}<br>${escapeHtml(i.status||'Draft')} · ${escapeHtml(i.storage||'No storage location')}</span>${needsFulfillment?`<span class="sync-review-note">Needs fulfillment · ${escapeHtml(sale.fulfillmentStatus||'Not started')}</span>`:''}${needsReview?`<span class="sync-review-note">Needs review · ${escapeHtml(review.missing.join(', '))}</span>`:''}</span>`;
         list.appendChild(card)
       });
       list.querySelectorAll('.inventory-compact-item').forEach(c=>c.onclick=()=>{loadItem(c.dataset.id);if(picker)picker.open=false});
@@ -2262,7 +2267,7 @@
     function workstationFilteredItems(){
       const q=String($('workstationSearch')?.value||'').toLowerCase().trim(),status=$('workstationStatusFilter')?.value||'needs-listing';
       const all=getItems();
-      return all.filter(item=>{const itemStatus=item.status||'Draft',statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):status==='needs-review'?combinedItemReview(item,all.findIndex(i=>i.id===item.id)).needsReview:itemStatus===status);return statusMatch&&(!q||itemSearchBlob(item).includes(q))}).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))
+      return all.filter(item=>{const itemStatus=item.status||'Draft',statusMatch=status==='all'||(status==='needs-listing'?['Draft','Ready to Post'].includes(itemStatus):status==='needs-review'?combinedItemReview(item,all.findIndex(i=>i.id===item.id)).needsReview:status==='needs-fulfillment'?itemNeedsFulfillment(item):itemStatus===status);return statusMatch&&(!q||itemSearchBlob(item).includes(q))}).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))
     }
     function workstationBundle(item){return `Title: ${item.fbTitle||item.title||''}\nPrice: ${item.fbPrice||moneyText(item.price)||''}\n\nDescription:\n${item.fbDescription||''}\n\nPickup Notes:\n${item.fbPickup||''}${normalizePricingResearch(item).summary?`\n\nPricing Research:\n${normalizePricingResearch(item).summary}`:''}`}
     function renderWorkstation(){
@@ -2271,7 +2276,7 @@
       if(!workstationItemId&&items[0])workstationItemId=items[0].id;
       $('workstationCount').textContent=`${items.length} matching item${items.length===1?'':'s'}`;
       list.innerHTML=items.length?'':'<div class="empty-state">No workstation items match this search and status filter.</div>';
-      items.forEach(item=>{const first=photoDisplayDataUrl(item.photos?.[0]),button=document.createElement('button'),all=getItems(),review=combinedItemReview(item,all.findIndex(i=>i.id===item.id)),needsReview=review.needsReview;button.type='button';button.className='workstation-item'+(item.id===workstationItemId?' active':'')+(needsReview?' needs-review':'');button.dataset.workstationItem=item.id;button.innerHTML=`${first?`<img class="workstation-thumb" src="${first}" alt="">`:'<span class="workstation-thumb"></span>'}<span><strong>${escapeHtml(item.title||'Untitled')}</strong><span class="note">${escapeHtml(item.status||'Draft')} · ${escapeHtml(item.storage||'No storage location')}<br>Updated ${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())}</span>${needsReview?`<span class="sync-review-note">Needs review · ${escapeHtml(review.missing.join(', '))}</span>`:''}</span>`;list.appendChild(button)});
+      items.forEach(item=>{const first=photoDisplayDataUrl(item.photos?.[0]),button=document.createElement('button'),all=getItems(),review=combinedItemReview(item,all.findIndex(i=>i.id===item.id)),needsReview=review.needsReview,needsFulfillment=itemNeedsFulfillment(item),sale=normalizeSaleTracking(item);button.type='button';button.className='workstation-item'+(item.id===workstationItemId?' active':'')+(needsReview||needsFulfillment?' needs-review':'');button.dataset.workstationItem=item.id;button.innerHTML=`${first?`<img class="workstation-thumb" src="${first}" alt="">`:'<span class="workstation-thumb"></span>'}<span><strong>${escapeHtml(item.title||'Untitled')}</strong><span class="note">${escapeHtml(item.status||'Draft')} · ${escapeHtml(item.storage||'No storage location')}<br>Updated ${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())}</span>${needsFulfillment?`<span class="sync-review-note">Needs fulfillment · ${escapeHtml(sale.fulfillmentStatus||'Not started')}</span>`:''}${needsReview?`<span class="sync-review-note">Needs review · ${escapeHtml(review.missing.join(', '))}</span>`:''}</span>`;list.appendChild(button)});
       list.querySelectorAll('[data-workstation-item]').forEach(button=>button.onclick=()=>{workstationItemId=button.dataset.workstationItem;renderWorkstation()});
       renderWorkstationDetail()
     }
