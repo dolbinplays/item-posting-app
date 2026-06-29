@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0500</title>
+  <title>Item Posting Assistant v0.26.06.01.0510</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0500 · Workstation fulfillment actions</p>
+      <p class="eyebrow">v0.26.06.01.0510 · Sales marketplace summary</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -1057,7 +1057,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0500';
+    const VERSION='v0.26.06.01.0510';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -4653,8 +4653,10 @@
       const net=totals.revenue-totals.cost-totals.fees-totals.shipping;
       const statusCounts=sold.reduce((acc,item)=>{const status=normalizeSaleTracking(item).fulfillmentStatus||'Not started';acc[status]=(acc[status]||0)+1;return acc},{});
       const statusText=Object.entries(statusCounts).map(([status,count])=>`${escapeHtml(status)}: <b>${count}</b>`).join(' · ')||'No sold items yet';
+      const marketplaceTotals=sold.reduce((acc,item)=>{const s=normalizeSaleTracking(item),name=String(s.platform||'Unspecified').trim()||'Unspecified';if(!acc[name])acc[name]={count:0,revenue:0,net:0};acc[name].count++;acc[name].revenue+=pricingNumber(s.soldPrice);acc[name].net+=saleNetProfit(s);return acc},{});
+      const marketplaceRows=Object.entries(marketplaceTotals).sort((a,b)=>b[1].revenue-a[1].revenue).slice(0,6).map(([name,row])=>`<tr><td>${escapeHtml(name)}</td><td>${row.count}</td><td>${escapeHtml(signedMoney(row.revenue))}</td><td>${escapeHtml(signedMoney(row.net))}</td></tr>`).join('');
       const unfulfilled=totals.unfulfilled.slice(0,6).map(item=>{const s=normalizeSaleTracking(item);return `<li>${escapeHtml(item.title||'Untitled item')} · ${escapeHtml(s.fulfillmentStatus||'Not started')}${s.soldDate?` · sold ${escapeHtml(s.soldDate)}`:''}</li>`}).join('');
-      el.innerHTML=`<div class="drive-plan-summary"><div class="drive-plan-card"><strong>${sold.length}</strong>Sold / priced items</div><div class="drive-plan-card"><strong>${escapeHtml(signedMoney(totals.revenue))}</strong>Gross sold price</div><div class="drive-plan-card"><strong>${escapeHtml(signedMoney(totals.cost+totals.fees+totals.shipping))}</strong>Cost + fees + shipping</div><div class="drive-plan-card"><strong>${escapeHtml(signedMoney(net))}</strong>Net profit estimate</div></div><p>Fulfillment: ${statusText}</p>${unfulfilled?`<p><b>Needs fulfillment follow-up:</b></p><ul>${unfulfilled}</ul>`:'<p>No unfulfilled sold items found.</p>'}`;
+      el.innerHTML=`<div class="drive-plan-summary"><div class="drive-plan-card"><strong>${sold.length}</strong>Sold / priced items</div><div class="drive-plan-card"><strong>${escapeHtml(signedMoney(totals.revenue))}</strong>Gross sold price</div><div class="drive-plan-card"><strong>${escapeHtml(signedMoney(totals.cost+totals.fees+totals.shipping))}</strong>Cost + fees + shipping</div><div class="drive-plan-card"><strong>${escapeHtml(signedMoney(net))}</strong>Net profit estimate</div></div><p>Fulfillment: ${statusText}</p>${marketplaceRows?`<p><b>Marketplace totals:</b></p><table class="backup-table"><thead><tr><th>Marketplace</th><th>Items</th><th>Gross</th><th>Net</th></tr></thead><tbody>${marketplaceRows}</tbody></table>`:''}${unfulfilled?`<p><b>Needs fulfillment follow-up:</b></p><ul>${unfulfilled}</ul>`:'<p>No unfulfilled sold items found.</p>'}`;
     }
     function renderCounts(){let b=backupObj();let photoCount=b.items.reduce((sum,i)=>sum+(i.photos?.length||0),0);let storagePhotoCount=b.items.reduce((sum,i)=>sum+(hasPhotoRef(i.storagePhoto)?1:0),0);let sync=googleSyncReadinessSummary(b.items);let gate=b.googleSyncReadinessGate.summary;$('countsBox').innerHTML=`<p>Inventory items: <b>${b.items.length}</b></p><p>Inventory photos: <b>${photoCount}</b></p><p>Item storage photos: <b>${storagePhotoCount}</b></p><p>Shared storage-location photos: <b>${Object.keys(getStorageLocationPhotos()).length}</b></p><p>Current captures: <b>${b.shots.length}</b></p><p>Saved sessions: <b>${b.sessions.length}</b></p><p>Calibration presets: <b>${b.presets.length}</b></p><p>Storage presets: <b>${b.storagePresets?.length||0}</b></p><p>Sync target: <b>${escapeHtml(sync.settings.sheetName)}</b> · <b>${escapeHtml(sync.settings.driveRootFolder)}</b></p><p>Sync gate: <b>${gate.readyForFutureSync}</b> ready · <b>${gate.needsReview}</b> need review</p>`}
     function itemBackupReadiness(item){

@@ -29,6 +29,7 @@
 - Dedicated sales/profit CSV export gives a compact accounting handoff with item IDs, status, storage label codes, asking price, sold price, original cost, fees, shipping, net profit, and sale notes. Implemented.
 - Fulfillment tracking adds pickup/shipping status, shipped or pickup date, carrier, and tracking/receipt number to sold-item records, workstation review, and CSV/Sheets exports. Implemented.
 - Sales/profit dashboard summarizes sold or priced items, gross sold price, cost/fees/shipping, estimated net profit, fulfillment status counts, and sold items needing fulfillment follow-up. Implemented.
+- Sales/profit dashboard groups sold or priced items by marketplace with item counts, gross revenue, and estimated net profit so users can see which marketplaces are performing. Implemented.
 - Inventory and Workstation include a `Needs Fulfillment` filter and item-card highlights for sold or priced items that still need pickup or shipping completion. Implemented.
 - Workstation quick fulfillment actions can mark a sold item as pickup complete, shipped, or delivered from the laptop review flow, update the fulfillment date, refresh Needs Fulfillment, and queue the normal shared-workspace sync. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
@@ -95,7 +96,7 @@
 - Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup. Implemented.
 - User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter. Implemented.
 - Reusable seller/store display-name preference for watermarking. Allow the user to save, edit, and clear the name, prefill it when applying watermarks, and include it in safe second-device setup handoff. Store display text only, never marketplace credentials or account tokens. Implemented.
-- Sold and shipped workflow with profit, fee, and shipping tracking. Sale/profit tracking foundation, fulfillment fields, dedicated sales CSV export, local dashboard, needs-fulfillment filters, and workstation quick fulfillment actions implemented; future work can add receipt exports and richer profit charts.
+- Sold and shipped workflow with profit, fee, and shipping tracking. Sale/profit tracking foundation, fulfillment fields, dedicated sales CSV export, local dashboard with marketplace totals, needs-fulfillment filters, and workstation quick fulfillment actions implemented; future work can add receipt exports and richer profit charts.
 
 ## Architecture Principles
 
