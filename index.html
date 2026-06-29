@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0490</title>
+  <title>Item Posting Assistant v0.26.06.01.0500</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0490 · Needs fulfillment filter</p>
+      <p class="eyebrow">v0.26.06.01.0500 · Workstation fulfillment actions</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -777,6 +777,9 @@
             <div id="workstationCopyChecklist" class="workstation-checklist"></div>
             <div class="actions"><button id="workstationResetChecklistBtn" class="secondary" type="button">Reset Posting Checklist</button></div>
             <label class="small">Update listing status</label><select id="workstationItemStatus"><option>Draft</option><option>Ready to Post</option><option>Listed</option><option>Sold</option><option>Archived</option></select>
+            <label class="small">Quick fulfillment update</label>
+            <div class="actions"><button id="workstationPickupCompleteBtn" class="success" type="button">Pickup Complete</button><button id="workstationShippedBtn" class="success" type="button">Mark Shipped</button><button id="workstationDeliveredBtn" class="secondary" type="button">Mark Delivered</button></div>
+            <div id="workstationFulfillmentStatus" class="save-workflow-status">Use these after an item sells to clear Needs Fulfillment without opening the full editor.</div>
             <div class="workstation-copy-grid">
               <div class="workstation-copy-row"><input id="workstationFbTitle" readonly><button class="secondary" data-workstation-copy="workstationFbTitle" type="button">Copy Title</button></div>
               <div class="workstation-copy-row"><input id="workstationFbPrice" readonly><button class="secondary" data-workstation-copy="workstationFbPrice" type="button">Copy Price</button></div>
@@ -1054,7 +1057,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0490';
+    const VERSION='v0.26.06.01.0500';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -2287,7 +2290,13 @@
       const photo=photoDisplayDataUrl(item.photos?.[0]),img=$('workstationPhoto');img.src=photo||'';img.style.display=photo?'block':'none';
       const all=getItems(),readiness=googleSyncItemReadiness(item,all.findIndex(i=>i.id===item.id)),review=listingQualityReview(item),sale=normalizeSaleTracking(item);$('workstationMeta').innerHTML=`<div><b>Status:</b> ${escapeHtml(item.status||'Draft')} · <b>Condition:</b> ${escapeHtml(item.condition||'')}</div><div><b>Storage:</b> ${escapeHtml(item.storage||'No storage location')}</div><div><b>Item:</b> ${escapeHtml(joinParts([item.brand,item.model,item.itemType,item.color], ' · ')||'No structured details saved')}</div><div><b>Photos:</b> ${(item.photos||[]).length} · <b>Comparables:</b> ${normalizePricingResearch(item).comparables.length}</div><div><b>Sale:</b> ${pricingNumber(sale.soldPrice)?`${escapeHtml(pricingMoney(sale.soldPrice))}${sale.platform?` on ${escapeHtml(sale.platform)}`:''} · Net ${escapeHtml(saleProfitText(sale))}`:`Original cost ${escapeHtml(pricingMoney(sale.itemCost)||'$0')} · Not sold yet`}</div><div><b>Fulfillment:</b> ${escapeHtml(sale.fulfillmentStatus||'Not started')}${sale.shippedDate?` · ${escapeHtml(sale.shippedDate)}`:''}${sale.trackingNumber?` · ${escapeHtml(sale.trackingNumber)}`:''}</div><div><b>Listing review:</b> ${review.missing.length?escapeHtml(review.missing.join(', ')):'Enabled requirements complete'}</div><div><b>Google Sync:</b> ${escapeHtml(readiness.status)}${readiness.blockers.length?` · ${escapeHtml(readiness.blockers.join(', '))}`:''}</div>`;
       $('workstationItemStatus').value=item.status||'Draft';$('workstationFbTitle').value=item.fbTitle||item.title||'';$('workstationFbPrice').value=item.fbPrice||moneyText(item.price);$('workstationFbDescription').value=item.fbDescription||'';$('workstationFbPickup').value=item.fbPickup||'';$('workstationPricingSummary').value=normalizePricingResearch(item).summary||''
+      renderWorkstationFulfillmentStatus(item);
       renderWorkstationPostingChecklist(item)
+    }
+    function renderWorkstationFulfillmentStatus(item,message=''){
+      const el=$('workstationFulfillmentStatus');if(!el)return;
+      const sale=normalizeSaleTracking(item),needs=itemNeedsFulfillment(item);
+      el.textContent=message||`Fulfillment: ${sale.fulfillmentStatus||'Not started'}${sale.shippedDate?` · ${sale.shippedDate}`:''}. ${needs?'This item still appears in Needs Fulfillment.':'This item is complete for the Needs Fulfillment filter.'}`
     }
     function renderWorkstationPostingChecklist(item){
       const el=$('workstationCopyChecklist');if(!el)return;
@@ -2307,6 +2316,18 @@
     async function copyWorkstationBundle(){const item=getItems().find(i=>i.id===workstationItemId);if(!item)return;try{await navigator.clipboard.writeText(workstationBundle(item));['title','price','description','pickup'].forEach(markWorkstationPostingStep);alert('Full listing bundle copied.')}catch{alert('Could not copy automatically. Use the individual workstation copy buttons.')}}
     function openWorkstationItemEditor(){if(!workstationItemId)return;loadItem(workstationItemId);showScreen('inventory')}
     function updateWorkstationItemStatus(){if(!workstationItemId)return;quickUpdateStatus(workstationItemId,$('workstationItemStatus').value);renderWorkstationDetail()}
+    function quickUpdateFulfillment(status){
+      if(!workstationItemId)return;
+      let items=getItems(),item=items.find(i=>i.id===workstationItemId);if(!item)return;
+      const today=new Date().toISOString().slice(0,10),sale={...normalizeSaleTracking(item),fulfillmentStatus:status,updatedAt:new Date().toISOString()};
+      if(['Pickup complete','Shipped','Delivered'].includes(status)&&!sale.shippedDate)sale.shippedDate=today;
+      item.saleTracking=sale;item.status='Sold';item.updatedAt=new Date().toISOString();
+      if(setItems(items)){
+        scheduleGoogleWorkspacePush('workstation fulfillment update');
+        if(selectedItemId===item.id){$('itemStatus').value=item.status;renderSaleTracking(item)}
+        renderInventory();renderWorkstation();refreshBackupViews();renderWorkstationFulfillmentStatus(item,`Saved fulfillment update: ${status}${sale.shippedDate?` · ${sale.shippedDate}`:''}.`)
+      }
+    }
     function quickUpdateStatus(itemId,status){
       let items=getItems(),item=items.find(i=>i.id===itemId);if(!item)return;
       item.status=status;item.updatedAt=new Date().toISOString();
@@ -2987,7 +3008,7 @@
       finally{if(btn)btn.disabled=false;}
     } function regenDraft(){let item=collectItem();if(!item)return;Object.assign(item,generateDraft(item));item.updatedAt=new Date().toISOString();if(setItems(getItems().map(i=>i.id===item.id?item:i))){scheduleGoogleWorkspacePush('regenerated listing draft');loadItem(item.id)}} function delItem(){if(!selectedItemId||!confirm('Delete this inventory item?'))return;if(!setItems(getItems().filter(i=>i.id!==selectedItemId)))return;scheduleGoogleWorkspacePush('deleted inventory item');selectedItemId=null;$('itemDetailEmpty').style.display='block';$('itemDetailForm').style.display='none';renderInventory()} async function copyField(idv){let el=$(idv),txt=el.value||el.textContent||'';try{await navigator.clipboard.writeText(txt);alert('Copied to clipboard.')}catch{el.select();alert('Text selected. Use your browser/device Copy command.')}}
     on('createItemBtn','onclick',createItemFromCurrentShots);on('newItemFromShotsBtn','onclick',createItemFromCurrentShots);on('inventorySearch','oninput',renderInventory);on('inventoryStatusFilter','onchange',renderInventory);on('inventoryStorageFilter','onchange',renderInventory);on('inventorySort','onchange',renderInventory);on('clearInventoryFiltersBtn','onclick',()=>{$('inventorySearch').value='';$('inventoryStatusFilter').value='all';$('inventoryStorageFilter').value='all';$('inventorySort').value='newest';renderInventory()});on('scanInventoryBtn','onclick',scanAndRepairInventory);on('deleteIncompleteItemsBtn','onclick',deleteIncompleteDraftItems);on('saveItemBtn','onclick',saveItem);on('generateDraftBtn','onclick',regenDraft);on('saveDraftVersionBtn','onclick',saveDraftVersion);on('clearDraftHistoryBtn','onclick',clearDraftHistory);on('deleteItemBtn','onclick',delItem);on('runListingAssistantBtn','onclick',runListingAssistant);on('recognizeListingPhotosBtn','onclick',recognizeListingPhotos);on('applyAllAssistantSuggestionsBtn','onclick',applyAllAssistantSuggestions);on('saveAssistantRelayBtn','onclick',saveAssistantRelaySettings);on('clearAssistantRelayBtn','onclick',clearAssistantRelaySettings);on('saveAiUsageSettingsBtn','onclick',saveAiUsageSettings);on('clearAiUsageBtn','onclick',clearAiUsage);on('lookupPricingComparableBtn','onclick',lookupPricingComparableUrl);on('parsePricingComparableBtn','onclick',parsePricingComparableText);on('pasteAndParsePricingComparableBtn','onclick',pasteAndParsePricingComparable);on('choosePricingComparableScreenshotBtn','onclick',choosePricingComparableScreenshot);on('pricingComparableScreenshotFile','onchange',handlePricingComparableScreenshotFile);on('analyzePricingComparableScreenshotBtn','onclick',analyzePricingComparableScreenshot);on('addPricingComparableBtn','onclick',addPricingComparable);on('calculatePricingGuidanceBtn','onclick',calculatePricingGuidance);on('copyPricingResearchSummaryBtn','onclick',copyPricingResearchSummary);on('applyFairMarketPriceBtn','onclick',applyFairMarketPrice);on('applyStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value;if(v){$('itemStorage').value=v;let current=getItems().find(i=>i.id===selectedItemId);if(current)renderStoragePhoto({...current,storage:v});}});on('saveStoragePresetBtn','onclick',()=>{let v=$('itemStorage').value.trim();if(!v){alert('Enter a storage location first.');return}let ps=getStoragePresets();if(!ps.includes(v)){setStoragePresets([...ps,v]);alert('Storage preset saved.')}else alert('That storage preset already exists.')});on('removeStoragePresetBtn','onclick',()=>{let v=$('itemStoragePreset').value||$('itemStorage').value.trim();if(!v){alert('Choose a preset to remove.');return}setStoragePresets(getStoragePresets().filter(p=>p!==v));});on('chooseStoragePhotoBtn','onclick',chooseStoragePhoto);on('storagePhotoFile','onchange',handleStoragePhotoFile);on('captureStorageFromCameraBtn','onclick',captureStoragePhotoFromActiveCamera);on('clearStoragePhotoBtn','onclick',clearStoragePhoto);on('applyWatermarkBtn','onclick',applyWatermarkToSelectedPhotos);on('restoreOriginalPhotosBtn','onclick',restoreOriginalListingPhotos);on('saveWatermarkDefaultBtn','onclick',saveWatermarkTextAsDefault);['watermarkEnabled','watermarkText','watermarkPlacement','watermarkOpacity','watermarkSize'].forEach(idv=>{let el=$(idv);if(el)el.oninput=()=>{let item=getItems().find(i=>i.id===selectedItemId);if(item)updateWatermarkStatus({...item,watermarkSettings:readWatermarkSettings()})}});document.querySelectorAll('.copy-btn').forEach(b=>b.onclick=()=>copyField(b.dataset.copy));
-    on('workstationSearch','oninput',renderWorkstation);on('workstationStatusFilter','onchange',renderWorkstation);on('workstationOpenEditorBtn','onclick',openWorkstationItemEditor);on('workstationCopyBundleBtn','onclick',copyWorkstationBundle);on('workstationResetChecklistBtn','onclick',resetWorkstationPostingChecklist);on('workstationFacebookBtn','onclick',()=>markWorkstationPostingStep('marketplace'));on('workstationItemStatus','onchange',updateWorkstationItemStatus);document.querySelectorAll('[data-workstation-copy]').forEach(b=>b.onclick=()=>copyWorkstationField(b.dataset.workstationCopy));
+    on('workstationSearch','oninput',renderWorkstation);on('workstationStatusFilter','onchange',renderWorkstation);on('workstationOpenEditorBtn','onclick',openWorkstationItemEditor);on('workstationCopyBundleBtn','onclick',copyWorkstationBundle);on('workstationResetChecklistBtn','onclick',resetWorkstationPostingChecklist);on('workstationFacebookBtn','onclick',()=>markWorkstationPostingStep('marketplace'));on('workstationItemStatus','onchange',updateWorkstationItemStatus);on('workstationPickupCompleteBtn','onclick',()=>quickUpdateFulfillment('Pickup complete'));on('workstationShippedBtn','onclick',()=>quickUpdateFulfillment('Shipped'));on('workstationDeliveredBtn','onclick',()=>quickUpdateFulfillment('Delivered'));document.querySelectorAll('[data-workstation-copy]').forEach(b=>b.onclick=()=>copyWorkstationField(b.dataset.workstationCopy));
     ['saleSoldDate','salePlatform','saleSoldPrice','saleItemCost','saleFees','saleShippingCost','saleFulfillmentStatus','saleShippedDate','saleCarrier','saleTrackingNumber','saleNotes'].forEach(idv=>on(idv,'oninput',()=>renderSaleTracking({saleTracking:readSaleTrackingForm({})})));
 
     // Backup
