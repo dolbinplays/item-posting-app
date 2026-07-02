@@ -35,6 +35,7 @@
 - Sales/profit dashboard groups sold or priced items by marketplace with item counts, gross revenue, and estimated net profit so users can see which marketplaces are performing. Implemented.
 - Sales/profit dashboard groups sold or priced items by month with item counts, gross revenue, and estimated net profit for quick period review. Implemented.
 - Sales/profit dashboard follow-up items can open directly into the selected item's Sale & Profit Tracking fields for faster fulfillment cleanup. Implemented.
+- Sales/profit dashboard also lists sold items missing required sale info and links directly to Sale & Profit Tracking so accounting fields can be completed before exports. Implemented.
 - Printable sold-items report exports an HTML accounting and fulfillment review with item photos, storage labels, sale price, original cost, fees, shipping, net profit, marketplace, and tracking details. Implemented.
 - Inventory and Workstation include a `Needs Fulfillment` filter and item-card highlights for sold or priced items that still need pickup or shipping completion. Implemented.
 - Workstation quick fulfillment actions can mark a sold item as pickup complete, shipped, or delivered from the laptop review flow, update the fulfillment date, refresh Needs Fulfillment, and queue the normal shared-workspace sync. Implemented.
