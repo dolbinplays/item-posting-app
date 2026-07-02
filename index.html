@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.06.01.0550</title>
+  <title>Item Posting Assistant v0.26.06.01.0560</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.06.01.0550 · Sales dashboard item links</p>
+      <p class="eyebrow">v0.26.06.01.0560 · Storage audit panel</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -1010,6 +1010,7 @@
           <h3 style="margin-top:16px">Storage Location Manager</h3>
           <p class="note">Review bins, shelves, totes, and rooms from one place. Use Focus Inventory to jump to every item in a location.</p>
           <div id="storageLocationManager" class="note">Storage locations have not been scanned yet.</div>
+          <div id="storageAuditPanel" class="note"></div>
           <div class="actions"><button id="exportStorageLabelsBtn" class="secondary" type="button">Export Printable Storage Labels</button><button id="exportStorageMapBtn" class="secondary" type="button">Export Storage Map</button></div>
           </details>
           <details class="backup-list">
@@ -1058,7 +1059,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.06.01.0550';
+    const VERSION='v0.26.06.01.0560';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1985,7 +1986,7 @@
       const items=getItems(),shared=getStorageLocationPhotos(),byKey=new Map();
       const ensure=(label,keyOverride='')=>{
         const raw=String(label||'').trim(),key=keyOverride||normalizeStorageLocation(raw)||'__unassigned__';
-        if(!byKey.has(key))byKey.set(key,{key,label:raw||'No storage location',itemCount:0,statusCounts:{},needsReview:0,photoRefs:0,sharedPhoto:hasPhotoRef(shared[key])?shared[key]:null,items:[]});
+        if(!byKey.has(key))byKey.set(key,{key,label:raw||'No storage location',itemCount:0,statusCounts:{},auditCounts:{},needsReview:0,photoRefs:0,sharedPhoto:hasPhotoRef(shared[key])?shared[key]:null,items:[]});
         return byKey.get(key);
       };
       items.forEach((item,index)=>{
@@ -1993,6 +1994,8 @@
         row.itemCount++;
         row.items.push(item);
         row.statusCounts[item.status||'Draft']=(row.statusCounts[item.status||'Draft']||0)+1;
+        const auditStatus=storageAuditStatus(item).status||'Not checked';
+        row.auditCounts[auditStatus]=(row.auditCounts[auditStatus]||0)+1;
         if(combinedItemReview(item,index).needsReview)row.needsReview++;
         if(hasPhotoRef(getEffectiveStoragePhoto(item)))row.photoRefs++;
       });
@@ -2002,7 +2005,8 @@
     }
     function storageLocationSummaryText(row){
       const statuses=Object.entries(row.statusCounts).filter(([,n])=>n).map(([status,n])=>`${n} ${status}`).join(' · ')||'No items yet';
-      return `${row.itemCount} item${row.itemCount===1?'':'s'} · ${statuses}`;
+      const audit=Object.entries(row.auditCounts||{}).filter(([,n])=>n).map(([status,n])=>`${n} ${status}`).join(' · ');
+      return `${row.itemCount} item${row.itemCount===1?'':'s'} · ${statuses}${audit?` · Audit: ${audit}`:''}`;
     }
     function storageLocationCode(label){
       const text=String(label||'storage').trim().toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'STORAGE';
@@ -2060,13 +2064,46 @@
       const key=String(locationValue||''),locationLabel=label||key;
       return getItems().filter(item=>key==='__unassigned__'?isBlankValue(item.storage):String(item.storage||'')===locationLabel);
     }
+    let activeStorageAudit=null;
+    function storageAuditStatus(item){
+      const audit=item?.storageAudit&&typeof item.storageAudit==='object'?item.storageAudit:{};
+      return {status:audit.status||'',checkedAt:audit.checkedAt||'',location:audit.location||'',notes:audit.notes||''}
+    }
+    function openStorageAudit(locationValue,label=''){
+      activeStorageAudit={locationValue:String(locationValue||''),label:label||locationValue||'No storage location'};
+      renderStorageAuditPanel();
+      setTimeout(()=>$('storageAuditPanel')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
+    }
+    function updateStorageAuditItem(itemId,status){
+      const items=getItems(),item=items.find(i=>i.id===itemId);if(!item)return;
+      if(status){
+        item.storageAudit={status,checkedAt:new Date().toISOString(),location:item.storage||'',source:'storage-location-manager'};
+      }else{
+        delete item.storageAudit;
+      }
+      item.updatedAt=new Date().toISOString();
+      if(setItems(items)){renderStorageLocationManager();renderStorageAuditPanel();renderInventory();refreshBackupViews();scheduleGoogleWorkspacePush('storage audit update')}
+    }
+    function renderStorageAuditPanel(){
+      const el=$('storageAuditPanel');if(!el)return;
+      if(!activeStorageAudit){el.innerHTML='';return}
+      const items=storageLocationItems(activeStorageAudit.locationValue,activeStorageAudit.label).slice().sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));
+      if(!items.length){el.innerHTML='<div class="empty-state">No items are assigned to this storage location anymore.</div>';return}
+      const rows=items.map(item=>{const audit=storageAuditStatus(item),status=audit.status||'Not checked',checked=audit.checkedAt?new Date(audit.checkedAt).toLocaleString():'';return `<div class="pricing-comparable"><div><strong>${escapeHtml(item.title||'Untitled item')}</strong><div class="note">${escapeHtml(item.status||'Draft')} · ${escapeHtml(item.storage||'No storage location')}<br>Audit: <b>${escapeHtml(status)}</b>${checked?` · ${escapeHtml(checked)}`:''}</div></div><div class="pricing-comparable-actions"><button class="success" type="button" data-storage-audit-found="${escapeAttr(item.id||'')}">Found</button><button class="danger" type="button" data-storage-audit-missing="${escapeAttr(item.id||'')}">Missing</button><button class="secondary" type="button" data-storage-audit-clear="${escapeAttr(item.id||'')}">Clear</button></div></div>`}).join('');
+      const found=items.filter(item=>storageAuditStatus(item).status==='Found').length,missing=items.filter(item=>storageAuditStatus(item).status==='Missing').length;
+      el.innerHTML=`<h4 style="margin:4px 0 8px">Storage audit: ${escapeHtml(activeStorageAudit.label||'No storage location')}</h4><p class="note">Mark items Found or Missing during a physical bin/tote check. This saves a lightweight audit note on each item and queues normal workspace sync.</p><p><b>${found}</b> found · <b>${missing}</b> missing · <b>${items.length-found-missing}</b> unchecked</p><div class="pricing-comparable-list">${rows}</div>`;
+      el.querySelectorAll('[data-storage-audit-found]').forEach(btn=>btn.onclick=()=>updateStorageAuditItem(btn.dataset.storageAuditFound,'Found'));
+      el.querySelectorAll('[data-storage-audit-missing]').forEach(btn=>btn.onclick=()=>updateStorageAuditItem(btn.dataset.storageAuditMissing,'Missing'));
+      el.querySelectorAll('[data-storage-audit-clear]').forEach(btn=>btn.onclick=()=>updateStorageAuditItem(btn.dataset.storageAuditClear,''));
+    }
     function exportStorageLocationCheckSheet(locationValue,label=''){
       const key=String(locationValue||''),locationLabel=label||key||'No storage location',items=storageLocationItems(key,locationLabel);
       if(!items.length){alert('No items are currently assigned to that storage location.');return}
       const exportedAt=new Date().toISOString(),code=key==='__unassigned__'?'Needs storage text':storageLocationCode(locationLabel);
       const rows=items.slice().sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''))).map((item,index)=>{
         const review=combinedItemReview(item,getItems().findIndex(i=>i.id===item.id)),photoCount=(item.photos||[]).length,lastMoved=(Array.isArray(item.storageMoveHistory)&&item.storageMoveHistory[0]?.movedAt)||'';
-        return `<tr><td class="check"></td><td class="check"></td><td>${index+1}</td><td><b>${escapeHtml(item.title||'Untitled item')}</b><br><span>${escapeHtml(item.id||'')}</span></td><td>${escapeHtml(item.status||'Draft')}</td><td>${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())}${lastMoved?`<br><span>Moved: ${escapeHtml(new Date(lastMoved).toLocaleString())}</span>`:''}</td><td>${photoCount}</td><td>${review.missing.length?escapeHtml(review.missing.join('; ')):'Ready by enabled review rules'}</td><td></td></tr>`;
+        const audit=storageAuditStatus(item),auditText=audit.status?`${audit.status}${audit.checkedAt?` · ${new Date(audit.checkedAt).toLocaleString()}`:''}`:'Not checked';
+        return `<tr><td class="check"></td><td class="check"></td><td>${index+1}</td><td><b>${escapeHtml(item.title||'Untitled item')}</b><br><span>${escapeHtml(item.id||'')}</span></td><td>${escapeHtml(item.status||'Draft')}</td><td>${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())}${lastMoved?`<br><span>Moved: ${escapeHtml(new Date(lastMoved).toLocaleString())}</span>`:''}</td><td>${photoCount}</td><td>${escapeHtml(auditText)}<br>${review.missing.length?escapeHtml(review.missing.join('; ')):'Ready by enabled review rules'}</td><td></td></tr>`;
       }).join('');
       const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Storage Check - ${escapeHtml(locationLabel)} - ${VERSION}</title><style>body{font-family:Arial,system-ui,sans-serif;margin:24px;color:#0f172a}.header{border:2px solid #0f172a;border-radius:14px;padding:16px;margin-bottom:16px}.code{font-size:36px;font-weight:900;letter-spacing:.08em}.meta{color:#475569}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;vertical-align:top}th{background:#e0f2fe}.check{width:34px;height:30px}@media print{body{margin:10mm}.no-print{display:none}tr{break-inside:avoid}}</style></head><body><section class="header"><div class="meta">Item Posting Assistant storage check sheet</div><h1>${escapeHtml(locationLabel)}</h1><div class="code">${escapeHtml(code)}</div><p class="meta">Version: ${escapeHtml(VERSION)} · Exported: ${escapeHtml(exportedAt)} · Items expected: ${items.length}</p><p>Use this while physically checking a bin, shelf, tote, or room. Mark Found or Missing, then update any item that needs follow-up in the app.</p></section><button class="no-print" onclick="print()">Print Check Sheet</button><table><thead><tr><th>Found</th><th>Missing</th><th>#</th><th>Item</th><th>Status</th><th>Last Updated</th><th>Photos</th><th>App Review Notes</th><th>Physical Notes</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
       download(`item-posting-storage-check-${safeName(locationLabel||'storage')}-${VERSION}.html`,html,'text/html');
@@ -2077,12 +2114,14 @@
       if(!rows.length){el.innerHTML='<div class="empty-state">No storage locations yet. Add storage text to an item to build this list.</div>';return}
       el.innerHTML=`<div class="drive-plan-summary">${rows.map(row=>{
         const isPreset=getStoragePresets().includes(row.label),photo=row.sharedPhoto||row.items.map(getEffectiveStoragePhoto).find(hasPhotoRef),photoHtml=photoDisplayDataUrl(photo)?`<img class="workstation-thumb" src="${photoDisplayDataUrl(photo)}" alt="">`:'<span class="workstation-thumb"></span>';
-        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}${row.key!=='__unassigned__'?`<br>Label code: ${escapeHtml(storageLocationCode(row.label))}`:''}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${row.itemCount?`<button class="secondary" type="button" data-move-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-move-storage-label="${escapeAttr(row.label)}">Move Items</button><button class="secondary" type="button" data-export-storage-check="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-export-storage-check-label="${escapeAttr(row.label)}">Export Check Sheet</button>`:''}${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
+        return `<div class="drive-plan-card" style="text-align:left"><div style="display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start">${photoHtml}<div><strong>${escapeHtml(row.label)}</strong><span class="note">${escapeHtml(storageLocationSummaryText(row))}${row.key!=='__unassigned__'?`<br>Label code: ${escapeHtml(storageLocationCode(row.label))}`:''}<br>Storage photos: ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}${row.needsReview?`<br>${row.needsReview} item${row.needsReview===1?'':'s'} need review`:''}</span></div></div><div class="actions" style="margin-top:10px"><button class="secondary" type="button" data-focus-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-focus-storage-label="${escapeAttr(row.label)}">Focus Inventory</button>${row.itemCount?`<button class="secondary" type="button" data-audit-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-audit-storage-label="${escapeAttr(row.label)}">Audit Items</button><button class="secondary" type="button" data-move-storage-location="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-move-storage-label="${escapeAttr(row.label)}">Move Items</button><button class="secondary" type="button" data-export-storage-check="${escapeAttr(row.key==='__unassigned__'?'__unassigned__':row.label)}" data-export-storage-check-label="${escapeAttr(row.label)}">Export Check Sheet</button>`:''}${isPreset||row.key==='__unassigned__'?'<span class="workstation-check done">'+(row.key==='__unassigned__'?'Needs storage text':'Preset saved')+'</span>':`<button class="success" type="button" data-save-storage-preset="${escapeAttr(row.label)}">Save Preset</button>`}</div></div>`;
       }).join('')}</div>`;
       el.querySelectorAll('[data-focus-storage-location]').forEach(btn=>btn.onclick=()=>focusInventoryStorageLocation(btn.dataset.focusStorageLocation,btn.dataset.focusStorageLabel));
+      el.querySelectorAll('[data-audit-storage-location]').forEach(btn=>btn.onclick=()=>openStorageAudit(btn.dataset.auditStorageLocation,btn.dataset.auditStorageLabel));
       el.querySelectorAll('[data-move-storage-location]').forEach(btn=>btn.onclick=()=>moveStorageLocationItems(btn.dataset.moveStorageLocation,btn.dataset.moveStorageLabel));
       el.querySelectorAll('[data-export-storage-check]').forEach(btn=>btn.onclick=()=>exportStorageLocationCheckSheet(btn.dataset.exportStorageCheck,btn.dataset.exportStorageCheckLabel));
       el.querySelectorAll('[data-save-storage-preset]').forEach(btn=>btn.onclick=()=>saveStorageLocationPresetFromManager(btn.dataset.saveStoragePreset));
+      renderStorageAuditPanel();
     }
     function exportStorageLabels(){
       const rows=storageLabelRows();
@@ -2100,7 +2139,8 @@
         const code=row.key==='__unassigned__'?'Needs storage text':storageLocationCode(row.label);
         const items=row.items.slice().sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''))).map(item=>{
           const review=combinedItemReview(item,getItems().findIndex(i=>i.id===item.id));
-          return `<li><b>${escapeHtml(item.title||'Untitled item')}</b><br><span>${escapeHtml(item.status||'Draft')} · Updated ${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())} · Photos ${(item.photos||[]).length}</span>${review.missing.length?`<br><span>Needs review: ${escapeHtml(review.missing.join('; '))}</span>`:''}</li>`;
+          const audit=storageAuditStatus(item),auditText=audit.status?`${audit.status}${audit.checkedAt?` · ${new Date(audit.checkedAt).toLocaleString()}`:''}`:'Not checked';
+          return `<li><b>${escapeHtml(item.title||'Untitled item')}</b><br><span>${escapeHtml(item.status||'Draft')} · Updated ${escapeHtml(new Date(item.updatedAt||item.createdAt||Date.now()).toLocaleString())} · Photos ${(item.photos||[]).length} · Audit ${escapeHtml(auditText)}</span>${review.missing.length?`<br><span>Needs review: ${escapeHtml(review.missing.join('; '))}</span>`:''}</li>`;
         }).join('')||'<li>No items assigned.</li>';
         return `<section><h2>${escapeHtml(row.label)}</h2><p><b>Label code:</b> ${escapeHtml(code)}<br><b>Summary:</b> ${escapeHtml(storageLocationSummaryText(row))}<br><b>Storage photos:</b> ${row.photoRefs}/${row.itemCount}${row.sharedPhoto?' · shared photo saved':''}<br><b>Needs review:</b> ${row.needsReview}</p><ol>${items}</ol></section>`;
       }).join('');
