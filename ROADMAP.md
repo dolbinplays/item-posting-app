@@ -39,6 +39,7 @@
 - Inventory and Workstation include a `Needs Fulfillment` filter and item-card highlights for sold or priced items that still need pickup or shipping completion. Implemented.
 - Workstation quick fulfillment actions can mark a sold item as pickup complete, shipped, or delivered from the laptop review flow, update the fulfillment date, refresh Needs Fulfillment, and queue the normal shared-workspace sync. Implemented.
 - Workstation quick fulfillment actions now populate missing sold date, marketplace, and sold price from the current listing price so sales/profit summaries and exports do not show fulfilled sales as $0. Implemented.
+- Inventory and Workstation include a `Needs Sale Info` filter and item-card highlights for sold items missing sold price, sold date, marketplace, or original cost details before accounting/report exports. Implemented.
 - Google account authorization, Drive root folder creation, one Drive folder per inventory item, best-available photo uploads, Google Sheet index creation, and Sheet row updates.
 - Inventory and workstation list highlights for items held by the Google Sync `Needs review` readiness gate.
 - Configurable listing-quality review rules: every listing step remains suggested, users choose which missing steps trigger highlights, and Inventory or Workstation can filter directly to items needing review. Implemented.
