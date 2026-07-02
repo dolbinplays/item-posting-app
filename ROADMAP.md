@@ -24,6 +24,7 @@
 - Printable storage labels assign stable short label codes to named storage locations and export a printer-friendly HTML label sheet as the foundation for future QR/barcode scanning. Implemented.
 - Printable missing-item check sheets export per storage location with expected item counts, Found/Missing columns, last-updated data, and app review notes for physical inventory audits. Implemented.
 - Storage audit status is now visible in Inventory and Workstation with a `Needs Storage Audit` filter, missing-item highlights, and selected-item audit status in the workstation detail panel. Implemented.
+- Workstation quick storage-audit actions can mark the selected item Found, Missing, or clear its audit status while refreshing Needs Storage Audit and queuing normal workspace sync. Implemented.
 - Dedicated storage-audit CSV export gives a lightweight handoff of item ID, storage label, audit status, checked-at date, storage-photo status, and Google Sync status for physical inventory reviews. Implemented.
 - Google Sheets/CSV exports include each item's stable storage label code so the Sheet index, printable labels, and future scan lookup use the same storage identifier. Implemented.
 - Printable storage map export lists every storage location, label code, status mix, storage-photo coverage, review counts, and assigned items for physical inventory planning. Implemented.
