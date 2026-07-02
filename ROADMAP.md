@@ -98,6 +98,7 @@
 - Printable storage map foundation groups locations and items for offline physical review. Implemented.
 - Missing-item check sheet foundation exports physical audit worksheets from each storage-location card. Implemented. Future scan lookup can mark items found or missing directly in the app.
 - Storage-location manager includes an in-app audit panel for each location so individual items can be marked Found, Missing, or cleared after a physical check. Audit status appears in storage summaries, printable check sheets, and storage maps. Implemented.
+- Storage audit status and checked-at timestamps flow into the basic inventory CSV, Sheets/Drive CSV, and media manifest so physical inventory results can become part of the Google-backed index. Implemented.
 - Configurable listing-quality checklist: show every item-creation step as a suggested step, including photos, watermark, item details, AI review, pricing research, storage location, storage photo, marketplace draft, and Google backup. Implemented.
 - User-selectable `Flag for review if missing` rules for checklist steps. Highlight inventory and workstation items when any enabled rule is incomplete, show the missing steps on the item card, and provide a focused `Needs Review` filter. Implemented.
 - Reusable seller/store display-name preference for watermarking. Allow the user to save, edit, and clear the name, prefill it when applying watermarks, and include it in safe second-device setup handoff. Store display text only, never marketplace credentials or account tokens. Implemented.
