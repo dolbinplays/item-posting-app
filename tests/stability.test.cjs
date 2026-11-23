@@ -3,6 +3,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+test('stopping while camera permission is pending releases the late stream', async () => {
+  const html = fs.readFileSync('index.html', 'utf8');
+  const start = html.match(/    async function startWithConstraints\(label,constraints\)\{[\s\S]*?\n    \}/)[0];
+  const stop = html.match(/    function stopCamera\(\)\{[^\n]+/)[0];
+  let resolveCamera, stopped = 0, played = 0;
+  const context = {
+    cameraRequest:0, stream:null, video:{play(){played++}},
+    navigator:{mediaDevices:{getUserMedia:()=>new Promise(resolve=>{resolveCamera=resolve})}},
+    updateDiag(){}, setLastError(){}, updateCapturePresetInfo(){}, log(){}, $:()=>({})
+  };
+  const opening = vm.runInNewContext(start+'\n'+stop+'\nstartWithConstraints("Rear",{})',context);
+  context.stopCamera();
+  resolveCamera({getTracks:()=>[{stop(){stopped++}}]});
+  await opening;
+  assert.equal(stopped,1);
+  assert.equal(played,0);
+  assert.equal(context.stream,null);
+});
+
 test('capture clears UI and preserves previous shots on interruption or save failure', async () => {
   const html = fs.readFileSync('index.html', 'utf8');
   const source = html.match(/    async function autoCapture\(\)\{[\s\S]*?\n    \}/)[0];

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
-  <title>Item Posting Assistant v0.26.11.21.1</title>
+  <title>Item Posting Assistant v0.26.11.23.1</title>
   <style>
     :root{
       --bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#f8fafc;--muted:#cbd5e1;
@@ -429,7 +429,7 @@
 <body>
   <main class="app">
     <header>
-      <p class="eyebrow">v0.26.11.21.1 · Capture and offline stability</p>
+      <p class="eyebrow">v0.26.11.23.1 · Camera permission recovery</p>
       <h1>Item Posting Assistant</h1>
       <p class="subtitle">Capture turntable photos, create inventory items, and generate Facebook Marketplace draft listings. Rear camera remains the primary capture path. This build adds a reviewable listing assistant foundation for structured details, stronger titles, search keywords, and future photo-based recognition.</p>
     </header>
@@ -1065,7 +1065,7 @@
   <script>
   (()=>{
     'use strict';
-    const VERSION='v0.26.11.21.1';
+    const VERSION='v0.26.11.23.1';
     const LOCAL_PREVIEW_MAX_W=240,LOCAL_PREVIEW_MAX_H=180,LOCAL_PREVIEW_QUALITY=.48;
     const K={presets:'ipa_presets',selected:'ipa_selected_preset',shots:'ipa_current_shots',sessions:'ipa_sessions',items:'ipa_items',storagePresets:'ipa_storage_presets',storageLocationPhotos:'ipa_storage_location_photos',assistantRelaySettings:'ipa_assistant_relay_settings',aiUsageLog:'ipa_ai_usage_log',aiUsageSettings:'ipa_ai_usage_settings',googleSyncSettings:'ipa_google_sync_settings',googleWorkspaceState:'ipa_google_workspace_state',googleApiSetup:'ipa_google_api_setup',googleReconnectPreference:'ipa_google_reconnect_preference',deviceRole:'ipa_device_role',listingPreferences:'ipa_listing_preferences',listingReviewRules:'ipa_listing_review_rules',googleSyncHistory:'ipa_google_sync_history',googleSyncRunLog:'ipa_google_sync_run_log',lastTab:'ipa_last_tab'};
     const $=id=>document.getElementById(id);
@@ -1647,26 +1647,32 @@
     $('toCaptureBtn').onclick=()=>showScreen('capture');
 
     // Camera - diagnostic-tested path
-    let stream=null,capturing=false;
+    let stream=null,capturing=false,cameraRequest=0;
     const video=$('video');
     function log(msg,obj){let line=`[${new Date().toLocaleTimeString()}] ${msg}`+(obj?'\n'+JSON.stringify(obj,null,2):'');$('cameraLog').textContent=line+'\n\n'+$('cameraLog').textContent.slice(0,2500)}
     function setLastError(msg){$('lastError').textContent=msg||'None'}
     function updateDiag(){ $('secureStatus').textContent=window.isSecureContext?'Yes':'No'; $('apiStatus').textContent=navigator.mediaDevices?.getUserMedia?'Available':'Unavailable'; }
-    function stopCamera(){try{if(stream)stream.getTracks().forEach(t=>t.stop())}catch(e){} stream=null; video.srcObject=null; $('videoStatus').textContent='Stopped'; $('captureStatus').textContent='Camera stopped.'; $('manualShotBtn').disabled=true; updateCapturePresetInfo(); log('Camera stopped')}
+    function stopCamera(){cameraRequest++;try{if(stream)stream.getTracks().forEach(t=>t.stop())}catch(e){} stream=null; video.srcObject=null; $('videoStatus').textContent='Stopped'; $('captureStatus').textContent='Camera stopped.'; $('manualShotBtn').disabled=true; updateCapturePresetInfo(); log('Camera stopped')}
+    window.addEventListener('pagehide',stopCamera);
     async function startWithConstraints(label,constraints){
-      updateDiag(); setLastError('None'); $('captureStatus').textContent=`Starting ${label}...`; $('videoStatus').textContent='Requesting permission…'; log('Starting '+label,constraints); stopCamera();
+      stopCamera();
+      const request=cameraRequest;
+      updateDiag(); setLastError('None'); $('captureStatus').textContent=`Starting ${label}...`; $('videoStatus').textContent='Requesting permission…'; log('Starting '+label,constraints);
       if(!navigator.mediaDevices?.getUserMedia) throw new Error('navigator.mediaDevices.getUserMedia unavailable. Use HTTPS in Chrome.');
       try{
-        stream=await navigator.mediaDevices.getUserMedia(constraints);
+        const opened=await navigator.mediaDevices.getUserMedia(constraints);
+        if(request!==cameraRequest){opened.getTracks().forEach(track=>track.stop());return}
+        stream=opened;
         video.srcObject=stream; video.muted=true; video.setAttribute('playsinline','true');
         await video.play();
+        if(request!==cameraRequest)return;
         const track=stream.getVideoTracks()[0];
         $('videoStatus').textContent=`${video.videoWidth||'?'} × ${video.videoHeight||'?'} · ${track?.label||'camera'}`;
         $('captureStatus').textContent=`Camera ready: ${track?.label||label}`;
         $('manualShotBtn').disabled=false; updateCapturePresetInfo(); log(label+' started',{videoWidth:video.videoWidth,videoHeight:video.videoHeight,track:track?.label,settings:track?.getSettings?track.getSettings():null});
-      }catch(e){setLastError(`${e.name||'Error'}: ${e.message||e}`);$('videoStatus').textContent='Failed';$('captureStatus').textContent='Camera failed. See diagnostics.';log(label+' failed',{name:e.name,message:e.message}); throw e;}
+      }catch(e){if(request!==cameraRequest)return;stopCamera();setLastError(`${e.name||'Error'}: ${e.message||e}`);$('videoStatus').textContent='Failed';$('captureStatus').textContent='Camera failed. See diagnostics.';log(label+' failed',{name:e.name,message:e.message}); throw e;}
     }
-    async function startRear(){const attempts=[{name:'Rear exact environment',c:{video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Rear ideal environment',c:{video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Any camera fallback',c:{video:true,audio:false}}];let errs=[];for(const a of attempts){try{await startWithConstraints(a.name,a.c);return}catch(e){errs.push(`${a.name}: ${e.name} ${e.message}`)}}alert('Camera could not start.\n\n'+errs.join('\n'))}
+    async function startRear(){const attempts=[{name:'Rear exact environment',c:{video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Rear ideal environment',c:{video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}},{name:'Any camera fallback',c:{video:true,audio:false}}];let errs=[];for(const a of attempts){try{await startWithConstraints(a.name,a.c);return}catch(e){if(e.name==='NotAllowedError'){alert('Camera permission was denied. Allow camera access in site settings, then try again.');return}errs.push(`${a.name}: ${e.name} ${e.message}`)}}alert('Camera could not start.\n\n'+errs.join('\n'))}
     $('startRearBtn').onclick=()=>{showScreen('capture');startRear()}; $('startDefaultBtn').onclick=()=>startWithConstraints('Default camera',{video:{width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('startFrontBtn').onclick=()=>startWithConstraints('Front camera',{video:{facingMode:{ideal:'user'},width:{ideal:1280},height:{ideal:720}},audio:false}).catch(()=>{}); $('stopCameraBtn').onclick=stopCamera;
     function lightweightPhotoRecord(photo){
       if(!photo||typeof photo!=='object')return photo;
